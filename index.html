@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twilight of the World — M0</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <!-- Загрузчик: подключает модули по порядку с cache-busting (?v=…), чтобы во
+       время разработки браузер не отдавал старые версии файлов. document.write
+       выполняет скрипты синхронно, порядок сохраняется. -->
+  <script>
+    ['constants', 'save', 'world', 'input', 'unit', 'camera', 'city', 'inventory', 'loot', 'effects', 'shield', 'intro',
+      'render_resource', 'render_module', 'render_world', 'render_loot', 'render_fx', 'render_shield', 'render_unit', 'render_intro', 'render_city', 'hud', 'ui_menu', 'game']
+      .forEach(function (f) { document.write('<script src="' + f + '.js?v=' + Date.now() + '"><\/script>'); });
+  </script>
+</body>
+</html>
