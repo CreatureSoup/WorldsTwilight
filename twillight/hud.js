@@ -27,7 +27,7 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
     `tile: ${unit.tileX}, ${unit.tileY}`,
     `state: ${stateName}`,
     `слой: ${world.layerName(unit.tileY)}  (глубина ${depth})`,
-    `fps: ${dbg.fps.toFixed(0)}`,
+    `скорость: ${unit.effectiveSpeed().toFixed(1)} тайл/с`,
   ];
   const boxW = 250, boxH = 18 * lines.length + 56;
   ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(8, 8, boxW, boxH);
@@ -73,6 +73,31 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
   ctx.fillStyle = '#cfe7ff'; ctx.font = '13px monospace'; ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
   ctx.fillText('⚙ Ядро (I)', ib.x + ib.w / 2, ib.y + ib.h / 2);
   ctx.textBaseline = 'top'; ctx.textAlign = 'left';
+
+  // индикатор цикла (макро-таймер) — вверху по центру, под баром города
+  if (dbg.cycle) {
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.font = 'bold 14px monospace'; ctx.fillStyle = '#9fd0ff';
+    ctx.fillText(`ЦИКЛ ${dbg.cycle.n}`, W / 2, 84);
+    ctx.font = '11px monospace'; ctx.fillStyle = '#7f93a8';
+    ctx.fillText(`след. через ${Math.ceil(dbg.cycle.timeLeft())}с`, W / 2, 104);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  }
+
+  // задание от города + репутация — справа, ПОД кнопкой «Ядро»
+  if (dbg.quest) {
+    const q = dbg.quest, left = Math.max(0, q.deadlineCycle - (dbg.cycle ? dbg.cycle.n : 0));
+    const pw = 200, px = W - 12 - pw, py = ib.y + ib.h + 8, rx = W - 18;
+    const rows = dbg.questMsg ? 5 : 4;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(px, py, pw, rows * 16 + 10);
+    let qy = py + 6; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    ctx.font = 'bold 12px monospace'; ctx.fillStyle = '#d9c47a'; ctx.fillText('ЗАДАНИЕ', rx, qy); qy += 16;
+    ctx.font = '12px monospace'; ctx.fillStyle = '#cfe7ff'; ctx.fillText(q.label(), rx, qy); qy += 16;
+    ctx.fillStyle = '#9fb3c8'; ctx.fillText(`осталось циклов: ${left}`, rx, qy); qy += 16;
+    ctx.fillText(`репутация: ${dbg.rep || 0}`, rx, qy); qy += 16;
+    if (dbg.questMsg) { ctx.font = 'bold 12px monospace'; ctx.fillStyle = dbg.questMsg.ok ? '#7ad05a' : '#e0664a'; ctx.fillText(dbg.questMsg.text, rx, qy); }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  }
 
   const hint = 'WASD/стрелки — ход и лазанье   упор в породу = бур   I — ядро   Esc — пауза';
   ctx.font = '13px monospace';

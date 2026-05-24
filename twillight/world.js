@@ -11,7 +11,8 @@ class World {
     this._s = this.seed;
     this.tiles = new Array(MAP_W * MAP_H);
     this.seen = new Uint8Array(MAP_W * MAP_H); // туман войны
-    this.caverns = [];                          // чужие города (пещеры)
+    this.caverns = [];                          // дружественные чужие города
+    this.wilds = [];                            // дикие города-гнёзда (источники волн)
     this.generate();
   }
 
@@ -57,8 +58,8 @@ class World {
       }
   }
   hardnessForY(y) {
-    if (y <= 45) return 1.5;
-    if (y <= 62) return 2.5;
+    if (y <= MAP_H * 0.5) return 1.5;
+    if (y <= MAP_H * 0.78) return 2.5;
     return 4.0;
   }
   layerName(y) {
@@ -66,44 +67,56 @@ class World {
     if (y < CAVE_Y0) return 'свод';
     if (y <= CAVE_FLOOR_Y) return 'город';
     if (y >= CRUST_Y0 && y <= CRUST_Y1) return 'корка';
-    if (y <= 45) return 'верхний';
-    if (y <= 62) return 'средний';
+    if (y <= MAP_H * 0.5) return 'верхний';
+    if (y <= MAP_H * 0.78) return 'средний';
     return 'глубокий';
   }
   inCave(x, y) { return x >= CAVE_X0 && x <= CAVE_X1 && y >= CAVE_Y0 && y <= CAVE_Y1; }
 
   // тороидальная дистанция по X в тайлах
   torDist(a, b) { const d = Math.abs(a - b) % MAP_W; return Math.min(d, MAP_W - d); }
-  inCavern(x, y) {
-    for (const c of this.caverns) {
+  inEllipseList(x, y, list) {
+    for (const c of list) {
       const dx = wrapDeltaPx(x * TILE, c.cx * TILE) / TILE, dy = y - c.cy;
       if ((dx * dx) / (c.rx * c.rx) + (dy * dy) / (c.ry * c.ry) <= 1) return true;
     }
     return false;
   }
-  // Размещение чужих городов: разные глубины, разнесены по кольцу.
-  genCaverns() {
-    const bands = [[34, 44], [48, 58], [63, 74]];
-    const startCx = (CAVE_X0 + CAVE_X1) / 2;
+  inCavern(x, y) { return this.inEllipseList(x, y, this.caverns); }
+  inWild(x, y) { return this.inEllipseList(x, y, this.wilds); }
+  // Размещение в эллипс-бэндах глубины с разносом 2D (далеко по X ИЛИ по глубине).
+  placeNest(bands, count, avoid) {
     const list = [];
-    for (let i = 0; i < OTHER_CITIES; i++) {
+    for (let i = 0; i < count; i++) {
       const band = bands[i % bands.length];
       let cx = -1, cy = 0;
-      for (let tries = 0; tries < 80; tries++) {
+      for (let tries = 0; tries < 100; tries++) {
         const x = Math.floor(this.rand() * MAP_W);
         const y = band[0] + Math.floor(this.rand() * (band[1] - band[0] + 1));
-        const farStart = this.torDist(x, startCx) >= CITY_MIN_GAP_X;
-        const farOthers = list.every((c) => this.torDist(x, c.cx) >= CITY_MIN_GAP_X);
-        if (farStart && farOthers) { cx = x; cy = y; break; }
+        const far = avoid.concat(list).every((a) => this.torDist(x, a.cx) >= CITY_MIN_GAP_X || Math.abs(y - a.cy) >= 14);
+        if (far) { cx = x; cy = y; break; }
       }
-      if (cx < 0) {  // фолбэк: равномерно разнести по кольцу от старта
-        cx = wrapX(Math.round(startCx + (i + 1) * MAP_W / (OTHER_CITIES + 1)));
-        cy = band[0] + ((band[1] - band[0]) >> 1);
-      }
+      if (cx < 0) { cx = wrapX(Math.round(this.rand() * MAP_W)); cy = band[0] + ((band[1] - band[0]) >> 1); }
       const rx = 5 + Math.floor(this.rand() * 3), ry = 3 + Math.floor(this.rand() * 2);
-      list.push({ cx, cy, rx, ry, floorY: cy + ry, name: CITY_NAMES[i % CITY_NAMES.length], rep: 0 });
+      list.push({ cx, cy, rx, ry, floorY: cy + ry });
     }
     return list;
+  }
+  // Дружественные чужие города (несут name/rep — задел под задания/мету).
+  genCaverns() {
+    const H = MAP_H;
+    const bands = [[H * 0.28, H * 0.42], [H * 0.46, H * 0.60], [H * 0.64, H * 0.80]].map((b) => [Math.round(b[0]), Math.round(b[1])]);
+    const startCx = (CAVE_X0 + CAVE_X1) / 2;
+    const list = this.placeNest(bands, OTHER_CITIES, [{ cx: startCx, cy: CAVE_FLOOR_Y }]);
+    return list.map((c, i) => ({ ...c, name: CITY_NAMES[i % CITY_NAMES.length], rep: 0 }));
+  }
+  // Дикие города-гнёзда: глубже, разнесены от старта, дружественных и друг друга.
+  genWilds() {
+    const H = MAP_H;
+    const bands = [[H * 0.40, H * 0.60], [H * 0.66, H * 0.86]].map((b) => [Math.round(b[0]), Math.round(b[1])]);
+    const startCx = (CAVE_X0 + CAVE_X1) / 2;
+    const avoid = this.caverns.map((c) => ({ cx: c.cx, cy: c.cy })).concat([{ cx: startCx, cy: CAVE_FLOOR_Y }]);
+    return this.placeNest(bands, WILD_NESTS, avoid).map((w) => ({ ...w, hp: WILD_HP, maxHp: WILD_HP, loot: 0, charge: 0 }));
   }
 
   resourceFor(x, y) {
@@ -121,19 +134,21 @@ class World {
   // поле очагов/оазисов (бесшовно по кольцу). Принимает дробные координаты.
   radAt(x, y) {
     const depth = Math.max(0, y - CAVE_FLOOR_Y);
-    const base = 0.3 + depth * 0.05;
+    const base = 0.3 + (depth / (MAP_H - CAVE_FLOOR_Y)) * 2.6; // масштабируется с глубиной карты
     return base * (0.2 + this.pnoise(x, y, 6) * 1.7);
   }
 
   generate() {
     this.caverns = this.genCaverns();
+    this.wilds = this.genWilds();
     for (let y = 0; y < MAP_H; y++)
       for (let x = 0; x < MAP_W; x++) {
         let type = AIR, hardness = 0, dens = 0, resource = null;
         if (y === MAP_H - 1) type = BORDER;            // дно (боковых границ нет — кольцо)
         else if (y < SURFACE_ROWS) type = AIR;          // внешняя поверхность
         else if (this.inCave(x, y)) type = AIR;         // стартовый город
-        else if (this.inCavern(x, y)) type = AIR;       // чужие города
+        else if (this.inCavern(x, y)) type = AIR;       // дружественные города
+        else if (this.inWild(x, y)) type = AIR;         // дикие гнёзда (без фундамента — будущий рейд)
         else {
           type = ROCK;
           if (y >= CRUST_Y0 && y <= CRUST_Y1) {         // спрессованный хлам: барьер
@@ -165,5 +180,5 @@ class World {
     if (y >= MAP_H) return { type: BORDER, hardness: 0, resource: null, dig: 0, dens: 0 };
     return this.tiles[y * MAP_W + wrapX(x)];
   }
-  setAir(x, y) { const t = this.tileAt(x, y); if (t.type === ROCK) { t.type = AIR; t.hardness = 0; t.dig = 0; t.resource = null; } }
+  setAir(x, y) { const t = this.tileAt(x, y); if (t.type === ROCK) { t.type = AIR; t.hardness = 0; t.dig = 0; t.resource = null; t.dug = true; } } // dug=прорытый ход (не природная пустота) — враги избегают своих ходов
 }

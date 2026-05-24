@@ -31,6 +31,11 @@ function drawTachikoma(ctx, world, unit, camera) {
     }
   }
 
+  // присед перед прыжком — корпус (и голова/бур) сжимается вниз к опоре; ноги не трогаем
+  const squashY = unit.crouchT > 0 ? 0.68 : 1;
+  ctx.save();
+  if (squashY !== 1) { const baseY = cy + R * 0.6; ctx.translate(cx, baseY); ctx.scale(1, squashY); ctx.translate(-cx, -baseY); }
+
   // корпус-капсула
   const bodyGrad = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.4, 2, cx, cy, R * 1.2);
   bodyGrad.addColorStop(0, '#9fdcf2');
@@ -67,4 +72,6 @@ function drawTachikoma(ctx, world, unit, camera) {
   ctx.lineTo(bx - px * R * 0.42, by - py * R * 0.42);
   ctx.closePath(); ctx.fill();
   ctx.strokeStyle = '#7f8b96'; ctx.lineWidth = Math.max(1, R * 0.06); ctx.stroke();
+
+  ctx.restore();   // конец сжатия приседа
 }

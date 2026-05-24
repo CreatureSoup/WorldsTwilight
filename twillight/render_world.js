@@ -118,11 +118,11 @@ function drawResourceVeins(ctx, world, ox, oy, x0, y0, x1, y1) {
     }
 }
 
-// Маркеры чужих городов в пещерах: ступенчатая «пирамида» на полу + имя (если открыто).
-function drawCityMarkers(ctx, world, camera, x0, y0, x1, y1) {
+// Маркеры дружественных городов: ступенчатая «пирамида» на полу пещеры + имя.
+function drawCityMarkers(ctx, world, camera, debug) {
   const oy = Math.round(camera.y);
   for (const c of world.caverns) {
-    if (!world.isSeen(c.cx, c.floorY)) continue;
+    if (!debug && !world.isSeen(c.cx, c.floorY)) continue;
     const sx = camera.screenX((c.cx + 0.5) * TILE);
     if (sx < -TILE * 4 || sx > camera.viewW + TILE * 4) continue;
     const fy = c.floorY * TILE - oy, w = TILE * 2.4, h = TILE * 0.5;
@@ -131,6 +131,28 @@ function drawCityMarkers(ctx, world, camera, x0, y0, x1, y1) {
     ctx.strokeStyle = '#7fd7ff'; ctx.lineWidth = 1; ctx.strokeRect(sx - w / 2, fy - 3 * h, w, 3 * h);
     ctx.fillStyle = '#bfe6ff'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
     ctx.fillText(c.name, sx, fy - 3 * h - 6);
+    ctx.textAlign = 'left';
+  }
+}
+
+// Маркеры диких городов (гнёзд): тёмная разрушенная масса + тлеющее красное ядро.
+function drawWildMarkers(ctx, world, camera, debug) {
+  const oy = Math.round(camera.y);
+  for (const w of world.wilds) {
+    if (!debug && !world.isSeen(w.cx, w.floorY)) continue;
+    const sx = camera.screenX((w.cx + 0.5) * TILE);
+    if (sx < -TILE * 5 || sx > camera.viewW + TILE * 5) continue;
+    const fy = w.floorY * TILE - oy, ww = TILE * 2.6, h = TILE * 0.5;
+    ctx.fillStyle = '#2a2230';
+    for (let i = 0; i < 3; i++) {
+      const cw = ww * (1 - i * 0.28), off = (tileHash(w.cx + i, w.floorY) - 0.5) * TILE * 0.5;
+      ctx.fillRect(sx - cw / 2 + off, fy - (i + 1) * h, cw, h + 1);
+    }
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 500 + w.cx);
+    ctx.fillStyle = `rgba(210,70,55,${0.45 + 0.4 * pulse})`;
+    ctx.beginPath(); ctx.arc(sx, fy - h * 1.6, TILE * 0.17, 0, 6.283); ctx.fill();
+    ctx.fillStyle = '#caa0a0'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('дикий город', sx, fy - 3 * h - 6);
     ctx.textAlign = 'left';
   }
 }
@@ -256,7 +278,7 @@ function drawTunnelShadow(ctx, world, camera, ox, oy, x0, y0, x1, y1) {
   ctx.restore();
 }
 
-function drawWorld(ctx, world, unit, camera) {
+function drawWorld(ctx, world, unit, camera, debug) {
   const W = camera.viewW, H = camera.viewH;
   const ox = Math.round(camera.x), oy = Math.round(camera.y);
   const x0 = Math.floor(camera.x / TILE), y0 = Math.max(0, Math.floor(camera.y / TILE));
@@ -339,7 +361,8 @@ function drawWorld(ctx, world, unit, camera) {
   ctx.strokeStyle = '#7fd7ff';
   ctx.strokeRect(prx + 0.5, pry + 0.5, PRINTER.w * TILE - 1, PRINTER.h * TILE - 1);
 
-  drawCityMarkers(ctx, world, camera, x0, y0, x1, y1);
+  drawCityMarkers(ctx, world, camera, debug);
+  drawWildMarkers(ctx, world, camera, debug);
 }
 
 // Туман войны + свет одним мягким градиентом. Диапазон с запасом в 1 тайл за

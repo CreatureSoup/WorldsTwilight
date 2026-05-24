@@ -28,11 +28,10 @@ function drawRadWidget(ctx, w, x, y) {
   ctx.fillStyle = f > 0 ? `rgb(255,${130 - Math.round(f * 90)},${110 - Math.round(f * 80)})` : '#5fd0ff';
   ctx.beginPath(); ctx.arc(cx, cy, RW_CORE + f * 2, 0, 6.283); ctx.fill();
 
-  // подписи
+  // подписи (без числа стойкости — наглядность даёт сам щит)
   const dmg = Math.max(0, w.rad - w.resist);
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.font = 'bold 12px monospace'; ctx.fillStyle = '#9fb3c8'; ctx.fillText('КОЖУХ', x + 78, y + 9);
-  ctx.font = '12px monospace'; ctx.fillStyle = '#cfe7ff'; ctx.fillText(`стойкость ${w.resist.toFixed(1)}`, x + 78, y + 27);
-  ctx.fillStyle = dmg > 0 ? '#ff8a8a' : '#5fe08a';
-  ctx.fillText(dmg > 0 ? `пробой −${dmg.toFixed(1)} HP/с` : 'щит держит', x + 78, y + 45);
+  ctx.font = 'bold 12px monospace'; ctx.fillStyle = '#9fb3c8'; ctx.fillText('КОЖУХ', x + 78, y + 18);
+  ctx.font = '12px monospace'; ctx.fillStyle = dmg > 0 ? '#ff8a8a' : '#5fe08a';
+  ctx.fillText(dmg > 0 ? `пробой −${dmg.toFixed(1)} HP/с` : 'щит держит', x + 78, y + 36);
 }

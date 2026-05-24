@@ -6,8 +6,9 @@
 const DROP_GRAV = 1500;   // px/сек² — притяжение дропа
 const DROP_VMAX = 900;    // px/сек — терминальная скорость падения
 const DROP_REST = 0.66;   // доля тайла: где дроп «лежит» на полу
-const SUCK_TIME = 0.14;   // сек — длительность всасывания в юнит
+const SUCK_TIME = 0.55;   // сек — длительность втягивания ресурса в юнит (лапы-граберы)
 const PICKUP_ARM = 1.0;   // сек — дроп лежит на земле, прежде чем его можно подобрать
+const PICKUP_R = 1;       // тайлов — радиус подхвата (текущий тайл + соседние)
 
 class Drop {
   constructor(x, y, type, cooldown = PICKUP_ARM) {
@@ -67,17 +68,21 @@ class Loot {
     for (const d of this.drops) {
       if (d.picked) {
         d.suckT += dt;
-        d.px += (unit.px - d.px) * Math.min(1, dt * 18);
-        d.py += (unit.py - d.py) * Math.min(1, dt * 18);
+        d.ux = unit.px; d.uy = unit.py;                  // позиция юнита — для рисовки лап-граберов
+        const t = Math.min(1, d.suckT / SUCK_TIME);
+        const ease = t * t;                              // плавно тянем (ускоряется к концу)
+        d.px = d.sx + (unit.px - d.sx) * ease;
+        d.py = d.sy + (unit.py - d.sy) * ease;
         continue;
       }
       d.update(dt, world);
       if (d.cooldown > 0) continue;        // ещё лежит — подобрать нельзя
-      if (d.tileX !== unit.tileX || d.tileY !== unit.tileY) continue;
+      const dxw = Math.abs(((d.tileX - unit.tileX) % MAP_W + MAP_W) % MAP_W); // радиус подхвата (тороидально по X)
+      if (Math.min(dxw, MAP_W - dxw) > PICKUP_R || Math.abs(d.tileY - unit.tileY) > PICKUP_R) continue;
       if (d.module) {                       // модуль — переустановка на доску (как подбор)
-        if (inv.tryInstall(d.type)) { d.picked = true; d.suckT = 0; installed = true; }
-      } else {                              // ресурс — в гексы груза
-        if (inv.addCargo(d.type)) { d.picked = true; d.suckT = 0; }
+        if (inv.tryInstall(d.type)) { d.picked = true; d.suckT = 0; d.sx = d.px; d.sy = d.py; d.ux = unit.px; d.uy = unit.py; installed = true; }
+      } else {                              // ресурс — лапы тянут в гексы груза
+        if (inv.addCargo(d.type)) { d.picked = true; d.suckT = 0; d.sx = d.px; d.sy = d.py; d.ux = unit.px; d.uy = unit.py; }
         else d.eject(world, unit);
       }
     }

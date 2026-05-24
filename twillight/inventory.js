@@ -243,6 +243,14 @@ class Inventory {
   cargoTotalHexes() { return this.cells.length; }                          // всего гексов в ядре
   cargoCapacity() { return Math.max(0, this.cells.length - this.moduleCellCount()); } // максимум груза
   cargoUsed() { return this.cargo.filter((c) => c.where === 'board').length; }        // груз в ядре
+  // Вес для скорости: груз + СЪЁМНЫЕ модули на доске (несъёмный каркас реактор+движок —
+  // «бесплатный», его вес заложен в базовую скорость; снимаешь модуль → едешь быстрее).
+  boardLoad() {
+    let n = this.cargoUsed();
+    for (const m of this.modules.values())
+      if (m.where === 'board' && MODULE_DEFS[m.type].removable) n += MODULE_DEFS[m.type].shape.length;
+    return n;
+  }
   cargoFreeHexes() { return Math.max(0, this.cargoCapacity() - this.cargoUsed()); }   // пустые гексы (xx)
   cargoCounts() { const c = {}; for (const cg of this.cargo) if (cg.where === 'board') c[cg.type] = (c[cg.type] || 0) + 1; return c; }
   addCargo(type) {
@@ -257,16 +265,22 @@ class Inventory {
     this.cargo = this.cargo.filter((c) => c.where !== 'board');
     return types;
   }
+  // Сдать ОДНУ единицу груза из ядра (для постепенной сдачи на базе); вернуть её тип или null.
+  deliverOneBoardCargo() {
+    const i = this.cargo.findIndex((c) => c.where === 'board');
+    if (i < 0) return null;
+    const t = this.cargo[i].type; this.cargo.splice(i, 1); return t;
+  }
   resetCargo() { this.cargo = []; }
 
   // -------- раскладка --------
   computeLayout(W, H) {
-    const bo = { x: W * 0.36, y: H * 0.30 };
-    const ground = { x: W * 0.06, y: H * 0.50, w: W * 0.56, h: H * 0.14 };
+    const bo = { x: W * 0.36, y: H * 0.40 };          // ниже, чтобы верхний гекс не лез под заголовок
+    const ground = { x: W * 0.06, y: H * 0.66, w: W * 0.56, h: H * 0.14 };
     ground.cy = ground.y + ground.h / 2;
     const panelX = W - 300, panelW = 286;
     const summary = { x: panelX, y: 92, w: panelW };
-    const card = { x: panelX, y: 280, w: panelW };
+    const card = { x: panelX, y: 312, w: panelW };   // под сводкой (10 строк по 18px), не налезает
     const rotateBtn = { x: panelX, y: 470, w: panelW, h: 46 };
     const start = { x: W / 2 - 140, y: H - 70, w: 280, h: 50 };
     const cw = 380, ch = 156, cmx = W / 2 - cw / 2, cmy = H / 2 - ch / 2;
@@ -575,6 +589,10 @@ class Inventory {
 
   drawSummary(ctx, L) {
     const s = this.stats, x = L.summary.x, y = L.summary.y, w = L.summary.w;
+    // скорость с учётом веса (груз + съёмные модули; как у юнита)
+    const load = this.boardLoad();
+    const eff = s.moveSpeed * Math.max(SPEED_MIN_FRAC, 1 - load * LOAD_PENALTY);
+    const speedVal = load > 0 ? `${eff.toFixed(1)} (баз ${s.moveSpeed})` : `${eff.toFixed(1)}`;
     const lines = [
       ['Ёмкость', `${Math.round(s.capacity)}`],
       ['Реген', `+${s.regen.toFixed(1)}/с`],
@@ -582,17 +600,19 @@ class Inventory {
       ['Баланс', `${s.regen - s.passiveDraw >= 0 ? '+' : ''}${(s.regen - s.passiveDraw).toFixed(1)}/с`],
       ['Бур', s.canDig ? 'подключён' : 'НЕТ'],
       ['Двигатель', s.canMove ? 'подключён' : 'НЕТ'],
+      ['Скорость', s.canMove ? `${speedVal} тайл/с` : 'НЕТ'],
       ['Прочность', `${s.maxHp} HP`],
       ['Стойкость', `${s.radResist.toFixed(1)} скв.`],
       ['Груз', `${this.cargoUsed()}/${this.cargoCapacity()} гексов`],
     ];
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(x, y, w, lines.length * 22 + 30);
+    const LH = 18;   // компактная строка — сводка не залезает на карточку выделенного
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(x, y, w, lines.length * LH + 28);
     ctx.font = 'bold 13px monospace'; ctx.textBaseline = 'top'; ctx.textAlign = 'left';
-    ctx.fillStyle = '#7fd7ff'; ctx.fillText('СБОРКА', x + 12, y + 8);
-    ctx.font = '13px monospace';
+    ctx.fillStyle = '#7fd7ff'; ctx.fillText('СБОРКА', x + 12, y + 6);
+    ctx.font = '12px monospace';
     lines.forEach(([k, v], i) => {
-      ctx.textAlign = 'left'; ctx.fillStyle = '#9fb3c8'; ctx.fillText(k, x + 12, y + 28 + i * 22);
-      ctx.textAlign = 'right'; ctx.fillStyle = v === 'НЕТ' ? '#e06f6f' : '#cfe7ff'; ctx.fillText(v, x + w - 12, y + 28 + i * 22);
+      ctx.textAlign = 'left'; ctx.fillStyle = '#9fb3c8'; ctx.fillText(k, x + 12, y + 24 + i * LH);
+      ctx.textAlign = 'right'; ctx.fillStyle = v === 'НЕТ' ? '#e06f6f' : '#cfe7ff'; ctx.fillText(v, x + w - 12, y + 24 + i * LH);
     });
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }

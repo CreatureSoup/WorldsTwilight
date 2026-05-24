@@ -15,6 +15,7 @@ class Unit {
     this.drilling = false; this.drillX = 0; this.drillY = 0;
     this.dug = null; // событие «выкопан ресурсный тайл» для оркестратора (game)
     this.load = 0;   // вес груза (занятые гексы), выставляет game перед update
+    this.crouchT = 0; this.crouchTarget = null; // присед перед прыжком вверх (ощущение веса)
     this.setStats(stats);
     this.energy = this.stats.capacity;
   }
@@ -62,17 +63,51 @@ class Unit {
       return;
     }
 
+    // присед перед прыжком: стоим JUMP_CROUCH_T, затем прыгаем (замедленно — тяжесть)
+    if (this.crouchT > 0) {
+      this.crouchT -= dt;
+      if (this.crouchT <= 0 && this.crouchTarget) {
+        const [jx, jy] = this.crouchTarget; this.crouchTarget = null;
+        this.startMove(jx, jy, this.effectiveSpeed() * JUMP_SPEED_FRAC, s.moveCost);
+      }
+      return;
+    }
+
     // Любой ход/лазанье — только с ОПОРЫ (клинг к породе). В свободном падении
     // управление не действует: зажатые клавиши отделены от физики (гравитации),
     // поэтому «полетать» вбок по воздуху нельзя.
     const anchored = this.isAnchored(world);
 
-    // СМАРТ-ЛАЗАНЬЕ: «вверх + вбок» → шаг по диагонали на боковой уступ (с опоры).
+    // ПОДЪЁМ по «вверх»: смарт-климб на уступ / лазанье по шахте / прыжок.
+    // Присед-прыжок — ТОЛЬКО когда прыгаем в открытый воздух; лазанье с опорой — без приседа.
     if (anchored && this.energy > 0 && s.canMove && input.up()) {
-      const hx = input.left() ? -1 : input.right() ? 1 : 0;
-      if (hx !== 0 && world.tileAt(this.tileX + hx, this.tileY - 1).type === AIR) {
-        this.dx = hx; this.dy = 0;
-        this.startMove(this.tileX + hx, this.tileY - 1, this.effectiveSpeed(), s.moveCost);
+      const reqHx = input.left() ? -1 : input.right() ? 1 : 0;
+      // 1) явный «вверх+вбок» → диагональ на боковой уступ
+      if (reqHx !== 0 && world.tileAt(this.tileX + reqHx, this.tileY - 1).type === AIR) {
+        this.dx = reqHx; this.dy = 0;
+        this.startMove(this.tileX + reqHx, this.tileY - 1, this.effectiveSpeed(), s.moveCost);
+        return;
+      }
+      // 2) «вверх» в воздух без явного вбок
+      if (reqHx === 0 && world.tileAt(this.tileX, this.tileY - 1).type === AIR) {
+        if (this.anchoredAt(world, this.tileX, this.tileY - 1)) {            // наверху есть опора (шахта/стена) → лезем
+          this.dx = 0; this.dy = -1;
+          this.startMove(this.tileX, this.tileY - 1, this.effectiveSpeed(), s.moveCost);
+          return;
+        }
+        // прямо вверх не зацепиться → авто-цепляние за ЕДИНСТВЕННЫЙ боковой уступ (без чёткого «вбок»)
+        const ledges = [];
+        for (const sgn of [-1, 1])
+          if (world.tileAt(this.tileX + sgn, this.tileY - 1).type === AIR && this.anchoredAt(world, this.tileX + sgn, this.tileY - 1)) ledges.push(sgn);
+        const side = ledges.length === 1 ? ledges[0] : (ledges.length === 2 && ledges.includes(this.dx) ? this.dx : null);
+        if (side !== null) {
+          this.dx = side; this.dy = 0;
+          this.startMove(this.tileX + side, this.tileY - 1, this.effectiveSpeed(), s.moveCost);
+          return;
+        }
+        // настоящий прыжок в открытый воздух → присед, затем замедленный прыжок (тяжесть)
+        this.dx = 0; this.dy = -1;
+        this.crouchT = JUMP_CROUCH_T; this.crouchTarget = [this.tileX, this.tileY - 1];
         return;
       }
     }
@@ -101,7 +136,7 @@ class Unit {
         }
         return;
       }
-      // ход в воздух (вкл. прыжок вверх на 1) — только с опоры
+      // ход в воздух (вбок/вниз) — только с опоры; подъём «вверх» обработан выше
       if (t.type === AIR && s.canMove && anchored) { this.startMove(nx, ny, this.effectiveSpeed(), s.moveCost); return; }
     }
 

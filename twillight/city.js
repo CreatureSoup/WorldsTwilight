@@ -23,6 +23,21 @@ class City {
     return -1;
   }
 
+  // Прямой урон рейдом по кольцам (снаружи внутрь). Пробитое кольцо теряется
+  // навсегда; если на базе — недопробитое активное кольцо позже дозарядится (update).
+  damage(amount) {
+    if (this.dead) return;
+    let dmg = amount;
+    while (dmg > 0) {
+      const i = this.activeRing();
+      if (i < 0) { this.dead = true; return; }
+      const take = Math.min(dmg, this.rings[i].hp);
+      this.rings[i].hp -= take; dmg -= take;
+      if (this.rings[i].hp <= 0) { this.rings[i].hp = 0; this.rings[i].lost = true; }
+    }
+    if (this.activeRing() < 0) this.dead = true;
+  }
+
   update(dt, atBase) {
     if (this.dead) return;
 
