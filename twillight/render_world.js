@@ -129,8 +129,8 @@ function drawCityMarkers(ctx, world, camera, debug) {
     ctx.fillStyle = '#3a5a6e';
     for (let i = 0; i < 3; i++) { const ww = w * (1 - i * 0.26); ctx.fillRect(sx - ww / 2, fy - (i + 1) * h, ww, h); }
     ctx.strokeStyle = '#7fd7ff'; ctx.lineWidth = 1; ctx.strokeRect(sx - w / 2, fy - 3 * h, w, 3 * h);
-    ctx.fillStyle = '#bfe6ff'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(c.name, sx, fy - 3 * h - 6);
+    ctx.fillStyle = PAL.gold; ctx.font = `9px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(c.name.toUpperCase(), sx, fy - 3 * h - 6);
     ctx.textAlign = 'left';
   }
 }
@@ -151,8 +151,8 @@ function drawWildMarkers(ctx, world, camera, debug) {
     const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 500 + w.cx);
     ctx.fillStyle = `rgba(210,70,55,${0.45 + 0.4 * pulse})`;
     ctx.beginPath(); ctx.arc(sx, fy - h * 1.6, TILE * 0.17, 0, 6.283); ctx.fill();
-    ctx.fillStyle = '#caa0a0'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText('дикий город', sx, fy - 3 * h - 6);
+    ctx.fillStyle = PAL.bloodBright; ctx.font = `9px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('ДИКИЙ ГОРОД', sx, fy - 3 * h - 6);
     ctx.textAlign = 'left';
   }
 }
@@ -390,7 +390,7 @@ function drawFog(ctx, world, unit, camera, W, H) {
         a = Math.min(1, Math.max(0, (dist - LIGHT_R0) / (LIGHT_R1 - LIGHT_R0))) * FOG_EXPLORED;
       }
       const o = (j * cols + i) * 4;
-      d[o] = 3; d[o + 1] = 5; d[o + 2] = 9; d[o + 3] = Math.round(a * 255);
+      d[o] = 7; d[o + 1] = 5; d[o + 2] = 10; d[o + 3] = Math.round(a * 255);  // PAL.void — тёплая темнота тумана
     }
   _fogX.putImageData(img, 0, 0);
   const sm = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = true;

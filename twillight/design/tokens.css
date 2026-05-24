@@ -1,0 +1,154 @@
+/* ============================================================
+   TWILIGHT OF THE WORLD — DESIGN TOKENS · v2
+   Подземная машинная цивилизация. Гравированный металл,
+   ритуальная орнаментика, точечные акценты крови и янтаря.
+   ============================================================ */
+
+:root {
+  /* ----- COLOR / SUBTERRANEAN NEUTRALS ---------------------- */
+  --void:    #07050a;   /* абсолютная глубина */
+  --pit:     #0d0a0e;   /* фон страницы */
+  --night:   #14100c;   /* тёплый чёрный, кованая поверхность */
+  --earth:   #1a140e;   /* приподнятая поверхность */
+  --bronze:  #2a2018;   /* контрол / окисленная медь */
+  --carbon:  #3a302a;   /* муть */
+  --ash:     #5a5046;   /* муть-2 */
+  --pewter:  #7a705e;   /* meta-текст */
+  --bone:    #b8a896;   /* основной текст, тёплая кость */
+  --chalk:   #e8dcc4;   /* высший приоритет, выжженный кремень */
+
+  /* ----- COLOR / RITUAL ACCENTS ----------------------------- */
+  --gold:        #d4a042;   /* гравировка, золото предков */
+  --gold-bright: #f2c878;
+  --gold-dim:    #4a3618;
+
+  --blood:       #a8281c;   /* кровь ядра, тёплая угроза */
+  --blood-bright:#ff3a22;
+  --blood-dim:   #3a0e08;
+
+  --toxic:       #c8e25a;   /* СКВЕРНА — кислотный жёлто-зелёный */
+  --toxic-bright:#e8ff7a;
+  --toxic-dim:   #3a4818;
+
+  --amber:       #f08a2a;   /* энергия, тёплый свет лампы */
+  --amber-bright:#ffb45a;
+  --amber-dim:   #4a2810;
+
+  --cobalt:      #3a7ec8;   /* холодный data-сигнал, редкий */
+  --cobalt-dim:  #14283f;
+
+  /* aliases preserved for v1 components ---------------------- */
+  --skverna:     var(--toxic);
+  --skverna-dim: var(--toxic-dim);
+  --data:        var(--cobalt);
+  --data-dim:    var(--cobalt-dim);
+  --ember:       var(--amber);
+  --ember-dim:   var(--amber-dim);
+  --rust:        var(--blood);
+  --rust-dim:    var(--blood-dim);
+  --jade:        #6a8a52;
+  --crystal:     #8a7ed4;
+  --soil:        var(--earth);
+  --iron:        var(--bronze);
+  --steel:       var(--ash);
+  --ghost:       var(--pewter);
+
+  /* ----- COLOR / CONFESSION --------------------------------- */
+  /* Каждая конфессия — единый ритуальный пигмент по чёрному металлу */
+  --maya-ochre:  #d4a042;     /* gold = sun */
+  --maya-jade:   #6a8a52;
+  --maya-stone:  #8a7e64;
+
+  --nord-pewter: #a89888;     /* кость, кованое олово */
+  --nord-frost:  #b8c4d4;
+  --nord-blood:  #a8281c;
+
+  --aztec-obsidian: #14100c;
+  --aztec-gold:     #d4a042;
+  --aztec-blood:    #8e2a1f;
+
+  /* ----- TYPE ----------------------------------------------- */
+  --font-display: 'Tektur', 'JetBrains Mono', monospace;
+  --font-ui:      'JetBrains Mono', 'IBM Plex Mono', monospace;
+  --font-body:    'IBM Plex Sans Condensed', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'IBM Plex Mono', monospace;
+  --font-glitch:  'Syne Mono', 'JetBrains Mono', monospace;
+
+  --t-display-mega: 180px;
+  --t-display-xl:   128px;
+  --t-display-l:    72px;
+  --t-h1:           44px;
+  --t-h2:           28px;
+  --t-h3:           20px;
+  --t-body:         15px;
+  --t-small:        13px;
+  --t-meta:         11px;
+  --t-micro:        10px;
+
+  --lh-tight: 0.92;
+  --lh-snug:  1.1;
+  --lh-body:  1.55;
+  --tr-flat:  -0.005em;
+  --tr-tight: -0.03em;
+  --tr-wide:  0.08em;
+  --tr-uber:  0.22em;
+  --tr-mega:  0.32em;
+
+  /* ----- SPACING (4px base) --------------------------------- */
+  --s-1: 4px;   --s-2: 8px;   --s-3: 12px;
+  --s-4: 16px;  --s-5: 24px;  --s-6: 32px;
+  --s-7: 48px;  --s-8: 64px;  --s-9: 96px;
+  --s-10: 128px; --s-11: 160px;
+
+  /* ----- RADII (industrial: sharp) -------------------------- */
+  --r-0: 0;
+  --r-1: 2px;
+  --r-2: 4px;
+  --r-pill: 999px;
+
+  /* ----- BORDERS -------------------------------------------- */
+  --border-hair:   1px solid var(--bronze);
+  --border-line:   1px solid var(--carbon);
+  --border-bright: 1px solid var(--ash);
+  --border-gold:   1px solid var(--gold);
+  --border-blood:  1px solid var(--blood);
+  --border-toxic:  1px solid var(--toxic);
+
+  /* ----- MOTION --------------------------------------------- */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --d-1: 80ms; --d-2: 140ms; --d-3: 240ms; --d-4: 400ms;
+
+  /* ----- GLOW (single-source, no halo) ---------------------- */
+  --glow-gold:   0 0 0 1px rgba(212,160,66,0.6),  0 0 24px -4px rgba(212,160,66,0.45);
+  --glow-blood:  0 0 0 1px rgba(168,40,28,0.7),   0 0 24px -4px rgba(255,58,34,0.45);
+  --glow-toxic:  0 0 0 1px rgba(200,226,90,0.45), 0 0 22px -4px rgba(200,226,90,0.22);
+  --glow-amber:  0 0 0 1px rgba(240,138,42,0.55), 0 0 24px -4px rgba(240,138,42,0.4);
+
+  /* ----- TEXTURES ------------------------------------------- */
+  --scanlines:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 2px,
+      rgba(232,220,196,0.018) 2px 3px
+    );
+
+  --grid-fine:
+    linear-gradient(to right, rgba(122,112,94,0.06) 1px, transparent 1px) 0 0 / 12px 12px,
+    linear-gradient(to bottom, rgba(122,112,94,0.06) 1px, transparent 1px) 0 0 / 12px 12px;
+
+  --grid-coarse:
+    linear-gradient(to right, rgba(122,112,94,0.10) 1px, transparent 1px) 0 0 / 48px 48px,
+    linear-gradient(to bottom, rgba(122,112,94,0.10) 1px, transparent 1px) 0 0 / 48px 48px;
+
+  /* engraved-plate filigree: hairline diagonal weave */
+  --filigree:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0 6px,
+      rgba(212,160,66,0.045) 6px 7px
+    );
+
+  /* noise grain — applied sparingly via mix-blend */
+  --grain:
+    radial-gradient(rgba(232,220,196,0.04) 1px, transparent 1.2px) 0 0 / 3px 3px;
+}

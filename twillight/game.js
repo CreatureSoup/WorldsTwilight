@@ -30,6 +30,9 @@ class Game {
     this.last = performance.now();
     this.fps = 60;
 
+    // предзагрузка шрифтов дизайн-системы, чтобы canvas не мигал фолбэком
+    if (document.fonts) [`700 16px ${FONT_DISPLAY}`, `500 13px ${FONT_MONO}`, `400 15px ${FONT_BODY}`].forEach((f) => document.fonts.load(f));
+
     this.resize();
     window.addEventListener('resize', () => this.resize());
     this.bindPointer();
@@ -65,7 +68,8 @@ class Game {
       }
     });
     this.canvas.addEventListener('mousemove', (e) => {
-      if (this.mode === 'inventory') { const { x, y } = pos(e); this.inventory.pointerMove(x, y); }
+      const p = pos(e); this.menuMouse = p;            // ховер кнопок меню/паузы/гейм-овера
+      if (this.mode === 'inventory') this.inventory.pointerMove(p.x, p.y);
     });
     this.canvas.addEventListener('mouseup', (e) => {
       if (this.mode === 'inventory') { const { x, y } = pos(e); this.inventory.pointerUp(x, y); }
@@ -77,22 +81,25 @@ class Game {
 
   menuButtons() {
     const W = this.designW, H = this.designH, w = 260, h = 50, x = W / 2 - w / 2;
+    let bs = [];
     if (this.mode === 'menu') {
-      return [{ id: 'start', label: 'НОВАЯ ИГРА', x, y: H / 2 + 10, w, h, primary: true }];
-    }
-    if (this.mode === 'paused') {
+      const lw = 340, lx = W - 48 - lw;
+      bs = [{ id: 'start', label: 'Новый забег', desc: 'seed · random', x: lx, y: H * 0.42, w: lw, h: 46, primary: true }];
+    } else if (this.mode === 'paused') {
       const y0 = H / 2 - 60;
-      return [
+      bs = [
         { id: 'resume',    label: 'Продолжить',     x, y: y0,       w, h },
         { id: 'inventory', label: 'Ядро / сборка',  x, y: y0 + 64,  w, h },
         { id: 'restart',   label: 'Начать заново',  x, y: y0 + 128, w, h },
         { id: 'mainmenu',  label: 'В главное меню', x, y: y0 + 192, w, h },
       ];
+    } else if (this.mode === 'gameover') {
+      const bw = 220, bh = 42;
+      bs = [{ id: 'mainmenu', label: 'В меню · ENTER', x: W - 48 - bw, y: H - 56, w: bw, h: bh, primary: true }];
     }
-    if (this.mode === 'gameover') {
-      return [{ id: 'mainmenu', label: 'В главное меню', x, y: H / 2 + 10, w, h, primary: true }];
-    }
-    return [];
+    const m = this.menuMouse;
+    if (m) for (const b of bs) b.hover = m.x >= b.x && m.x <= b.x + b.w && m.y >= b.y && m.y <= b.y + b.h;
+    return bs;
   }
 
   menuClick(x, y) {
@@ -328,20 +335,21 @@ class Game {
 
   drawScene() {
     const ctx = this.ctx;
-    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, this.designW, this.designH);
+    ctx.fillStyle = PAL.pit; ctx.fillRect(0, 0, this.designW, this.designH);
     drawWorld(ctx, this.world, this.unit, this.camera, this.debug);
     drawEnemies(ctx, this.enemies, this.camera);
     drawLoot(ctx, this.loot, this.camera);
     if (!this.debug) drawFog(ctx, this.world, this.unit, this.camera, this.designW, this.designH); // дебаг — без тумана
     drawTachikoma(ctx, this.world, this.unit, this.camera);
     drawFx(ctx, this.fx, this.camera);
+    drawCrtOverlay(ctx, this.designW, this.designH);   // виньетка + скан-лайны поверх мира (HUD крупнее)
     drawHUD(ctx, this.world, this.unit, this.inventory, { fps: this.fps, delivered: this.deliveredTotal, radWidget: this.radWidget, cycle: this.cycle, quest: this.quest, questMsg: this.questMsg, rep: this.save.rep[this.cities[0].name] || 0 }, this.designW, this.designH);
     drawCity(ctx, this.city, this.designW);
     if (this.debug) {
-      ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = 'bold 13px monospace'; ctx.fillStyle = '#ffd24a';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = `13px ${FONT_MONO}`; ctx.fillStyle = '#ffd24a';
       ctx.fillText('DEBUG: камера свободна (WASD), туман выкл, юнит в безопасности — B выкл', this.designW / 2, this.designH - 48);
       // список городов: разведаны ли копателями
-      ctx.textAlign = 'right'; ctx.font = 'bold 12px monospace';
+      ctx.textAlign = 'right'; ctx.font = `12px ${FONT_MONO}`;
       const rx = this.designW - 14; let ly = 168;   // ниже панели задания (справа под кнопкой «Ядро»)
       ctx.fillStyle = '#ffd24a'; ctx.fillText('ГОРОДА (разведка):', rx, ly); ly += 17;
       for (const c of this.cities) {
@@ -349,7 +357,7 @@ class Game {
         ctx.fillText((c.found ? '✓ ' : '✗ ') + c.name, rx, ly); ly += 15;
       }
       // над дикими гнёздами — накоплено: ресурсы (собиратели) и заряд (разведчики)
-      ctx.textAlign = 'center'; ctx.font = 'bold 12px monospace'; ctx.fillStyle = '#ffd24a';
+      ctx.textAlign = 'center'; ctx.font = `12px ${FONT_MONO}`; ctx.fillStyle = '#ffd24a';
       for (const w of this.world.wilds) {
         const sx = Math.round(this.camera.screenX(w.cx * TILE + TILE / 2)), sy = Math.round(w.cy * TILE - this.camera.y);
         ctx.fillText(`ресурс ${w.loot} · заряд ${w.charge}`, sx, sy - TILE * 2);
@@ -417,13 +425,16 @@ class Game {
     } else if (this.mode === 'intro') {
       this.intro.update(dt);
       if (this.intro.done || this.input.pressed('Space', 'Enter', 'NumpadEnter')) this.mode = 'playing';
-      ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, this.designW, this.designH);
+      ctx.fillStyle = PAL.pit; ctx.fillRect(0, 0, this.designW, this.designH);
       drawWorld(ctx, this.world, this.unit, this.camera);
       drawFog(ctx, this.world, this.unit, this.camera, this.designW, this.designH);
       drawIntro(ctx, this.intro, this.world, this.unit, this.camera, this.designW, this.designH);
     } else if (this.mode === 'gameover') {
       this.drawScene();
-      drawGameOver(ctx, this.menuButtons(), this.designW, this.designH, this.overReason);
+      drawGameOver(ctx, this.menuButtons(), this.designW, this.designH, this.overReason, {
+        depth: this.unit ? Math.max(0, this.unit.tileY - CAVE_FLOOR_Y) : 0,
+        delivered: this.deliveredTotal, byType: this.delivered, best: this.save.bestDepth, cycle: this.cycle.n,
+      });
     } else if (this.mode === 'inventory') {
       if (!this.inventory.confirm) {  // пока открыта модалка выхода — хоткеи заблокированы
         if (this.input.pressed('Escape')) {

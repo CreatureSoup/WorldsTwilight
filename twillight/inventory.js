@@ -406,12 +406,30 @@ class Inventory {
     const L = this.computeLayout(W, H);
     this.hover = this.drag ? null : this.pieceAt(this.mouse.x, this.mouse.y);
 
-    ctx.fillStyle = '#0a0e14'; ctx.fillRect(0, 0, W, H);
+    drawStaticBg(ctx, W, H);
+    hazardTape(ctx, 0, 0, W, 5, PAL.amberDim);
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = '#46c6ff'; ctx.font = 'bold 30px monospace';
-    ctx.fillText('ЯДРО ЮНИТА', W / 2, 50);
-    ctx.fillStyle = '#9fb3c8'; ctx.font = '14px monospace';
-    ctx.fillText('Тащи — перемести • клик — выбрать • соединяй узлы с реактором', W / 2, 74);
+    pulseDot(ctx, W / 2 - 78, 23, 3, PAL.gold);
+    ctx.fillStyle = PAL.gold; ctx.font = `9px ${FONT_MONO}`; ctx.fillText('// СБОРКА ЯДРА · АКТИВНА', W / 2, 26);
+    ctx.fillStyle = PAL.chalk; ctx.font = `700 28px ${FONT_DISPLAY}`;
+    ctx.fillText('ЯДРО ЮНИТА', W / 2, 54);
+    ctx.fillStyle = PAL.pewter; ctx.font = `11px ${FONT_MONO}`;
+    ctx.fillText('ТАЩИ · ПЕРЕМЕСТИТЬ    КЛИК · ВЫБРАТЬ    R · ПОВОРОТ', W / 2, 74);
+
+    // направляющие круги + крестики-прицелы вокруг доски (как в кодексе)
+    let br = 0;
+    for (const c of this.cells) { const p = axialToPixel(c.q, c.r, L.bo.x, L.bo.y); br = Math.max(br, Math.hypot(p.x - L.bo.x, p.y - L.bo.y)); }
+    br += HEX_SIZE * 0.9;
+    ctx.save(); ctx.setLineDash([2, 4]); ctx.strokeStyle = 'rgba(168,40,28,0.18)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(L.bo.x, L.bo.y, br, 0, 6.283); ctx.stroke();
+    ctx.setLineDash([1, 6]); ctx.strokeStyle = 'rgba(212,160,66,0.3)';
+    ctx.beginPath(); ctx.arc(L.bo.x, L.bo.y, br + 14, 0, 6.283); ctx.stroke();
+    ctx.setLineDash([]); ctx.restore();
+    ctx.strokeStyle = PAL.gold; ctx.lineWidth = 1;
+    for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+      const cx = L.bo.x + dx * (br + 14), cy = L.bo.y + dy * (br + 14);
+      ctx.beginPath(); ctx.moveTo(cx - 5, cy); ctx.lineTo(cx + 5, cy); ctx.moveTo(cx, cy - 5); ctx.lineTo(cx, cy + 5); ctx.stroke();
+    }
 
     // ячейки доски
     for (const c of this.cells) {
@@ -447,16 +465,13 @@ class Inventory {
         ctx.strokeStyle = '#ff5a5a'; ctx.lineWidth = 3;
         for (const c of cellsOf(m)) { const p = axialToPixel(c.q, c.r, L.bo.x, L.bo.y); hexPath(ctx, p.x, p.y, HEX_SIZE * 1.02); ctx.stroke(); }
         const cen = this.centroid(m, L.bo);
-        ctx.fillStyle = '#ff9a9a'; ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center';
-        ctx.fillText('нет места', cen.x, cen.y - HEX_SIZE * 1.3);
+        ctx.fillStyle = PAL.bloodBright; ctx.font = `bold 11px ${FONT_MONO}`; ctx.textAlign = 'center';
+        ctx.fillText('НЕТ МЕСТА', cen.x, cen.y - HEX_SIZE * 1.3);
       }
     }
 
-    // земля
-    ctx.fillStyle = 'rgba(40,30,20,0.45)'; ctx.fillRect(L.ground.x, L.ground.y, L.ground.w, L.ground.h);
-    ctx.strokeStyle = 'rgba(150,110,70,0.4)'; ctx.lineWidth = 1; ctx.strokeRect(L.ground.x + 0.5, L.ground.y + 0.5, L.ground.w - 1, L.ground.h - 1);
-    ctx.fillStyle = 'rgba(170,140,110,0.6)'; ctx.font = '12px monospace'; ctx.textAlign = 'left';
-    ctx.fillText('ЗЕМЛЯ (не установлено)', L.ground.x + 8, L.ground.y + 16);
+    // земля (полка)
+    techPanel(ctx, L.ground.x, L.ground.y, L.ground.w, L.ground.h, { accent: PAL.gold, label: '// ЗЕМЛЯ · НЕ УСТАНОВЛЕНО', serial: 'STK', bolts: false });
     for (const m of this.modules.values()) {
       if (m.where !== 'ground') continue;
       this.drawMini(ctx, this.groundX(m, L.ground), L.ground.cy, m, this.selected === m.id);
@@ -503,23 +518,23 @@ class Inventory {
 
   drawConfirm(ctx, L) {
     const noDrill = this.countBoard('drill') === 0, noShield = this.countBoard('shield') === 0;
-    const what = noDrill && noShield ? 'без бура и кожуха' : noDrill ? 'без бура' : 'без кожуха';
+    const what = noDrill && noShield ? 'БЕЗ БУРА И КОЖУХА' : noDrill ? 'БЕЗ БУРА' : 'БЕЗ КОЖУХА';
     const sub = noDrill ? 'Юнит не сможет копать породу.' : 'Юнит останется без защиты от скверны.';
     const b = L.confirm;
-    ctx.fillStyle = 'rgba(5,8,12,0.72)'; ctx.fillRect(0, 0, L.W, L.H);
-    ctx.fillStyle = 'rgba(22,14,14,0.98)'; ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.strokeStyle = '#e06f6f'; ctx.lineWidth = 2; ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+    ctx.fillStyle = 'rgba(7,5,10,0.78)'; ctx.fillRect(0, 0, L.W, L.H);
+    techPanel(ctx, b.x, b.y, b.w, b.h, { accent: PAL.blood });
+    hazardTape(ctx, b.x + 1, b.y + 1, b.w - 2, 6, PAL.blood);
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = '#ffb3b3'; ctx.font = 'bold 18px monospace';
-    ctx.fillText(`Выйти в шахту ${what}?`, b.x + b.w / 2, b.y + 46);
-    ctx.fillStyle = '#caa6a6'; ctx.font = '13px monospace';
-    ctx.fillText(sub, b.x + b.w / 2, b.y + 72);
+    ctx.fillStyle = PAL.bloodBright; ctx.font = `700 18px ${FONT_DISPLAY}`;
+    ctx.fillText(`ВЫЙТИ ${what}?`, b.x + b.w / 2, b.y + 44);
+    ctx.fillStyle = PAL.bone; ctx.font = `12px ${FONT_BODY}`;
+    ctx.fillText(sub, b.x + b.w / 2, b.y + 70);
     const btn = (r, label, danger) => {
-      ctx.fillStyle = danger ? '#7a2a2a' : 'rgba(20,40,55,0.95)'; ctx.fillRect(r.x, r.y, r.w, r.h);
-      ctx.strokeStyle = danger ? '#ff7a7a' : '#46c6ff'; ctx.lineWidth = 2; ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
-      ctx.fillStyle = '#eaf6ff'; ctx.font = 'bold 15px monospace'; ctx.textBaseline = 'middle'; ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2); ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = 'rgba(13,10,14,0.95)'; ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeStyle = danger ? PAL.blood : PAL.ash; ctx.lineWidth = 1; ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+      ctx.fillStyle = danger ? PAL.bloodBright : PAL.bone; ctx.font = `13px ${FONT_MONO}`; ctx.textBaseline = 'middle'; ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2); ctx.textBaseline = 'alphabetic';
     };
-    btn(L.confirmYes, 'Выйти', true); btn(L.confirmNo, 'Отмена', false);
+    btn(L.confirmYes, 'ВЫЙТИ', true); btn(L.confirmNo, 'ОТМЕНА', false);
     ctx.textAlign = 'left';
   }
 
@@ -606,13 +621,12 @@ class Inventory {
       ['Груз', `${this.cargoUsed()}/${this.cargoCapacity()} гексов`],
     ];
     const LH = 18;   // компактная строка — сводка не залезает на карточку выделенного
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(x, y, w, lines.length * LH + 28);
-    ctx.font = 'bold 13px monospace'; ctx.textBaseline = 'top'; ctx.textAlign = 'left';
-    ctx.fillStyle = '#7fd7ff'; ctx.fillText('СБОРКА', x + 12, y + 6);
-    ctx.font = '12px monospace';
+    const cyTop = techPanel(ctx, x, y, w, lines.length * LH + 36, { accent: PAL.cobalt, label: '// СБОРКА', serial: 'STATS' });
+    ctx.font = `11px ${FONT_MONO}`; ctx.textBaseline = 'top';
     lines.forEach(([k, v], i) => {
-      ctx.textAlign = 'left'; ctx.fillStyle = '#9fb3c8'; ctx.fillText(k, x + 12, y + 24 + i * LH);
-      ctx.textAlign = 'right'; ctx.fillStyle = v === 'НЕТ' ? '#e06f6f' : '#cfe7ff'; ctx.fillText(v, x + w - 12, y + 24 + i * LH);
+      const ly = cyTop + 6 + i * LH;
+      ctx.textAlign = 'left'; ctx.fillStyle = PAL.pewter; ctx.fillText(k, x + 12, ly);
+      ctx.textAlign = 'right'; ctx.fillStyle = v === 'НЕТ' ? PAL.bloodBright : PAL.chalk; ctx.fillText(v, x + w - 12, ly);
     });
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
@@ -638,16 +652,13 @@ class Inventory {
     if (id == null) return;
     const m = this.pieceById(id); if (!m) return;
     const info = this.moduleInfo(m);
-    const x = L.card.x, y = L.card.y, w = L.card.w, h = info.lines.length * 22 + 40;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = info.color; ctx.lineWidth = 2; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-    ctx.textBaseline = 'top'; ctx.textAlign = 'left';
-    ctx.fillStyle = info.color; ctx.font = 'bold 16px monospace';
-    ctx.fillText(info.name, x + 12, y + 10);
-    ctx.font = '13px monospace';
+    const x = L.card.x, y = L.card.y, w = L.card.w, h = info.lines.length * 20 + 40;
+    const cyTop = techPanel(ctx, x, y, w, h, { accent: info.color, label: '// ' + info.name.toUpperCase(), serial: m.res ? 'RES' : 'MOD', fingers: true });
+    ctx.textBaseline = 'top'; ctx.font = `11px ${FONT_MONO}`;
     info.lines.forEach(([k, v], i) => {
-      ctx.textAlign = 'left'; ctx.fillStyle = '#9fb3c8'; ctx.fillText(k, x + 12, y + 36 + i * 22);
-      ctx.textAlign = 'right'; ctx.fillStyle = '#cfe7ff'; ctx.fillText(v, x + w - 12, y + 36 + i * 22);
+      const ly = cyTop + 6 + i * 20;
+      ctx.textAlign = 'left'; ctx.fillStyle = PAL.pewter; ctx.fillText(k, x + 12, ly);
+      ctx.textAlign = 'right'; ctx.fillStyle = PAL.chalk; ctx.fillText(v, x + w - 12, ly);
     });
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
@@ -657,27 +668,28 @@ class Inventory {
     if (!sel || sel.res) return;   // у груза нет поворота
     const b = L.rotateBtn;
     const hot = this.inRect(this.mouse.x, this.mouse.y, b);
-    ctx.fillStyle = hot ? '#2a5570' : 'rgba(20,40,55,0.95)'; ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.strokeStyle = '#46c6ff'; ctx.lineWidth = 2; ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
-    ctx.fillStyle = '#eaf6ff'; ctx.font = 'bold 17px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('⟳ Повернуть (R)', b.x + b.w / 2, b.y + b.h / 2);
+    ctx.fillStyle = hot ? PAL.carbon : 'rgba(13,10,14,0.9)'; ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = PAL.cobalt; ctx.lineWidth = 1; ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+    ctx.fillStyle = PAL.cobalt; ctx.font = `12px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('⟳ ПОВЕРНУТЬ · R', b.x + b.w / 2, b.y + b.h / 2);
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
   drawStart(ctx, L) {
     const valid = this.stats.valid, b = L.start;
-    ctx.fillStyle = valid ? '#1f7a44' : '#33272b'; ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.strokeStyle = valid ? '#5fe08a' : '#6a5560'; ctx.lineWidth = 2; ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
-    ctx.fillStyle = valid ? '#eaf6ff' : '#9a8a90'; ctx.font = 'bold 18px monospace';
+    const hot = this.inRect(this.mouse.x, this.mouse.y, b);
+    ctx.fillStyle = valid && hot ? PAL.gold : 'rgba(13,10,14,0.9)'; ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = valid ? PAL.gold : PAL.ash; ctx.lineWidth = 1; ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+    ctx.fillStyle = valid ? (hot ? PAL.void : PAL.gold) : PAL.ash; ctx.font = `14px ${FONT_MONO}`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(this.preGame ? 'В ШАХТУ ▶' : 'ПРОДОЛЖИТЬ ▶', b.x + b.w / 2, b.y + b.h / 2);
     ctx.textBaseline = 'alphabetic';
     if (!valid && this.inRect(this.mouse.x, this.mouse.y, b)) {
-      const msg = 'Подключите к реактору: ' + this.stats.missing.join(', ');
-      ctx.font = '13px monospace';
+      const msg = 'ПОДКЛЮЧИТЕ К РЕАКТОРУ: ' + this.stats.missing.join(', ').toUpperCase();
+      ctx.font = `11px ${FONT_MONO}`;
       const tw = ctx.measureText(msg).width + 20, tx = this.mouse.x - tw / 2, ty = b.y - 40;
-      ctx.fillStyle = 'rgba(20,8,8,0.95)'; ctx.fillRect(tx, ty, tw, 30);
-      ctx.strokeStyle = '#e06f6f'; ctx.lineWidth = 1; ctx.strokeRect(tx + 0.5, ty + 0.5, tw - 1, 29);
-      ctx.fillStyle = '#ffb3b3'; ctx.textBaseline = 'middle'; ctx.fillText(msg, this.mouse.x, ty + 15);
+      ctx.fillStyle = 'rgba(13,10,14,0.95)'; ctx.fillRect(tx, ty, tw, 28);
+      ctx.strokeStyle = PAL.bloodBright; ctx.lineWidth = 1; ctx.strokeRect(tx + 0.5, ty + 0.5, tw - 1, 27);
+      ctx.fillStyle = PAL.bloodBright; ctx.textBaseline = 'middle'; ctx.fillText(msg, this.mouse.x, ty + 14);
       ctx.textBaseline = 'alphabetic';
     }
     ctx.textAlign = 'left';

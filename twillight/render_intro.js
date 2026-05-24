@@ -38,7 +38,7 @@ function drawIntro(ctx, intro, world, unit, camera, W, H) {
     ctx.beginPath(); ctx.arc(ox, oy, rr * 1.9, 0, 6.283); ctx.fill();
     ctx.fillStyle = '#3ad17a';
     ctx.beginPath(); ctx.arc(ox, oy, rr, 0, 6.283); ctx.fill();
-    ctx.fillStyle = '#0d1117'; ctx.font = `bold ${Math.max(8, Math.round(rr * 1.3))}px monospace`;
+    ctx.fillStyle = '#0d1117'; ctx.font = `bold ${Math.max(8, Math.round(rr * 1.3))}px ${FONT_MONO}`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('Р', ox, oy + 1);
     ctx.textBaseline = 'alphabetic';
   }
@@ -49,11 +49,12 @@ function drawIntro(ctx, intro, world, unit, camera, W, H) {
   }
 
   // этап + подсказка
-  const label = t < INTRO_PRINT ? 'Печать корпуса…'
-    : t < INTRO_PRINT + INTRO_REACTOR ? 'Установка реактора…' : 'Синхронизация связи…';
+  const label = t < INTRO_PRINT ? 'ПЕЧАТЬ КОРПУСА'
+    : t < INTRO_PRINT + INTRO_REACTOR ? 'УСТАНОВКА РЕАКТОРА' : 'СИНХРОНИЗАЦИЯ СВЯЗИ';
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = '#cfe7ff'; ctx.font = 'bold 18px monospace'; ctx.fillText(label, W / 2, 42);
-  ctx.fillStyle = 'rgba(159,179,200,0.8)'; ctx.font = '13px monospace';
-  ctx.fillText('Пробел — пропустить', W / 2, H - 24);
+  ctx.fillStyle = PAL.gold; ctx.font = `9px ${FONT_MONO}`; ctx.fillText('// ПРИНТЕР', W / 2, 30);
+  ctx.fillStyle = PAL.chalk; ctx.font = `700 22px ${FONT_DISPLAY}`; ctx.fillText(label, W / 2, 54);
+  ctx.fillStyle = PAL.pewter; ctx.font = `9px ${FONT_MONO}`;
+  ctx.fillText('ПРОБЕЛ · ПРОПУСТИТЬ', W / 2, H - 20);
   ctx.textAlign = 'left';
 }
