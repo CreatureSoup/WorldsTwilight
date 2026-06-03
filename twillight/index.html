@@ -17,8 +17,8 @@
        время разработки браузер не отдавал старые версии файлов. document.write
        выполняет скрипты синхронно, порядок сохраняется. -->
   <script>
-    ['constants', 'save', 'world', 'input', 'unit', 'camera', 'city', 'cycle', 'quest', 'inventory', 'loot', 'effects', 'shield', 'intro', 'enemy',
-      'render_resource', 'render_module', 'render_world', 'render_loot', 'render_fx', 'render_shield', 'render_unit', 'render_enemy', 'render_intro', 'render_city', 'hud', 'ui_menu', 'game']
+    ['constants', 'save', 'world', 'input', 'unit', 'camera', 'city', 'cycle', 'unitdefs', 'anim', 'rig', 'inventory', 'upgrades', 'loot', 'effects', 'intro', 'enemy',
+      'render_resource', 'render_module', 'render_world', 'render_loot', 'render_fx', 'render_parts', 'render_unit', 'render_light', 'render_enemy', 'render_intro', 'render_city', 'render_glitch', 'hud', 'ui_menu', 'game', 'ai']
       .forEach(function (f) { document.write('<script src="' + f + '.js?v=' + Date.now() + '"><\/script>'); });
   </script>
 </body>

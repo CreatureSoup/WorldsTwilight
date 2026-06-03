@@ -22,7 +22,7 @@ function drawIntro(ctx, intro, world, unit, camera, W, H) {
   const revealH = R * 2 + 16, bottom = cy + R + 8, top = bottom - printT * revealH;
   ctx.save();
   ctx.beginPath(); ctx.rect(cx - R - 10, top, (R + 10) * 2, bottom - top); ctx.clip();
-  drawTachikoma(ctx, world, unit, camera);
+  drawTachikoma(ctx, world, unit, camera, { scale: UNIT_DRAW_SCALE });
   ctx.restore();
   if (printT > 0 && printT < 1) {
     ctx.fillStyle = 'rgba(120,220,255,0.22)'; ctx.fillRect(cx - R - 8, top, (R + 8) * 2, 3);

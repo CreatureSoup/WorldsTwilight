@@ -1,77 +1,97 @@
 'use strict';
 
-// Рендер юнита-Tachikoma: корпус-капсула, кластер глаз-линз спереди,
-// 4 сегментные ноги к опорной породе (клинг), бур по направлению взгляда.
-// Все размеры пропорциональны R, поэтому юнит масштабируется вместе с TILE.
-function drawTachikoma(ctx, world, unit, camera) {
+// Рендер юнита из РИГА. Юнит всегда собирается в НЕЙТРАЛЬНОЙ горизонтальной позе
+// (масса + ноги — единый авторский силуэт), а при лазании по стене ЖЁСТКО
+// поворачивается на ±90° целиком — так масса и ноги не «расходятся» (нет бага со
+// сдвигом ног в корпус), а ноги ложатся к СУЩЕСТВУЮЩЕЙ стенке, бур — по ходу.
+function drawTachikoma(ctx, world, unit, camera, opts) {
+  opts = opts || {};
   const cx = Math.round(camera.screenX(unit.px)), cy = Math.round(unit.py - camera.y);
-  const R = (TILE - 8) / 2;
-  const dxn = unit.dx, dyn = unit.dy;
-  const px = dyn, py = dxn; // перпендикуляр направлению
+  const t = performance.now() / 1000;
 
-  // ноги к каждой соседней породе (сегментные)
-  ctx.lineCap = 'round';
-  const dirs = [[0, 1], [0, -1], [-1, 0], [1, 0]];
-  for (const [nx, ny] of dirs) {
-    if (!isSolid(world.tileAt(unit.tileX + nx, unit.tileY + ny))) continue;
-    const ppx = ny, ppy = nx;
-    const footBX = cx + nx * (TILE / 2), footBY = cy + ny * (TILE / 2);
-    for (const sgn of [-1, 1]) {
-      const hipX = cx + nx * (R - 2) + ppx * sgn * R * 0.42;
-      const hipY = cy + ny * (R - 2) + ppy * sgn * R * 0.42;
-      const kneeX = (hipX + footBX) / 2 + nx * R * 0.42 + ppx * sgn * R * 0.33;
-      const kneeY = (hipY + footBY) / 2 + ny * R * 0.42 + ppy * sgn * R * 0.33;
-      const footX = footBX + ppx * sgn * R * 0.58, footY = footBY + ppy * sgn * R * 0.58;
-      ctx.strokeStyle = '#243a4a'; ctx.lineWidth = Math.max(3, R * 0.33);
-      ctx.beginPath(); ctx.moveTo(hipX, hipY); ctx.lineTo(kneeX, kneeY); ctx.lineTo(footX, footY); ctx.stroke();
-      ctx.strokeStyle = '#6fa9c8'; ctx.lineWidth = Math.max(1, R * 0.13);
-      ctx.beginPath(); ctx.moveTo(hipX, hipY); ctx.lineTo(kneeX, kneeY); ctx.lineTo(footX, footY); ctx.stroke();
-      ctx.fillStyle = '#243a4a';
-      ctx.beginPath(); ctx.arc(footX, footY, R * 0.2, 0, Math.PI * 2); ctx.fill();
+  // Опора + ориентация для лазания.
+  const sup = (world && opts.scale) ? supportDirOf(world, unit) : 'down';
+  const climbing = sup !== 'down';
+  let face = unit.faceX === -1 ? -1 : 1, theta = 0;
+  if (climbing) {
+    const wallRight = sup === 'right';
+    const up = unit.dy <= 0;                                  // ход вверх (или стоит) → бур вверх
+    face = (wallRight ? 1 : -1) * (up ? 1 : -1);              // нейтральный взгляд для поворота
+    theta = -face * Math.PI / 2;                             // целиком повернуть ±90° (ноги → стена)
+  }
+
+  // Рендерим риг в НЕЙТРАЛЬНОЙ горизонтали (dy=0) — поворот делаем внешним transform.
+  const ru = { hull: unit.hull, dx: face, dy: 0, faceX: face, state: unit.state, crouchT: unit.crouchT, noAnim: unit.noAnim, drilling: unit.drilling, stats: unit.stats };
+  const rig = resolveUnitRig(cx, cy, ru, t, 'down');
+
+  // Сильный даунскейл (≈16×): качественный сэмплинг гасит мерцание.
+  const smOn = ctx.imageSmoothingEnabled, smQ = ctx.imageSmoothingQuality;
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+
+  const scaled = opts.scale && opts.scale !== 1;
+  if (scaled) {
+    ctx.save();
+    if (!climbing) {
+      // на полу: стопы → пол тайла (якорь из СТАТИЧНОГО рига — без покадровой дрожи)
+      const stat = resolveUnitRig(cx, cy, { hull: unit.hull, dx: face, dy: 0, faceX: face, state: IDLE, crouchT: 0, noAnim: true, stats: unit.stats }, t, 'down');
+      let footY = cy;
+      for (const leg of stat.legs) for (const sg of leg.segs) footY = Math.max(footY, sg.jy, sg.ly);
+      const shift = Math.round((cy + TILE * 0.5 - TILE * 0.28) - footY);
+      ctx.translate(0, shift);
+      ctx.translate(cx, footY); ctx.scale(opts.scale, opts.scale); ctx.translate(-cx, -footY);
+    } else {
+      // на стене: придвигаем корпус К стене (ноги касаются её) + жёсткий поворот
+      const off = Math.round((sup === 'right' ? 1 : -1) * TILE * 0.16);
+      ctx.translate(off, 0);
+      ctx.translate(cx, cy); ctx.rotate(theta); ctx.scale(opts.scale, opts.scale); ctx.translate(-cx, -cy);
     }
   }
 
-  // присед перед прыжком — корпус (и голова/бур) сжимается вниз к опоре; ноги не трогаем
-  const squashY = unit.crouchT > 0 ? 0.68 : 1;
-  ctx.save();
-  if (squashY !== 1) { const baseY = cy + R * 0.6; ctx.translate(cx, baseY); ctx.scale(1, squashY); ctx.translate(-cx, -baseY); }
+  // 1) кабели — задний слой
+  for (const c of rig.cables) drawCable(ctx, c.ax, c.ay, c.bx, c.by, c.type, t);
+  // 2) детали и ноги — единый порядок по z
+  const items = [];
+  for (const leg of rig.legs) items.push({ z: leg.z, leg });
+  for (const p of rig.parts) items.push({ z: p.z, part: p });
+  items.sort((a, b) => a.z - b.z);
+  const crouch = unit.crouchT > 0;
+  for (const it of items) {
+    if (it.leg) { drawLeg(ctx, it.leg, rig.R); continue; }
+    const p = it.part;
+    ctx.save();
+    if (crouch) { ctx.translate(rig.legHub.x, rig.legHub.y); ctx.scale(1, 0.7); ctx.translate(-rig.legHub.x, -rig.legHub.y); }
+    drawPart(ctx, p.kind, p.x, p.y, p.scale, p.angle, p.flip, t, p);
+    ctx.restore();
+  }
+  if (scaled) ctx.restore();
+  ctx.imageSmoothingEnabled = smOn; ctx.imageSmoothingQuality = smQ;
+}
 
-  // корпус-капсула
-  const bodyGrad = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.4, 2, cx, cy, R * 1.2);
-  bodyGrad.addColorStop(0, '#9fdcf2');
-  bodyGrad.addColorStop(0.5, '#3f9fc9');
-  bodyGrad.addColorStop(1, '#1d5f86');
-  ctx.fillStyle = bodyGrad;
-  ctx.beginPath(); ctx.ellipse(cx, cy, R, R * 0.86, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#123247'; ctx.lineWidth = Math.max(1.5, R * 0.1); ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.beginPath(); ctx.ellipse(cx - R * 0.35, cy - R * 0.42, R * 0.32, R * 0.18, 0, 0, Math.PI * 2); ctx.fill();
-
-  // «голова» с глазами на фронте
-  const hx = cx + dxn * R * 0.55, hy = cy + dyn * R * 0.55;
-  ctx.fillStyle = '#16384b';
-  ctx.beginPath(); ctx.ellipse(hx, hy, R * 0.5, R * 0.42, 0, 0, Math.PI * 2); ctx.fill();
-  const eye = (ex, ey, rr, glow) => {
-    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(ex, ey, rr + R * 0.06, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#bff4ff'; ctx.beginPath(); ctx.arc(ex, ey, rr, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#1c6fa0'; ctx.beginPath(); ctx.arc(ex, ey, rr * 0.5, 0, Math.PI * 2); ctx.fill();
-  };
-  const g = '#5fd0ff';
-  eye(hx + dxn * R * 0.17, hy + dyn * R * 0.17, R * 0.27, g);
-  eye(hx + px * R * 0.42 - dxn * R * 0.08, hy + py * R * 0.42 - dyn * R * 0.08, R * 0.17, g);
-  eye(hx - px * R * 0.42 - dxn * R * 0.08, hy - py * R * 0.42 - dyn * R * 0.08, R * 0.17, g);
-
-  // бур спереди — при копании вибрирует (движение вперёд-назад)
-  const digWob = unit.drilling ? Math.sin(performance.now() / 30) * R * 0.16 : 0;
-  const fwd = R + 1 + digWob;
-  const bx = cx + dxn * fwd, by = cy + dyn * fwd;
-  ctx.fillStyle = '#c9d2da';
-  ctx.beginPath();
-  ctx.moveTo(bx + dxn * R * 0.67, by + dyn * R * 0.67);
-  ctx.lineTo(bx + px * R * 0.42, by + py * R * 0.42);
-  ctx.lineTo(bx - px * R * 0.42, by - py * R * 0.42);
-  ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = '#7f8b96'; ctx.lineWidth = Math.max(1, R * 0.06); ctx.stroke();
-
-  ctx.restore();   // конец сжатия приседа
+// Экранная позиция «прожектора» — узел РЕАКТОРА, проведённый через ТОТ ЖЕ трансформ,
+// что и `drawTachikoma` (масштаб/якорь стоп/поворот при лазании + idle-bob). Поэтому
+// конус света двигается синхронно с дышащим юнитом. Возвращает вершину `ax,ay` (чуть
+// впереди по ходу) и направление луча `fx,fy`.
+function unitLightAnchor(world, unit, camera) {
+  const cx = Math.round(camera.screenX(unit.px)), cy = Math.round(unit.py - camera.y);
+  const t = performance.now() / 1000;
+  const sup = supportDirOf(world, unit), climbing = sup !== 'down';
+  let face = unit.faceX === -1 ? -1 : 1, theta = 0;
+  if (climbing) { const wr = sup === 'right', up = unit.dy <= 0; face = (wr ? 1 : -1) * (up ? 1 : -1); theta = -face * Math.PI / 2; }
+  const ru = { hull: unit.hull, dx: face, dy: 0, faceX: face, state: unit.state, crouchT: unit.crouchT, noAnim: unit.noAnim, drilling: unit.drilling, stats: unit.stats };
+  const rig = resolveUnitRig(cx, cy, ru, t, 'down');
+  const node = rig.parts.find((p) => p.kind === 'reactor') || rig.parts.find((p) => p.kind === 'drill') || { x: cx, y: cy };
+  let nx = node.x, ny = node.y;
+  const k = UNIT_DRAW_SCALE;
+  if (!climbing) {
+    const stat = resolveUnitRig(cx, cy, { hull: unit.hull, dx: face, dy: 0, faceX: face, state: IDLE, crouchT: 0, noAnim: true, stats: unit.stats }, t, 'down');
+    let footY = cy; for (const leg of stat.legs) for (const sg of leg.segs) footY = Math.max(footY, sg.jy, sg.ly);
+    const shift = Math.round((cy + TILE * 0.5 - TILE * 0.28) - footY);
+    nx = cx + (nx - cx) * k; ny = footY + (ny - footY) * k + shift;
+  } else {
+    const off = Math.round((sup === 'right' ? 1 : -1) * TILE * 0.16);
+    const x = (nx - cx) * k, y = (ny - cy) * k, c = Math.cos(theta), s = Math.sin(theta);
+    nx = cx + (x * c - y * s) + off; ny = cy + (x * s + y * c);
+  }
+  const fx = climbing ? 0 : face, fy = climbing ? (unit.dy <= 0 ? -1 : 1) : 0;
+  return { ax: nx + fx * TILE * 0.18, ay: ny + fy * TILE * 0.18, fx, fy };
 }

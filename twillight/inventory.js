@@ -1,697 +1,419 @@
 'use strict';
 
 // ============================================================
-// Inventory — модульное «ядро»: гекс-сетка, мультигекс-модули
-// (тащи — перемести, клик — выбрать, кнопка — повернуть).
-// Не влезающие модули падают в зону «Земля». Из активной (связанной
-// с реактором) сборки выводятся боевые статы юнита.
+// Inventory — сборка юнита перед забегом: слева ЖИВОЙ рендер собранного юнита
+// (тот же риг со спрайтами деталей, что в игре и tools/rig_editor), справа список
+// модулей по категориям. По умолчанию юнит СОБРАН (все слоты заняты). Гнёзда-кольца
+// наложены на реальные детали; драг карточки на гнездо своей категории МЕНЯЕТ
+// установленный модуль (полезно, когда в категории >1 варианта).
+//
+// Никаких гексов/реактора/энергии/подложки-схемы. Груз — счётчики ресурсов;
+// ёмкость — модуль «Трюм».
 // ============================================================
 
-const HEX_SIZE = 30;
-const SQRT3 = Math.sqrt(3);
-const NODE_R = Math.max(2, HEX_SIZE * 0.14);
-const HEX_DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
-const EDGE_OFFSET = HEX_DIRS.map(([dq, dr]) => ({
-  x: HEX_SIZE * SQRT3 * (dq + dr / 2),
-  y: HEX_SIZE * 1.5 * dr,
-}));
-
-// shape — клетки (axial-смещения). nodes — [индекс_клетки, грань] коннекторы;
-// если не задан — все внешние грани (хаб).
-// Размерная сетка модулей: 1..8 гексов. size зашит в каждый модуль.
-const SIZE_NAMES = ['', 'малый', 'компактный', 'средний', 'крупный', 'большой', 'массивный', 'огромный', 'гигантский'];
-
-// `removable: false` — снять с юнита (отправить на полку «Земля») нельзя.
-const MODULE_DEFS = {
-  battery: { name: 'Реактор',   glyph: 'Р', color: '#3ad17a', kind: 'source', required: false, removable: false, size: 3,
-             shape: [[0, 0], [1, 0], [0, 1]], nodes: [[0, 3], [1, 2], [2, 5]], capacity: 60, regen: 9 },
-  drill:   { name: 'Бур',       glyph: 'Б', color: '#ffae42', kind: 'drill', required: false, removable: true, size: 1,
-             shape: [[0, 0]], nodes: [[0, 0], [0, 1], [0, 2]], digMult: 1.0, digCost: 5, draw: 0.4 },
-  engine:  { name: 'Двигатель', glyph: 'Д', color: '#46c6ff', kind: 'engine', required: true, removable: false, size: 2,
-             shape: [[0, 0], [1, 0]], nodes: [[0, 3], [1, 0]], speed: 4, moveCost: 0.5, draw: 0.3 },
-  conduit: { name: 'Кабель',    glyph: 'К', color: '#8a93a0', kind: 'wire', required: false, removable: true, size: 1,
-             shape: [[0, 0]] },
-  casing:  { name: 'Кожух',     glyph: 'Щ', color: '#7fb0c8', kind: 'shield', required: false, removable: true, size: 1,
-             shape: [[0, 0]], radResist: 1.2, draw: 0.06 },
+// Подпись гнезда + направление выноски (экранно). Гнездо садится на деталь рига
+// категории (`kind`); позиция берётся из resolveUnitRig — всегда совпадает с тем,
+// как деталь нарисована.
+const SLOT_META = {
+  drill:   { kind: 'drill',  label: 'БУР',       lx:  1, ly: -1 },
+  engine:  { kind: 'engine', label: 'ДВИГАТЕЛЬ', lx:  0, ly:  1 },
+  scanner: { kind: 'sensor', label: 'СКАНЕР',    lx: -1, ly: -1 },
+  cargo:   { kind: 'hold',   label: 'ТРЮМ',      lx: -1, ly:  1 },
 };
-
-const cubeFromAxial = (q, r) => ({ x: q, y: -q - r, z: r });
-function rotAxial(q, r, times) {
-  let c = cubeFromAxial(q, r);
-  times = ((times % 6) + 6) % 6;
-  for (let i = 0; i < times; i++) c = { x: -c.y, y: -c.z, z: -c.x };
-  return { q: c.x, r: c.z };
-}
-function baseNodes(type) {
-  const def = MODULE_DEFS[type];
-  if (def.nodes) return def.nodes;
-  const set = new Set(def.shape.map(([q, r]) => `${q},${r}`));
-  const out = [];
-  def.shape.forEach(([q, r], ci) => {
-    for (let e = 0; e < 6; e++) {
-      const nq = q + HEX_DIRS[e][0], nr = r + HEX_DIRS[e][1];
-      if (!set.has(`${nq},${nr}`)) out.push([ci, e]);
-    }
-  });
-  return out;
-}
-function cellsOf(m) {
-  return MODULE_DEFS[m.type].shape.map(([dq, dr]) => {
-    const o = rotAxial(dq, dr, m.rot);
-    return { q: m.q + o.q, r: m.r + o.r };
-  });
-}
-function nodesAbs(m) {
-  const shape = MODULE_DEFS[m.type].shape;
-  return baseNodes(m.type).map(([ci, e]) => {
-    const o = rotAxial(shape[ci][0], shape[ci][1], m.rot);
-    return { q: m.q + o.q, r: m.r + o.r, edge: (e + m.rot) % 6 };
-  });
-}
-function axialToPixel(q, r, ox, oy) {
-  return { x: ox + HEX_SIZE * SQRT3 * (q + r / 2), y: oy + HEX_SIZE * 1.5 * r };
-}
-function hexRound(q, r) {
-  let x = q, z = r, y = -x - z;
-  let rx = Math.round(x), ry = Math.round(y), rz = Math.round(z);
-  const dx = Math.abs(rx - x), dy = Math.abs(ry - y), dz = Math.abs(rz - z);
-  if (dx > dy && dx > dz) rx = -ry - rz; else if (dy > dz) ry = -rx - rz; else rz = -rx - ry;
-  return { q: rx, r: rz };
-}
-function pixelToAxial(px, py, ox, oy) {
-  const dx = px - ox, dy = py - oy;
-  return hexRound((SQRT3 / 3 * dx - 1 / 3 * dy) / HEX_SIZE, (2 / 3 * dy) / HEX_SIZE);
-}
-function hexPath(ctx, cx, cy, size) {
-  ctx.beginPath();
-  for (let i = 0; i < 6; i++) {
-    const a = Math.PI / 180 * (60 * i - 30);
-    const x = cx + size * Math.cos(a), y = cy + size * Math.sin(a);
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-}
 
 class Inventory {
   constructor() {
-    this.hull = 'scout';        // корпус задаёт сетку ядра, HP и стойкость к скверне
-    const R = HULL_DEFS[this.hull].radius;
-    this.cells = [];
-    for (let q = -R; q <= R; q++)
-      for (let r = -R; r <= R; r++)
-        if (Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)) <= R) this.cells.push({ q, r });
-    this.cellSet = new Set(this.cells.map((c) => `${c.q},${c.r}`));
+    this.hull = 'scout';
+    this.modules = {};          // category → moduleType (пусто = слот не занят)
+    this.cargo = { iron: 0, organic: 0, crystal: 0 };
 
-    this.modules = new Map();   // id -> {id,type,rot,where:'board'|'ground'|'drag',q,r,gxFrac}
-    this.nextId = 1;
-    this.cargo = [];            // груз: перетаскиваемые объекты ресурса {id,type,res,where,q,r,gxFrac}
-
-    this.pending = null;
-    this.drag = null;
-    this.confirm = null;        // модалка подтверждения снятия последнего бура/щита
-    this.selected = null;
-    this.hover = null;
+    this.drag = null;           // { type, category } — перетаскиваемый шаблон
     this.mouse = { x: 0, y: 0 };
     this.layout = null;
+    this.hoverCard = null;
+    this.hoverSlot = null;
+    this.scrollY = 0;           // вертикальный скролл списка модулей
+    this.maxScroll = 0;
     this.onStart = null;
     this.preGame = true;
 
     this.defaultBuild();
-    this.recompute();
   }
 
-  add(type, where, q, r, gxFrac, rot) {
-    const m = { id: this.nextId++, type, rot: rot || 0, where, q: q || 0, r: r || 0, gxFrac };
-    this.modules.set(m.id, m);
-    return m;
-  }
+  // По умолчанию юнит СОБРАН — каждый слот корпуса получает первый модуль своей
+  // категории (как риг в тулзе). Менять можно при наличии других вариантов.
   defaultBuild() {
-    // Стартовая сборка: всё установлено в ядро (полка пуста).
-    this.add('battery', 'board', 0, 0, null, 0);
-    this.add('drill', 'board', -1, 0, null, 0);
-    this.add('engine', 'board', 1, -1, null, 2);
-    this.add('casing', 'board', 0, 2, null, 0);   // подключается к реактору (грань 5 ↔ 2)
+    this.modules = {};
+    for (const slot of HULL_DEFS[this.hull].slots)
+      for (const key in MODULE_DEFS) if (MODULE_DEFS[key].category === slot) { this.modules[slot] = key; break; }
   }
+  reset() { this.defaultBuild(); this.resetCargo(); this.drag = null; this.scrollY = 0; }
+  resetCargo() { for (const k in this.cargo) this.cargo[k] = 0; }
 
-  // -------- связность и статы --------
-  occMap(excludeId) {
-    const map = new Map();
-    for (const m of this.modules.values()) {
-      if (m.where !== 'board' || m.id === excludeId) continue;
-      for (const c of cellsOf(m)) map.set(`${c.q},${c.r}`, m.id);
-    }
-    return map;
-  }
-  canPlace(type, rot, q, r, excludeId) {
-    const occ = this.occCells(excludeId);   // модули И груз — на занятый гекс не встать
-    for (const [dq, dr] of MODULE_DEFS[type].shape) {
-      const o = rotAxial(dq, dr, rot);
-      const k = `${q + o.q},${r + o.r}`;
-      if (!this.cellSet.has(k)) return false;
-      if (occ.has(k)) return false;
-    }
-    return true;
-  }
-
-  recompute() {
-    const board = [...this.modules.values()].filter((m) => m.where === 'board');
-    const occ = this.occMap(null);
-    const nodeSig = {}, absNodes = {};
-    for (const m of board) {
-      const an = nodesAbs(m);
-      absNodes[m.id] = an;
-      nodeSig[m.id] = new Set(an.map((n) => `${n.q},${n.r}|${n.edge}`));
-    }
-    const parent = {};
-    const find = (a) => { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; };
-    const union = (a, b) => { parent[find(a)] = find(b); };
-    board.forEach((m) => (parent[m.id] = m.id));
-
-    const liveSig = new Set(), connPairs = new Set();
-    for (const m of board) {
-      for (const n of absNodes[m.id]) {
-        const nq = n.q + HEX_DIRS[n.edge][0], nr = n.r + HEX_DIRS[n.edge][1];
-        const oid = occ.get(`${nq},${nr}`);
-        if (!oid || oid === m.id) continue;
-        const opp = (n.edge + 3) % 6;
-        if (!nodeSig[oid].has(`${nq},${nr}|${opp}`)) continue;
-        union(m.id, oid);
-        liveSig.add(`${n.q},${n.r}|${n.edge}`);
-        liveSig.add(`${nq},${nr}|${opp}`);
-        connPairs.add(m.id < oid ? `${m.id}-${oid}` : `${oid}-${m.id}`);
-      }
-    }
-    const compBattery = {};
-    for (const m of board) if (m.type === 'battery') compBattery[find(m.id)] = true;
-    const active = new Set();
-    for (const m of board) if (compBattery[find(m.id)]) active.add(m.id);
-
-    let capacity = 0, regen = 0, draw = 0, digMult = 0, digCost = 5;
-    let moveSpeed = 0, moveCost = 0.5, drills = 0, engines = 0, radResist = 0;
-    const activeTypes = new Set();
-    for (const m of board) {
-      if (!active.has(m.id)) continue;
-      activeTypes.add(m.type);
-      const d = MODULE_DEFS[m.type];
-      if (d.kind === 'source') { capacity += d.capacity; regen += d.regen; }
-      if (d.kind === 'drill')  { digMult += d.digMult; drills++; draw += d.draw; digCost = d.digCost; }
-      if (d.kind === 'engine') { moveSpeed = Math.max(moveSpeed, d.speed); engines++; draw += d.draw; moveCost = d.moveCost; }
-      if (d.kind === 'shield') { radResist += d.radResist; draw += d.draw; }
-    }
-    const required = Object.keys(MODULE_DEFS).filter((t) => MODULE_DEFS[t].required);
-    const missing = required.filter((t) => !activeTypes.has(t)).map((t) => MODULE_DEFS[t].name);
-
+  // Производные статы по установленным модулям. HP — из корпуса.
+  getStats() {
     const hull = HULL_DEFS[this.hull];
-    this.activeIds = active;
-    this.liveSig = liveSig;
-    this.connPairs = [...connPairs];
-    this.stats = {
-      capacity: Math.max(capacity, 10), regen, passiveDraw: draw,
-      canDig: drills > 0, digMult: Math.max(digMult, 0.001), digCost,
-      canMove: engines > 0, moveSpeed: moveSpeed || 4, moveCost,
-      maxHp: hull.hp, radResist,
-      activeCount: active.size, totalCount: board.length,
-      valid: missing.length === 0, missing,
-    };
-    return this.stats;
-  }
-  getStats() { return this.recompute(); }
-
-  // -------- груз (ресурсы-объекты в гексах ядра) --------
-  // Груз — перетаскиваемые объекты, как модули: в свободном гексе ядра
-  // (where:'board') либо на полке «Земля» (where:'ground', не в ядре). Чем тяжелее
-  // сборка — тем меньше места под добычу (скрытый trade-off, GDD §4.5).
-  moduleCellCount() {
-    let n = 0;
-    for (const m of this.modules.values()) if (m.where === 'board') n += MODULE_DEFS[m.type].shape.length;
-    return n;
-  }
-  // Занятые ячейки доски: модули + груз (для коллизий при размещении).
-  occCells(excludeId) {
-    const s = new Set();
-    for (const m of this.modules.values()) if (m.where === 'board' && m.id !== excludeId) for (const c of cellsOf(m)) s.add(`${c.q},${c.r}`);
-    for (const cg of this.cargo) if (cg.where === 'board' && cg.id !== excludeId) s.add(`${cg.q},${cg.r}`);
+    const s = { maxHp: hull.hp, moveSpeed: 0, digMult: 0, scanR: 0, capacity: 0,
+                canDig: false, canMove: false };
+    for (const cat in this.modules) {
+      const t = this.modules[cat]; if (!t) continue;
+      const m = MODULE_DEFS[t]; if (!m) continue;
+      if (m.digMult)  { s.digMult += m.digMult;  s.canDig = true; }
+      if (m.speed)    { s.moveSpeed = Math.max(s.moveSpeed, m.speed); s.canMove = true; }
+      if (m.scanR)    s.scanR = Math.max(s.scanR, m.scanR);
+      if (m.capacity) s.capacity += m.capacity;
+    }
+    // Готов к старту, когда все слоты корпуса заняты.
+    s.valid = HULL_DEFS[this.hull].slots.every((cat) => !!this.modules[cat]);
+    s.missing = HULL_DEFS[this.hull].slots.filter((cat) => !this.modules[cat]);
     return s;
   }
-  firstFreeCargoCell() {
-    const occ = this.occCells(null);
-    for (const c of this.cells) if (!occ.has(`${c.q},${c.r}`)) return c;
-    return null;
-  }
-  pieceById(id) { return this.modules.get(id) || this.cargo.find((c) => c.id === id) || null; }
 
-  cargoTotalHexes() { return this.cells.length; }                          // всего гексов в ядре
-  cargoCapacity() { return Math.max(0, this.cells.length - this.moduleCellCount()); } // максимум груза
-  cargoUsed() { return this.cargo.filter((c) => c.where === 'board').length; }        // груз в ядре
-  // Вес для скорости: груз + СЪЁМНЫЕ модули на доске (несъёмный каркас реактор+движок —
-  // «бесплатный», его вес заложен в базовую скорость; снимаешь модуль → едешь быстрее).
-  boardLoad() {
-    let n = this.cargoUsed();
-    for (const m of this.modules.values())
-      if (m.where === 'board' && MODULE_DEFS[m.type].removable) n += MODULE_DEFS[m.type].shape.length;
-    return n;
-  }
-  cargoFreeHexes() { return Math.max(0, this.cargoCapacity() - this.cargoUsed()); }   // пустые гексы (xx)
-  cargoCounts() { const c = {}; for (const cg of this.cargo) if (cg.where === 'board') c[cg.type] = (c[cg.type] || 0) + 1; return c; }
+  // ---- Груз ----
+  cargoUsed()    { return this.cargo.iron + this.cargo.organic + this.cargo.crystal; }
+  cargoCapacity(){ return this.getStats().capacity; }
+  cargoFree()    { return Math.max(0, this.cargoCapacity() - this.cargoUsed()); }
+  cargoCounts()  { return { ...this.cargo }; }
   addCargo(type) {
-    const cell = this.firstFreeCargoCell();
-    if (!cell) return false;   // нет свободного гекса — первый свободный отсутствует
-    this.cargo.push({ id: this.nextId++, type, res: true, where: 'board', q: cell.q, r: cell.r, rot: 0, gxFrac: 0.5 });
+    if (this.cargoUsed() >= this.cargoCapacity()) return false;
+    this.cargo[type] = (this.cargo[type] || 0) + 1;
     return true;
   }
-  // Сдача на базе: весь груз ИЗ ядра уходит (гексы освобождаются); груз на полке остаётся.
-  deliverBoardCargo() {
-    const types = this.cargo.filter((c) => c.where === 'board').map((c) => c.type);
-    this.cargo = this.cargo.filter((c) => c.where !== 'board');
-    return types;
-  }
-  // Сдать ОДНУ единицу груза из ядра (для постепенной сдачи на базе); вернуть её тип или null.
-  deliverOneBoardCargo() {
-    const i = this.cargo.findIndex((c) => c.where === 'board');
-    if (i < 0) return null;
-    const t = this.cargo[i].type; this.cargo.splice(i, 1); return t;
-  }
-  resetCargo() { this.cargo = []; }
-
-  // -------- раскладка --------
-  computeLayout(W, H) {
-    const bo = { x: W * 0.36, y: H * 0.40 };          // ниже, чтобы верхний гекс не лез под заголовок
-    const ground = { x: W * 0.06, y: H * 0.66, w: W * 0.56, h: H * 0.14 };
-    ground.cy = ground.y + ground.h / 2;
-    const panelX = W - 300, panelW = 286;
-    const summary = { x: panelX, y: 92, w: panelW };
-    const card = { x: panelX, y: 312, w: panelW };   // под сводкой (10 строк по 18px), не налезает
-    const rotateBtn = { x: panelX, y: 470, w: panelW, h: 46 };
-    const start = { x: W / 2 - 140, y: H - 70, w: 280, h: 50 };
-    const cw = 380, ch = 156, cmx = W / 2 - cw / 2, cmy = H / 2 - ch / 2;
-    const confirm = { x: cmx, y: cmy, w: cw, h: ch };
-    const confirmYes = { x: cmx + 26, y: cmy + ch - 58, w: 150, h: 42 };
-    const confirmNo = { x: cmx + cw - 176, y: cmy + ch - 58, w: 150, h: 42 };
-    this.layout = { bo, ground, summary, card, rotateBtn, start, confirm, confirmYes, confirmNo, W, H };
-    return this.layout;
-  }
-
-  // -------- ввод --------
-  inRect(x, y, r) { return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; }
-  groundX(m, g) { return g.x + Math.min(0.95, Math.max(0.05, m.gxFrac)) * g.w; }
-  pieceAt(x, y) {
-    const L = this.layout; if (!L) return null;
-    const a = pixelToAxial(x, y, L.bo.x, L.bo.y);
-    if (this.cellSet.has(`${a.q},${a.r}`)) {
-      const id = this.occMap(null).get(`${a.q},${a.r}`);
-      if (id) return id;
-      for (const cg of this.cargo) if (cg.where === 'board' && cg.q === a.q && cg.r === a.r) return cg.id;
-    }
-    for (const m of this.modules.values()) {
-      if (m.where !== 'ground') continue;
-      if (Math.hypot(x - this.groundX(m, L.ground), y - L.ground.cy) < HEX_SIZE * 1.9) return m.id;
-    }
-    for (const cg of this.cargo) {
-      if (cg.where !== 'ground') continue;
-      if (Math.hypot(x - this.groundX(cg, L.ground), y - L.ground.cy) < HEX_SIZE * 1.9) return cg.id;
-    }
+  deliverOneCargo() {
+    for (const t of Object.keys(this.cargo)) if (this.cargo[t] > 0) { this.cargo[t]--; return t; }
     return null;
   }
 
+  // =============================================================
+  // UI: чертёж + галереи модулей + сводка
+  // =============================================================
+  computeLayout(W, H) {
+    const headerH = 90;
+    const bx = Math.round(W * 0.04), by = headerH, bw = Math.round(W * 0.54);
+    const bh = Math.round(H - headerH - 200);
+    const blueprint = { x: bx, y: by, w: bw, h: bh, cx: bx + bw / 2, cy: by + bh / 2 };
+    const stats = { x: bx, y: by + bh + 8, w: bw, h: 84 };
+    const lx = bx + bw + 18, ly = by;
+    const lw = Math.max(280, W - lx - Math.round(W * 0.04));
+    const lh = bh + 8 + 84;
+    const list = { x: lx, y: ly, w: lw, h: lh };
+    const start = { x: bx, y: H - 64, w: bw, h: 50 };
+    this.layout = { blueprint, stats, list, start, W, H };
+    return this.layout;
+  }
+  inRect(x, y, r) { return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; }
+
+  // ---- чертёж: живой риг юнита + позиции гнёзд по деталям ----
+  // Болванка-юнит для рендера/рига. `allOn`=true — все детали присутствуют (для
+  // позиций гнёзд); иначе по факту установки (отсутствующий модуль = деталь скрыта).
+  _dummyUnit(allOn) {
+    return {
+      hull: this.hull, dx: 1, dy: 0, faceX: 1, state: IDLE, crouchT: 0, noAnim: false, px: 0, py: 0,
+      stats: {
+        canDig:   allOn || !!this.modules.drill,
+        canMove:  allOn || !!this.modules.engine,
+        scanR:    (allOn || this.modules.scanner) ? 1 : 0,
+        capacity: (allOn || this.modules.cargo)   ? 1 : 0,
+      },
+    };
+  }
+  // Масштаб «вписать риг в панель»: по габаритам деталей+ног (со спрайтами длинные),
+  // крупно (множитель подобран, чтобы юнит занимал бо́льшую часть панели).
+  blueprintScale(L) {
+    const rig = resolveUnitRig(0, 0, this._dummyUnit(true), 0);
+    let maxR = rig.R * 1.5;
+    for (const p of rig.parts) maxR = Math.max(maxR, Math.hypot(p.x, p.y) + rig.R);
+    for (const lg of rig.legs) for (const sg of lg.segs) maxR = Math.max(maxR, Math.hypot(sg.lx, sg.ly), Math.hypot(sg.jx, sg.jy));
+    const b = L.blueprint, half = Math.min(b.w, b.h - 30) / 2;
+    return Math.max(1, half * 1.55 / maxR);
+  }
+  // t — общее время для idle-анимации (чтобы кольца гнёзд следовали за деталями).
+  _rigTime() { return performance.now() / 1000; }
+  computeSlots() {
+    const L = this.layout; if (!L) return [];
+    const b = L.blueprint, S = this.blueprintScale(L);
+    const rig = resolveUnitRig(0, 0, this._dummyUnit(true), this._rigTime());
+    const out = [];
+    for (const cat in SLOT_META) {
+      const part = rig.parts.find((p) => p.kind === SLOT_META[cat].kind);
+      if (!part) continue;
+      out.push({ category: cat, label: SLOT_META[cat].label, lx: SLOT_META[cat].lx, ly: SLOT_META[cat].ly,
+                 x: b.cx + part.x * S, y: b.cy + part.y * S });
+    }
+    return out;
+  }
+  slotAt(x, y) {
+    for (const s of this.computeSlots()) if (Math.hypot(x - s.x, y - s.y) < 34) return s;
+    return null;
+  }
+
+  // ---- галерея карточек: вертикальный стек категорий, горизонтальный ряд карт ----
+  CARD_W() { return 104; }
+  CARD_H() { return 116; }
+  computeCards() {
+    const L = this.layout; if (!L) return { cards: [], headers: [], contentH: 0 };
+    const labels = { drill: 'БУРЫ', engine: 'ДВИГАТЕЛИ', scanner: 'СКАНЕРЫ', cargo: 'ТРЮМЫ' };
+    const cw = this.CARD_W(), ch = this.CARD_H(), cgap = 10, hdrH = 22, rowGap = 18;
+    const x0 = L.list.x + 14, y0 = L.list.y + 38 - this.scrollY;
+    const cards = [], headers = [];
+    let cy = y0;
+    for (const cat of HULL_DEFS[this.hull].slots) {
+      headers.push({ label: labels[cat] || cat.toUpperCase(), x: x0, y: cy, w: L.list.w - 28 });
+      cy += hdrH;
+      const mods = Object.keys(MODULE_DEFS).filter((k) => MODULE_DEFS[k].category === cat);
+      mods.forEach((type, i) => {
+        cards.push({ type, category: cat, def: MODULE_DEFS[type], x: x0 + i * (cw + cgap), y: cy, w: cw, h: ch });
+      });
+      cy += ch + rowGap;
+    }
+    const contentH = (cy + this.scrollY) - (L.list.y + 38) + 12;
+    return { cards, headers, contentH };
+  }
+  cardAt(x, y) {
+    const L = this.layout; if (!L) return null;
+    if (!this.inRect(x, y, { x: L.list.x, y: L.list.y + 30, w: L.list.w, h: L.list.h - 38 })) return null; // клип-зона списка
+    for (const c of this.computeCards().cards) if (this.inRect(x, y, c)) return c;
+    return null;
+  }
+
+  // =============================================================
+  // Ввод
+  // =============================================================
+  onWheel(dy) { this.scrollY = Math.max(0, Math.min(this.maxScroll, this.scrollY + dy)); }
   pointerDown(x, y) {
     const L = this.layout; if (!L) return;
-    if (this.confirm) {                          // модалка выхода перехватывает ввод
-      if (this.inRect(x, y, L.confirmYes)) { const cb = this.confirm; this.confirm = null; cb(); }
-      else if (this.inRect(x, y, L.confirmNo)) { this.confirm = null; }
-      return;
-    }
-    if (this.selected != null && this.inRect(x, y, L.rotateBtn)) { this.rotateInPlace(this.selected); this.recompute(); return; }
-    if (this.inRect(x, y, L.start)) { if (this.stats.valid && this.onStart) this.onStart(); return; }
-    const id = this.pieceAt(x, y);
-    if (id) { this.pending = { id, sx: x, sy: y }; }
-    else { this.selected = null; }
     this.mouse = { x, y };
+    if (this.inRect(x, y, L.start)) { if (this.getStats().valid && this.onStart) this.onStart(); return; }
+    const card = this.cardAt(x, y);
+    if (card) this.drag = { type: card.type, category: card.category };
   }
   pointerMove(x, y) {
     this.mouse = { x, y };
-    if (this.pending && !this.drag && Math.hypot(x - this.pending.sx, y - this.pending.sy) > 6) this.beginDrag();
-  }
-  beginDrag() {
-    const m = this.pieceById(this.pending.id);
-    const a = pixelToAxial(this.pending.sx, this.pending.sy, this.layout.bo.x, this.layout.bo.y);
-    this.drag = { id: m.id, grab: m.where === 'board' ? { q: a.q - m.q, r: a.r - m.r } : { q: 0, r: 0 } };
-    this.selected = m.id;
-    m.where = 'drag';
-    this.recompute();
+    this.hoverCard = this.drag ? null : this.cardAt(x, y);
+    this.hoverSlot = this.drag ? this.slotAt(x, y) : null;
   }
   pointerUp(x, y) {
-    if (this.drag) { this.dropDrag(x, y); this.selected = this.drag.id; }
-    else if (this.pending) { this.selected = this.pending.id; }
-    this.pending = null; this.drag = null;
-    this.recompute();
+    if (!this.drag) return;
+    const slot = this.slotAt(x, y);
+    if (slot && slot.category === this.drag.category) this.modules[slot.category] = this.drag.type;
+    this.drag = null;
   }
-  countBoard(kind) {
-    let n = 0;
-    for (const m of this.modules.values()) if (m.where === 'board' && MODULE_DEFS[m.type].kind === kind) n++;
-    return n;
-  }
-  dropDrag(x, y) {
-    const m = this.pieceById(this.drag.id);
-    const L = this.layout;
-    const hov = pixelToAxial(x, y, L.bo.x, L.bo.y);
-    const aq = hov.q - this.drag.grab.q, ar = hov.r - this.drag.grab.r;
-    const fits = m.res
-      ? (this.cellSet.has(`${aq},${ar}`) && !this.occCells(m.id).has(`${aq},${ar}`))   // груз — один гекс
-      : (this.cellSet.has(`${hov.q},${hov.r}`) && this.canPlace(m.type, m.rot, aq, ar, m.id));
-    if (fits) { m.where = 'board'; m.q = aq; m.r = ar; return; }
-    // сброшено мимо ядра. Модули реактора/двигателя снять нельзя — возвращаем на место.
-    if (!m.res && !MODULE_DEFS[m.type].removable) { m.where = 'board'; return; }
-    // на полку «Земля» (груз и снимаемые модули). Подтверждение — не здесь, а на выходе.
-    m.where = 'ground';
-    m.gxFrac = Math.min(0.95, Math.max(0.05, (x - L.ground.x) / L.ground.w));
-  }
-  // На доске нет бура или кожуха → выход требует подтверждения.
-  needsExitConfirm() { return this.countBoard('drill') === 0 || this.countBoard('shield') === 0; }
-  // Авто-переустановка подобранного модуля: первый свободный гекс, где он подключается
-  // к реактору. true — установлен (мутирует сборку), false — места/связи нет.
-  tryInstall(type) {
-    for (const c of this.cells) {
-      for (let rot = 0; rot < 6; rot++) {
-        if (!this.canPlace(type, rot, c.q, c.r, null)) continue;
-        const m = this.add(type, 'board', c.q, c.r, null, rot);
-        this.recompute();
-        if (this.activeIds.has(m.id)) return true;
-        this.modules.delete(m.id);
-      }
-    }
-    this.recompute();
-    return false;
-  }
-  rotateInPlace(id) {
-    const m = this.pieceById(id);
-    if (!m || m.res) return;   // у груза нет поворота
-    const nr = (m.rot + 1) % 6;
-    if (m.where !== 'board') { m.rot = nr; return; }
-    if (this.canPlace(m.type, nr, m.q, m.r, m.id)) { m.rot = nr; return; }
-    // wall-kick: модуль «уперся» — пробуем сдвинуть в ближайшую валидную позицию
-    const kicks = [];
-    for (const [dq, dr] of HEX_DIRS) kicks.push([dq, dr]);
-    for (const [dq, dr] of HEX_DIRS) kicks.push([dq * 2, dr * 2]);
-    for (const [dq, dr] of kicks) {
-      if (this.canPlace(m.type, nr, m.q + dq, m.r + dr, m.id)) { m.rot = nr; m.q += dq; m.r += dr; return; }
-    }
-    // совсем нет места — показываем флэш, чтобы кнопка не казалась «сломанной»
-    this.rotateFail = { id, t: performance.now() };
-  }
-  rotateSelected() { if (this.selected != null) { this.rotateInPlace(this.selected); this.recompute(); } }
-  rotateAt(x, y) { const id = this.pieceAt(x, y); if (id) { this.selected = id; this.rotateInPlace(id); this.recompute(); } }
 
-  // -------- рендер --------
+  // =============================================================
+  // Рендер
+  // =============================================================
   draw(ctx, W, H) {
     const L = this.computeLayout(W, H);
-    this.hover = this.drag ? null : this.pieceAt(this.mouse.x, this.mouse.y);
+    this.hoverCard = this.drag ? null : this.cardAt(this.mouse.x, this.mouse.y);
+    this.hoverSlot = this.drag ? this.slotAt(this.mouse.x, this.mouse.y) : null;
 
     drawStaticBg(ctx, W, H);
     hazardTape(ctx, 0, 0, W, 5, PAL.amberDim);
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    pulseDot(ctx, W / 2 - 78, 23, 3, PAL.gold);
-    ctx.fillStyle = PAL.gold; ctx.font = `9px ${FONT_MONO}`; ctx.fillText('// СБОРКА ЯДРА · АКТИВНА', W / 2, 26);
+    pulseDot(ctx, W / 2 - 110, 23, 3, PAL.gold);
+    ctx.fillStyle = PAL.gold; ctx.font = `9px ${FONT_MONO}`;
+    ctx.fillText('// СБОРКА ЮНИТА · АКТИВНА', W / 2, 26);
     ctx.fillStyle = PAL.chalk; ctx.font = `700 28px ${FONT_DISPLAY}`;
-    ctx.fillText('ЯДРО ЮНИТА', W / 2, 54);
+    ctx.fillText('ЧЕРТЁЖ', W / 2, 54);
     ctx.fillStyle = PAL.pewter; ctx.font = `11px ${FONT_MONO}`;
-    ctx.fillText('ТАЩИ · ПЕРЕМЕСТИТЬ    КЛИК · ВЫБРАТЬ    R · ПОВОРОТ', W / 2, 74);
+    ctx.fillText('ТАЩИ КАРТОЧКУ МОДУЛЯ НА СВЕТЯЩИЙСЯ СЛОТ · ENTER · В ШАХТУ', W / 2, 74);
 
-    // направляющие круги + крестики-прицелы вокруг доски (как в кодексе)
-    let br = 0;
-    for (const c of this.cells) { const p = axialToPixel(c.q, c.r, L.bo.x, L.bo.y); br = Math.max(br, Math.hypot(p.x - L.bo.x, p.y - L.bo.y)); }
-    br += HEX_SIZE * 0.9;
-    ctx.save(); ctx.setLineDash([2, 4]); ctx.strokeStyle = 'rgba(168,40,28,0.18)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(L.bo.x, L.bo.y, br, 0, 6.283); ctx.stroke();
-    ctx.setLineDash([1, 6]); ctx.strokeStyle = 'rgba(212,160,66,0.3)';
-    ctx.beginPath(); ctx.arc(L.bo.x, L.bo.y, br + 14, 0, 6.283); ctx.stroke();
-    ctx.setLineDash([]); ctx.restore();
-    ctx.strokeStyle = PAL.gold; ctx.lineWidth = 1;
-    for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
-      const cx = L.bo.x + dx * (br + 14), cy = L.bo.y + dy * (br + 14);
-      ctx.beginPath(); ctx.moveTo(cx - 5, cy); ctx.lineTo(cx + 5, cy); ctx.moveTo(cx, cy - 5); ctx.lineTo(cx, cy + 5); ctx.stroke();
-    }
+    this._drawBlueprint(ctx, L);
+    this._drawStats(ctx, L);
+    this._drawList(ctx, L);
+    this._drawStart(ctx, L);
 
-    // ячейки доски
-    for (const c of this.cells) {
-      const p = axialToPixel(c.q, c.r, L.bo.x, L.bo.y);
-      hexPath(ctx, p.x, p.y, HEX_SIZE * 0.96);
-      ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fill();
-      ctx.strokeStyle = 'rgba(120,160,200,0.22)'; ctx.lineWidth = 1; ctx.stroke();
-    }
-    // связи
-    for (const pair of this.connPairs) {
-      const [a, b] = pair.split('-').map(Number);
-      const ca = this.centroid(this.modules.get(a), L.bo), cb = this.centroid(this.modules.get(b), L.bo);
-      const live = this.activeIds.has(a) && this.activeIds.has(b);
-      ctx.strokeStyle = live ? 'rgba(90,224,138,0.9)' : 'rgba(120,130,140,0.5)';
-      ctx.lineWidth = live ? 3 : 2;
-      ctx.beginPath(); ctx.moveTo(ca.x, ca.y); ctx.lineTo(cb.x, cb.y); ctx.stroke();
-    }
-    // модули на доске
-    for (const m of this.modules.values())
-      if (m.where === 'board') this.drawBoardModule(ctx, m, L.bo, this.activeIds.has(m.id), { selected: this.selected === m.id });
-
-    // груз: объекты-ресурсы в гексах ядра (силуэт по типу), перетаскиваемые как модули
-    for (const cg of this.cargo)
-      if (cg.where === 'board') {
-        const p = axialToPixel(cg.q, cg.r, L.bo.x, L.bo.y);
-        this.drawCargoPiece(ctx, p.x, p.y, cg.type, cg.id, this.selected === cg.id);
-      }
-
-    // флэш «нет места» при неудачном повороте
-    if (this.rotateFail && performance.now() - this.rotateFail.t < 400) {
-      const m = this.modules.get(this.rotateFail.id);
-      if (m && m.where === 'board') {
-        ctx.strokeStyle = '#ff5a5a'; ctx.lineWidth = 3;
-        for (const c of cellsOf(m)) { const p = axialToPixel(c.q, c.r, L.bo.x, L.bo.y); hexPath(ctx, p.x, p.y, HEX_SIZE * 1.02); ctx.stroke(); }
-        const cen = this.centroid(m, L.bo);
-        ctx.fillStyle = PAL.bloodBright; ctx.font = `bold 11px ${FONT_MONO}`; ctx.textAlign = 'center';
-        ctx.fillText('НЕТ МЕСТА', cen.x, cen.y - HEX_SIZE * 1.3);
-      }
-    }
-
-    // земля (полка)
-    techPanel(ctx, L.ground.x, L.ground.y, L.ground.w, L.ground.h, { accent: PAL.gold, label: '// ЗЕМЛЯ · НЕ УСТАНОВЛЕНО', serial: 'STK', bolts: false });
-    for (const m of this.modules.values()) {
-      if (m.where !== 'ground') continue;
-      this.drawMini(ctx, this.groundX(m, L.ground), L.ground.cy, m, this.selected === m.id);
-    }
-    for (const cg of this.cargo) {
-      if (cg.where !== 'ground') continue;
-      this.drawCargoPiece(ctx, this.groundX(cg, L.ground), L.ground.cy, cg.type, cg.id, this.selected === cg.id);
-    }
-
-    this.drawSummary(ctx, L);
-    this.drawCard(ctx, L);
-    this.drawRotateBtn(ctx, L);
-    this.drawStart(ctx, L);
-
-    // призрак перетаскивания
-    if (this.drag) {
-      const m = this.pieceById(this.drag.id);
-      const hov = pixelToAxial(this.mouse.x, this.mouse.y, L.bo.x, L.bo.y);
-      const aq = hov.q - this.drag.grab.q, ar = hov.r - this.drag.grab.r;
-      if (m.res) {
-        const onCell = this.cellSet.has(`${aq},${ar}`);
-        const ok = onCell && !this.occCells(m.id).has(`${aq},${ar}`);
-        if (onCell) {
-          const p = axialToPixel(aq, ar, L.bo.x, L.bo.y);
-          ctx.globalAlpha = 0.7; this.drawCargoPiece(ctx, p.x, p.y, m.type, m.id, false, ok ? '#5fe08a' : '#ff5a5a'); ctx.globalAlpha = 1;
-        } else {
-          this.drawCargoPiece(ctx, this.mouse.x, this.mouse.y, m.type, m.id, false);
-        }
-      } else {
-        const onBoard = this.cellSet.has(`${hov.q},${hov.r}`);
-        const ok = onBoard && this.canPlace(m.type, m.rot, aq, ar, m.id);
-        if (onBoard) {
-          ctx.globalAlpha = 0.7;
-          this.drawBoardModule(ctx, { type: m.type, rot: m.rot, q: aq, r: ar }, L.bo, true, { overrideStroke: ok ? '#5fe08a' : '#ff5a5a' });
-          ctx.globalAlpha = 1;
-        } else {
-          this.drawMini(ctx, this.mouse.x, this.mouse.y, m, false);
-        }
-      }
-    }
-    if (this.confirm) this.drawConfirm(ctx, L);
-    ctx.textAlign = 'left';
+    if (this.drag) this._drawDragGhost(ctx);
   }
 
-  drawConfirm(ctx, L) {
-    const noDrill = this.countBoard('drill') === 0, noShield = this.countBoard('shield') === 0;
-    const what = noDrill && noShield ? 'БЕЗ БУРА И КОЖУХА' : noDrill ? 'БЕЗ БУРА' : 'БЕЗ КОЖУХА';
-    const sub = noDrill ? 'Юнит не сможет копать породу.' : 'Юнит останется без защиты от скверны.';
-    const b = L.confirm;
-    ctx.fillStyle = 'rgba(7,5,10,0.78)'; ctx.fillRect(0, 0, L.W, L.H);
-    techPanel(ctx, b.x, b.y, b.w, b.h, { accent: PAL.blood });
-    hazardTape(ctx, b.x + 1, b.y + 1, b.w - 2, 6, PAL.blood);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = PAL.bloodBright; ctx.font = `700 18px ${FONT_DISPLAY}`;
-    ctx.fillText(`ВЫЙТИ ${what}?`, b.x + b.w / 2, b.y + 44);
-    ctx.fillStyle = PAL.bone; ctx.font = `12px ${FONT_BODY}`;
-    ctx.fillText(sub, b.x + b.w / 2, b.y + 70);
-    const btn = (r, label, danger) => {
-      ctx.fillStyle = 'rgba(13,10,14,0.95)'; ctx.fillRect(r.x, r.y, r.w, r.h);
-      ctx.strokeStyle = danger ? PAL.blood : PAL.ash; ctx.lineWidth = 1; ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
-      ctx.fillStyle = danger ? PAL.bloodBright : PAL.bone; ctx.font = `13px ${FONT_MONO}`; ctx.textBaseline = 'middle'; ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2); ctx.textBaseline = 'alphabetic';
-    };
-    btn(L.confirmYes, 'ВЫЙТИ', true); btn(L.confirmNo, 'ОТМЕНА', false);
-    ctx.textAlign = 'left';
+  _drawBlueprint(ctx, L) {
+    const b = L.blueprint;
+    techPanel(ctx, b.x, b.y, b.w, b.h, { accent: PAL.cobalt, label: '// ЮНИТ · СКИТАЛЕЦ', serial: 'RIG' });
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(b.x + 6, b.y + 22, b.w - 12, b.h - 28); ctx.clip();
+
+    // лёгкая сетка-«пол» (атмосфера, не подложка-схема)
+    ctx.strokeStyle = 'rgba(58,126,200,0.06)'; ctx.lineWidth = 1;
+    for (let gy = b.y + 24; gy < b.y + b.h - 6; gy += 32) { ctx.beginPath(); ctx.moveTo(b.x + 6, gy + 0.5); ctx.lineTo(b.x + b.w - 6, gy + 0.5); ctx.stroke(); }
+
+    const slots = this.computeSlots();
+    // фоновые подписи-выноски (под юнитом)
+    for (const s of slots) this._drawCallout(ctx, s);
+
+    // ЖИВОЙ риг юнита со спрайтами (по фактической сборке: нет модуля → деталь скрыта)
+    const S = this.blueprintScale(L);
+    const fakeCam = { x: 0, y: 0, screenX: (px) => px };
+    ctx.save(); ctx.translate(b.cx, b.cy); ctx.scale(S, S);
+    drawTachikoma(ctx, null, this._dummyUnit(false), fakeCam);
+    ctx.restore();
+
+    // гнёзда — лёгкие кольца-цели поверх деталей: установленный — тонкое кольцо,
+    // пустой — пунктир amber, при перетаскивании подходящей карточки — подсветка.
+    for (const s of slots) {
+      const filled = !!this.modules[s.category];
+      const matchable = this.drag && this.drag.category === s.category;
+      const hovering = matchable && this.hoverSlot && this.hoverSlot.category === s.category;
+      const r = 24;
+      let col, lw, dash, alpha;
+      if (hovering)        { col = PAL.goldBright; lw = 2.5; dash = []; alpha = 1; }
+      else if (matchable)  { col = PAL.gold;       lw = 2;   dash = [5, 4]; alpha = 1; }
+      else if (filled)     { col = PAL.cobalt;     lw = 1;   dash = []; alpha = 0.5; }
+      else                 { col = PAL.amber;      lw = 1.5; dash = [4, 4]; alpha = 1; }
+      ctx.globalAlpha = alpha; ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.setLineDash(dash);
+      ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, 6.283); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
 
-  centroid(m, bo) {
-    const cs = cellsOf(m).map((c) => axialToPixel(c.q, c.r, bo.x, bo.y));
-    return { x: cs.reduce((s, p) => s + p.x, 0) / cs.length, y: cs.reduce((s, p) => s + p.y, 0) / cs.length };
+  // Выноска: тонкая линия от кольца гнезда к фоновой подписи в сторону (lx,ly).
+  _drawCallout(ctx, s) {
+    const r = 24, len = 26, dx = s.lx, dy = s.ly;
+    const n = Math.hypot(dx, dy) || 1;
+    const ex = s.x + (dx / n) * (r + len), ey = s.y + (dy / n) * (r + len);
+    ctx.strokeStyle = 'rgba(122,112,94,0.45)'; ctx.lineWidth = 1;   // pewter-dim, фоновая
+    ctx.beginPath();
+    ctx.moveTo(s.x + (dx / n) * r, s.y + (dy / n) * r);
+    ctx.lineTo(ex, ey);
+    ctx.lineTo(ex + (dx >= 0 ? 14 : -14), ey);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(122,112,94,0.7)'; ctx.font = `8px ${FONT_MONO}`;
+    ctx.textAlign = dx >= 0 ? 'left' : 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(s.label, ex + (dx >= 0 ? 16 : -16), ey);
   }
 
-  drawBoardModule(ctx, m, bo, active, opts) {
-    opts = opts || {};
-    const def = MODULE_DEFS[m.type];
-    const cells = cellsOf(m);
-    const baseAlpha = ctx.globalAlpha;
-    for (const c of cells) {
-      const p = axialToPixel(c.q, c.r, bo.x, bo.y);
-      hexPath(ctx, p.x, p.y, HEX_SIZE * 0.9);
-      ctx.globalAlpha = baseAlpha * (active ? 0.92 : 0.5);
-      ctx.fillStyle = def.color; ctx.fill();
-      ctx.globalAlpha = baseAlpha;
-      ctx.lineWidth = 2; ctx.strokeStyle = opts.overrideStroke || (active ? '#eaffff' : 'rgba(255,255,255,0.4)');
-      ctx.stroke();
-    }
-    if (opts.selected) {
-      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 200);
-      ctx.strokeStyle = `rgba(255,210,74,${0.55 + 0.45 * pulse})`; ctx.lineWidth = 2.5;
-      for (const c of cells) { const p = axialToPixel(c.q, c.r, bo.x, bo.y); hexPath(ctx, p.x, p.y, HEX_SIZE * 1.02); ctx.stroke(); }
-    }
-    for (const n of nodesAbs(m)) {
-      const p = axialToPixel(n.q, n.r, bo.x, bo.y);
-      const ex = p.x + EDGE_OFFSET[n.edge].x / 2, ey = p.y + EDGE_OFFSET[n.edge].y / 2;
-      const live = this.liveSig && this.liveSig.has(`${n.q},${n.r}|${n.edge}`);
-      ctx.beginPath(); ctx.arc(ex, ey, NODE_R, 0, Math.PI * 2);
-      ctx.fillStyle = live ? '#5fe08a' : 'rgba(20,25,32,0.85)'; ctx.fill();
-      ctx.lineWidth = 1.2; ctx.strokeStyle = '#eaffff'; ctx.stroke();
-    }
-    const cen = this.centroid(m, bo);
-    drawModuleIcon(ctx, m.type, cen.x, cen.y, HEX_SIZE * 0.5, '#0d1117');
-  }
-
-  drawCargoPiece(ctx, cx, cy, type, seedId, selected, overrideStroke) {
-    ctx.globalAlpha = ctx.globalAlpha * 0.22;
-    ctx.fillStyle = RESOURCE_DEFS[type].color;
-    ctx.beginPath(); ctx.arc(cx, cy, HEX_SIZE * 0.66, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = ctx.globalAlpha / 0.22;
-    paintResource(ctx, type, cx, cy, HEX_SIZE * 0.5, (seedId * 2654435761) | 0);
-    if (overrideStroke) { hexPath(ctx, cx, cy, HEX_SIZE * 0.96); ctx.strokeStyle = overrideStroke; ctx.lineWidth = 2; ctx.stroke(); }
-    if (selected) {
-      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 200);
-      hexPath(ctx, cx, cy, HEX_SIZE * 1.02);
-      ctx.strokeStyle = `rgba(255,210,74,${0.55 + 0.45 * pulse})`; ctx.lineWidth = 2.5; ctx.stroke();
-    }
-  }
-
-  drawMini(ctx, cx, cy, m, selected) {
-    const def = MODULE_DEFS[m.type];
-    const mini = HEX_SIZE * 0.95;
-    const cells = MODULE_DEFS[m.type].shape.map(([q, r]) => rotAxial(q, r, m.rot));
-    const pts = cells.map((c) => ({ x: mini * SQRT3 * (c.q + c.r / 2), y: mini * 1.5 * c.r }));
-    const ax = pts.reduce((s, p) => s + p.x, 0) / pts.length, ay = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-    for (const p of pts) {
-      hexPath(ctx, cx + p.x - ax, cy + p.y - ay, mini * 0.9);
-      ctx.fillStyle = def.color; ctx.globalAlpha = 0.85; ctx.fill(); ctx.globalAlpha = 1;
-      ctx.lineWidth = 1.5; ctx.strokeStyle = selected ? '#ffd24a' : '#0d1117'; ctx.stroke();
-    }
-    drawModuleIcon(ctx, m.type, cx, cy, HEX_SIZE * 0.5, '#0d1117');
-  }
-
-  drawSummary(ctx, L) {
-    const s = this.stats, x = L.summary.x, y = L.summary.y, w = L.summary.w;
-    // скорость с учётом веса (груз + съёмные модули; как у юнита)
-    const load = this.boardLoad();
-    const eff = s.moveSpeed * Math.max(SPEED_MIN_FRAC, 1 - load * LOAD_PENALTY);
-    const speedVal = load > 0 ? `${eff.toFixed(1)} (баз ${s.moveSpeed})` : `${eff.toFixed(1)}`;
-    const lines = [
-      ['Ёмкость', `${Math.round(s.capacity)}`],
-      ['Реген', `+${s.regen.toFixed(1)}/с`],
-      ['Расход', `-${s.passiveDraw.toFixed(1)}/с`],
-      ['Баланс', `${s.regen - s.passiveDraw >= 0 ? '+' : ''}${(s.regen - s.passiveDraw).toFixed(1)}/с`],
-      ['Бур', s.canDig ? 'подключён' : 'НЕТ'],
-      ['Двигатель', s.canMove ? 'подключён' : 'НЕТ'],
-      ['Скорость', s.canMove ? `${speedVal} тайл/с` : 'НЕТ'],
-      ['Прочность', `${s.maxHp} HP`],
-      ['Стойкость', `${s.radResist.toFixed(1)} скв.`],
-      ['Груз', `${this.cargoUsed()}/${this.cargoCapacity()} гексов`],
+  _drawStats(ctx, L) {
+    const s = this.getStats(), b = L.stats;
+    techPanel(ctx, b.x, b.y, b.w, b.h, { accent: PAL.gold, label: '// СВОДКА', serial: 'STATS' });
+    const items = [
+      ['ХП',       `${s.maxHp}`,                          PAL.bloodBright],
+      ['СКОРОСТЬ', s.canMove ? `${s.moveSpeed} т/с` : '—', PAL.cobalt],
+      ['БУР',      s.canDig ? `×${s.digMult.toFixed(1)}` : '—', PAL.amber],
+      ['СКАНЕР',   s.scanR ? `${s.scanR} т` : '—',        PAL.gold],
+      ['ГРУЗ',     `${s.capacity}`,                       PAL.toxic],
     ];
-    const LH = 18;   // компактная строка — сводка не залезает на карточку выделенного
-    const cyTop = techPanel(ctx, x, y, w, lines.length * LH + 36, { accent: PAL.cobalt, label: '// СБОРКА', serial: 'STATS' });
-    ctx.font = `11px ${FONT_MONO}`; ctx.textBaseline = 'top';
-    lines.forEach(([k, v], i) => {
-      const ly = cyTop + 6 + i * LH;
-      ctx.textAlign = 'left'; ctx.fillStyle = PAL.pewter; ctx.fillText(k, x + 12, ly);
-      ctx.textAlign = 'right'; ctx.fillStyle = v === 'НЕТ' ? PAL.bloodBright : PAL.chalk; ctx.fillText(v, x + w - 12, ly);
+    const cellW = (b.w - 24) / items.length;
+    items.forEach(([k, v, c], i) => {
+      const cx = b.x + 12 + cellW * (i + 0.5);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillStyle = PAL.pewter; ctx.font = `9px ${FONT_MONO}`; ctx.fillText(k, cx, b.y + 28);
+      ctx.fillStyle = v === '—' ? PAL.ash : c; ctx.font = `800 22px ${FONT_DISPLAY}`;
+      ctx.fillText(v, cx, b.y + 46);
     });
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
 
-  moduleInfo(m) {
-    if (m.res) {
-      const r = RESOURCE_DEFS[m.type];
-      return { name: r.name, color: r.color, lines: [['Тип', 'ресурс'], ['Гексы', '1'], ['Статус', m.where === 'board' ? 'в ядре' : 'на земле']] };
+  _drawList(ctx, L) {
+    techPanel(ctx, L.list.x, L.list.y, L.list.w, L.list.h, { accent: PAL.gold, label: '// МОДУЛИ', serial: 'CAT' });
+    const { cards, headers, contentH } = this.computeCards();
+    const innerY = L.list.y + 30, innerH = L.list.h - 38;
+    this.maxScroll = Math.max(0, contentH - innerH);
+    if (this.scrollY > this.maxScroll) this.scrollY = this.maxScroll;
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(L.list.x + 4, innerY, L.list.w - 8, innerH); ctx.clip();
+    for (const h of headers) {
+      if (h.y + 14 < innerY || h.y > innerY + innerH) continue;
+      ctx.fillStyle = PAL.gold; ctx.font = `bold 10px ${FONT_MONO}`; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(`// ${h.label}`, h.x, h.y + 12);
+      const tw = ctx.measureText(`// ${h.label}`).width;
+      ctx.strokeStyle = PAL.bronze; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(h.x + tw + 8, h.y + 8); ctx.lineTo(h.x + h.w, h.y + 8); ctx.stroke();
     }
-    const d = MODULE_DEFS[m.type], lines = [];
-    if (d.kind === 'source') { lines.push(['Ёмкость', `${d.capacity}`], ['Регенерация', `+${d.regen}/с`]); }
-    if (d.kind === 'drill') { lines.push(['Скорость бура', `×${d.digMult}`], ['Копание', `${d.digCost}/блок`], ['Потребление', `${d.draw}/с`]); }
-    if (d.kind === 'engine') { lines.push(['Скорость', `${d.speed}`], ['Ход', `${d.moveCost}/блок`], ['Потребление', `${d.draw}/с`]); }
-    if (d.kind === 'shield') { lines.push(['Стойкость', `${d.radResist} скв.`], ['Потребление', `${d.draw}/с`]); }
-    if (d.kind === 'wire') lines.push(['Тип', 'коннектор']);
-    lines.push(['Размер', `${SIZE_NAMES[d.size]} (${d.size})`]);
-    if (m.where === 'board') lines.push(['Статус', this.activeIds.has(m.id) ? 'подключён' : 'не подключён']);
-    else lines.push(['Статус', 'на земле']);
-    return { name: d.name, color: d.color, lines };
+    for (const c of cards) {
+      if (c.y + c.h < innerY || c.y > innerY + innerH) continue;
+      const installed = this.modules[c.category] === c.type;
+      const hover = this.hoverCard && this.hoverCard.type === c.type;
+      this._drawCard(ctx, c.x, c.y, c.w, c.h, c.def, installed, hover);
+    }
+    ctx.restore();
+
+    // Скролл-индикатор справа от списка
+    if (this.maxScroll > 0) {
+      const trackX = L.list.x + L.list.w - 6, trackY = innerY + 2, trackH = innerH - 4;
+      ctx.fillStyle = PAL.bronze; ctx.fillRect(trackX, trackY, 3, trackH);
+      const thumbH = Math.max(20, trackH * innerH / (innerH + this.maxScroll));
+      const thumbY = trackY + (trackH - thumbH) * (this.scrollY / this.maxScroll);
+      ctx.fillStyle = PAL.gold; ctx.fillRect(trackX, thumbY, 3, thumbH);
+    }
   }
-  drawCard(ctx, L) {
-    const id = this.hover != null ? this.hover : this.selected;
-    if (id == null) return;
-    const m = this.pieceById(id); if (!m) return;
-    const info = this.moduleInfo(m);
-    const x = L.card.x, y = L.card.y, w = L.card.w, h = info.lines.length * 20 + 40;
-    const cyTop = techPanel(ctx, x, y, w, h, { accent: info.color, label: '// ' + info.name.toUpperCase(), serial: m.res ? 'RES' : 'MOD', fingers: true });
-    ctx.textBaseline = 'top'; ctx.font = `11px ${FONT_MONO}`;
-    info.lines.forEach(([k, v], i) => {
-      const ly = cyTop + 6 + i * 20;
-      ctx.textAlign = 'left'; ctx.fillStyle = PAL.pewter; ctx.fillText(k, x + 12, ly);
-      ctx.textAlign = 'right'; ctx.fillStyle = PAL.chalk; ctx.fillText(v, x + w - 12, ly);
-    });
-    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  }
-  drawRotateBtn(ctx, L) {
-    if (this.selected == null) return;
-    const sel = this.pieceById(this.selected);
-    if (!sel || sel.res) return;   // у груза нет поворота
-    const b = L.rotateBtn;
-    const hot = this.inRect(this.mouse.x, this.mouse.y, b);
-    ctx.fillStyle = hot ? PAL.carbon : 'rgba(13,10,14,0.9)'; ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.strokeStyle = PAL.cobalt; ctx.lineWidth = 1; ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
-    ctx.fillStyle = PAL.cobalt; ctx.font = `12px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('⟳ ПОВЕРНУТЬ · R', b.x + b.w / 2, b.y + b.h / 2);
-    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  }
-  drawStart(ctx, L) {
-    const valid = this.stats.valid, b = L.start;
-    const hot = this.inRect(this.mouse.x, this.mouse.y, b);
-    ctx.fillStyle = valid && hot ? PAL.gold : 'rgba(13,10,14,0.9)'; ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.strokeStyle = valid ? PAL.gold : PAL.ash; ctx.lineWidth = 1; ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
-    ctx.fillStyle = valid ? (hot ? PAL.void : PAL.gold) : PAL.ash; ctx.font = `14px ${FONT_MONO}`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(this.preGame ? 'В ШАХТУ ▶' : 'ПРОДОЛЖИТЬ ▶', b.x + b.w / 2, b.y + b.h / 2);
-    ctx.textBaseline = 'alphabetic';
-    if (!valid && this.inRect(this.mouse.x, this.mouse.y, b)) {
-      const msg = 'ПОДКЛЮЧИТЕ К РЕАКТОРУ: ' + this.stats.missing.join(', ').toUpperCase();
-      ctx.font = `11px ${FONT_MONO}`;
-      const tw = ctx.measureText(msg).width + 20, tx = this.mouse.x - tw / 2, ty = b.y - 40;
-      ctx.fillStyle = 'rgba(13,10,14,0.95)'; ctx.fillRect(tx, ty, tw, 28);
-      ctx.strokeStyle = PAL.bloodBright; ctx.lineWidth = 1; ctx.strokeRect(tx + 0.5, ty + 0.5, tw - 1, 27);
-      ctx.fillStyle = PAL.bloodBright; ctx.textBaseline = 'middle'; ctx.fillText(msg, this.mouse.x, ty + 14);
-      ctx.textBaseline = 'alphabetic';
+
+  // Карточка модуля: высокая и узкая (видно, что в галерее есть ещё). Сверху —
+  // область ассета (пока крупная иконка-плейсхолдер), ниже имя и стат.
+  _drawCard(ctx, x, y, w, h, def, installed, hover) {
+    const accent = def.color;
+    ctx.fillStyle = installed ? 'rgba(20,16,12,0.96)' : 'rgba(13,10,14,0.92)';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = installed ? accent : (hover ? PAL.bone : PAL.bronze);
+    ctx.lineWidth = installed ? 1.5 : 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+
+    // область ассета: настоящий спрайт модуля (та же деталь, что на юните); если
+    // спрайта нет (напр. сканер) — фолбэк на монохромную иконку.
+    const imgH = Math.round(h * 0.52);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x + 1, y + 1, w - 2, imgH);
+    const CAT2SPRITE = { drill: 'drill', engine: 'engine', cargo: 'hold', scanner: 'sensor' };
+    const sp = PART_SPRITES[CAT2SPRITE[def.category]];
+    ctx.save(); ctx.translate(x + w / 2, y + 1 + imgH / 2);
+    if (sp && sp.img && sp.img.complete) {
+      const boxW = (w - 8) * 0.92, boxH = imgH * 0.84;
+      const k = Math.min(boxW / sp.img.width, boxH / sp.img.height);
+      ctx.drawImage(sp.img, -sp.img.width * k / 2, -sp.img.height * k / 2, sp.img.width * k, sp.img.height * k);
+    } else {
+      drawModuleIcon(ctx, def.category, 0, 0, imgH * 0.42, accent);
+    }
+    ctx.restore();
+    // тонкая линия-разделитель
+    ctx.strokeStyle = PAL.bronze; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x + 1, y + imgH + 1.5); ctx.lineTo(x + w - 1, y + imgH + 1.5); ctx.stroke();
+    // полоска цвета категории сверху
+    ctx.fillStyle = accent; ctx.fillRect(x, y, w, 3);
+
+    // имя
+    ctx.font = `bold 10px ${FONT_MONO}`; ctx.fillStyle = PAL.chalk; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(def.name.toUpperCase(), x + w / 2, y + imgH + 20);
+    // стат
+    let statStr = '';
+    if (def.digMult)  statStr = `СИЛА ×${def.digMult.toFixed(1)}`;
+    if (def.speed)    statStr = `${def.speed} Т/С`;
+    if (def.scanR)    statStr = `РАДИУС ${def.scanR}`;
+    if (def.capacity) statStr = `ГРУЗ ${def.capacity}`;
+    ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
+    ctx.fillText(statStr, x + w / 2, y + imgH + 36);
+    // бейдж «установлен» — галка в углу
+    if (installed) {
+      ctx.fillStyle = accent; ctx.font = `bold 8px ${FONT_MONO}`; ctx.textAlign = 'center';
+      ctx.fillText('✓ УСТАНОВЛЕН', x + w / 2, y + h - 8);
     }
     ctx.textAlign = 'left';
+  }
+
+  _drawDragGhost(ctx) {
+    const m = MODULE_DEFS[this.drag.type];
+    const w = this.CARD_W(), h = this.CARD_H();
+    ctx.save(); ctx.globalAlpha = 0.92;
+    this._drawCard(ctx, this.mouse.x - w / 2, this.mouse.y - h / 2, w, h, m, false, false);
+    ctx.restore();
+  }
+
+  _drawStart(ctx, L) {
+    const s = this.getStats(), valid = s.valid, b = L.start;
+    const hot = this.inRect(this.mouse.x, this.mouse.y, b);
+    ctx.fillStyle = valid && hot ? PAL.gold : 'rgba(13,10,14,0.9)';
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = valid ? PAL.gold : PAL.ash; ctx.lineWidth = 1;
+    ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (valid) {
+      ctx.fillStyle = hot ? PAL.void : PAL.gold; ctx.font = `14px ${FONT_MONO}`;
+      ctx.fillText('В ШАХТУ ▶', b.x + b.w / 2, b.y + b.h / 2);
+    } else {
+      ctx.fillStyle = PAL.ash; ctx.font = `12px ${FONT_MONO}`;
+      const cat2label = { drill: 'бур', engine: 'двигатель', scanner: 'сканер', cargo: 'трюм' };
+      ctx.fillText('УСТАНОВИ: ' + s.missing.map((c) => cat2label[c]).join(', ').toUpperCase(), b.x + b.w / 2, b.y + b.h / 2);
+    }
+    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
   }
 }

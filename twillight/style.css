@@ -15,4 +15,10 @@ html, body {
   height: 100vh;
   image-rendering: auto;
   cursor: crosshair;
+  /* drag-n-drop в инвентаре — наш собственный (canvas): запрещаем нативное
+     выделение/перетаскивание, иначе браузер перехватывает mousemove/mouseup. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  touch-action: none;
 }

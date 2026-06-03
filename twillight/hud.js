@@ -3,8 +3,6 @@
 // Внутриигровой HUD по дизайн-системе (design/ · кодекс): техно-рамки TechPanel
 // (рамка + уголки + болты + шапка label/serial + опц. PCB-пальцы), акцент по смыслу,
 // пульс-LED индикаторы. Шрифты Tektur/JetBrains Mono/Plex, палитра PAL.
-function invBtnRect(W) { return { x: W - 94, y: 8, w: 84, h: 22 }; }
-
 function blinkA() { return 0.35 + 0.55 * (0.5 + 0.5 * Math.sin(performance.now() / 320)); }
 function pulseDot(ctx, x, y, r, color) { ctx.save(); ctx.globalAlpha = blinkA(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill(); ctx.restore(); }
 
@@ -72,7 +70,7 @@ function techPanel(ctx, x, y, w, h, o) {
   return cy;
 }
 
-const BAR_PAL = { hp: ['#5a1a14', PAL.bloodBright], energy: ['#4a2810', PAL.amber], data: ['#1f3a48', PAL.cobalt], gold: ['#4a3618', PAL.gold] };
+const BAR_PAL = { hp: ['#5a1a14', PAL.bloodBright], data: ['#1f3a48', PAL.cobalt], gold: ['#4a3618', PAL.gold] };
 // Шкала: моно-подпись слева + значение справа над треком; цвет-кодная заливка; мигает при <25%.
 function hudBar(ctx, x, y, w, h, frac, label, value, kind) {
   frac = Math.max(0, Math.min(1, frac));
@@ -115,20 +113,18 @@ function drawCrtOverlay(ctx, W, H) {
 function drawHUD(ctx, world, unit, inv, dbg, W, H) {
   const depth = Math.max(0, unit.tileY - CAVE_FLOOR_Y);
 
-  // ===== TOP-LEFT: статус юнита (gold) =====
-  const vx = 10, vy = 8, vw = 188, vh = 80;
+  // ===== TOP-LEFT: статус юнита (gold) — без энергии (упрощённая модель) =====
+  const vx = 10, vy = 8, vw = 188, vh = 58;
   let cy = techPanel(ctx, vx, vy, vw, vh, { accent: PAL.gold, label: '// ЮНИТ · НОРД', serial: 'TR-014' });
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = PAL.pewter; ctx.font = `7px ${FONT_MONO}`;
   ctx.fillText(`${world.layerName(unit.tileY)} · ГЛУБ ${depth} · ${unit.effectiveSpeed().toFixed(1)} т/с`, vx + 11, cy + 8);
   const bx = vx + 11, bw = vw - 22, bh = 9;
-  const cap = unit.stats.capacity;
   hudBar(ctx, bx, cy + 24, bw, bh, unit.hp / unit.stats.maxHp, 'HP / КОРПУС', `${Math.round(unit.hp)}/${unit.stats.maxHp}`, 'hp');
-  hudBar(ctx, bx, cy + 47, bw, bh, cap > 0 ? unit.energy / cap : 0, 'ENERGY / ЭНЕРГИЯ', `${Math.round(unit.energy)}/${Math.round(cap)}`, 'energy');
 
-  // ===== TOP-LEFT (под статусом): груз (gold) — фигурки ресурсов + счётчик =====
-  const gy = vy + vh + 6, gh = 40, free = inv.cargoFreeHexes(), total = inv.cargoTotalHexes();
-  const gcy = techPanel(ctx, vx, gy, vw, gh, { accent: PAL.gold, label: '// ГРУЗ', serial: `${free}/${total}`, bolts: false });
+  // ===== TOP-LEFT (под статусом): груз (toxic) — фигурки ресурсов + счётчик =====
+  const gy = vy + vh + 6, gh = 40, used = inv.cargoUsed(), cap = inv.cargoCapacity();
+  const gcy = techPanel(ctx, vx, gy, vw, gh, { accent: PAL.toxic, label: '// ГРУЗ', serial: `${used}/${cap}`, bolts: false });
   const counts = inv.cargoCounts(), keys = Object.keys(RESOURCE_DEFS);
   const cellW = (vw - 24) / keys.length, ry = gcy + 9;
   ctx.textBaseline = 'middle';
@@ -140,42 +136,18 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
   });
   ctx.textBaseline = 'alphabetic';
 
-  // ===== BOTTOM-LEFT: кожух (toxic) — над строкой подсказки =====
-  if (dbg.radWidget) drawRadWidget(ctx, dbg.radWidget, 10, H - RW_PH - 24);
-
-  // ===== TOP-RIGHT: кнопка «Ядро» (primary — золото) =====
-  const ib = invBtnRect(W);
-  ctx.fillStyle = 'rgba(13,10,14,0.92)'; ctx.fillRect(ib.x, ib.y, ib.w, ib.h);
-  ctx.strokeStyle = PAL.gold; ctx.lineWidth = 1; ctx.strokeRect(ib.x + 0.5, ib.y + 0.5, ib.w - 1, ib.h - 1);
-  ctx.fillStyle = PAL.gold; ctx.font = `9px ${FONT_MONO}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
-  ctx.fillText('ЯДРО · I', ib.x + ib.w / 2, ib.y + ib.h / 2 + 1);
-  ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
-
-  // ===== TOP-CENTER (под баром города): цикл =====
+  // ===== СПРАВА от капсулы таймера (Hibernation Widget): цикл =====
+  // Капсула стоит на x=210..570; ставим цикл сразу после неё, выше панели задания.
   if (dbg.cycle) {
-    const gx = (200 + W - 104) / 2;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = `700 16px ${FONT_DISPLAY}`; ctx.fillStyle = PAL.chalk;
-    ctx.fillText(`ЦИКЛ ${dbg.cycle.n}`, gx, 50);
+    const gx = 580;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = `700 14px ${FONT_DISPLAY}`; ctx.fillStyle = PAL.chalk;
+    ctx.fillText(`ЦИКЛ ${dbg.cycle.n}`, gx, 10);
     ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
-    ctx.fillText(`СЛЕДУЮЩИЙ ЧЕРЕЗ ${Math.ceil(dbg.cycle.timeLeft())}С`, gx, 70);
-    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  }
-
-  // ===== TOP-RIGHT (под кнопкой): задание (gold) =====
-  if (dbg.quest) {
-    const q = dbg.quest, left = Math.max(0, q.deadlineCycle - (dbg.cycle ? dbg.cycle.n : 0));
-    const pw = 188, px = W - 10 - pw, py = ib.y + ib.h + 6, ph = dbg.questMsg ? 78 : 64;
-    const qcy = techPanel(ctx, px, py, pw, ph, { accent: PAL.gold, label: '// ЗАДАНИЕ', serial: `Q ${q.progress}/${q.amount}` });
-    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.font = `11px ${FONT_BODY}`; ctx.fillStyle = PAL.chalk; ctx.fillText(q.label(), px + 12, qcy + 4);
-    ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
-    ctx.fillText(`ОСТАЛОСЬ ЦИКЛОВ: ${left}`, px + 12, qcy + 20);
-    ctx.fillText(`РЕПУТАЦИЯ: ${dbg.rep || 0}`, px + 12, qcy + 32);
-    if (dbg.questMsg) { ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = dbg.questMsg.ok ? PAL.toxic : PAL.bloodBright; ctx.fillText(dbg.questMsg.text, px + 12, qcy + 46); }
+    ctx.fillText(`СЛЕД. ЧЕРЕЗ ${Math.ceil(dbg.cycle.timeLeft())}С`, gx, 26);
     ctx.textBaseline = 'alphabetic';
   }
 
   // ===== BOTTOM: подсказка управления =====
   ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
-  ctx.fillText('WASD · ХОД/ЛАЗАНЬЕ    УПОР В ПОРОДУ = БУР    I · ЯДРО    ESC · ПАУЗА', 12, H - 10);
+  ctx.fillText('WASD · ХОД/ЛАЗАНЬЕ    УПОР В ПОРОДУ = БУР    ESC · ПАУЗА', 12, H - 10);
 }

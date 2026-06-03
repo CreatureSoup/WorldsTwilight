@@ -39,6 +39,19 @@ function drawRaider(ctx, e, cx, cy, r) {
   // глаз по направлению движения
   ctx.fillStyle = '#ff5038';
   ctx.beginPath(); ctx.arc(cx + e.dx * r * 0.25, cy + e.dy * r * 0.25, r * 0.32, 0, 6.283); ctx.fill();
+  // фаза «заполнения» у города: растущее кольцо заряда + пульсация (видно, что копит, не мгновенно)
+  if (e.draining) {
+    const frac = Math.max(0, Math.min(1, (e.drainT || 0) / RAID_DRAIN_TIME));
+    const t = performance.now() / 1000;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(111,224,255,0.85)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.3, -Math.PI / 2, -Math.PI / 2 + frac * 6.283); ctx.stroke();
+    ctx.shadowColor = '#6fe0ff'; ctx.shadowBlur = 6 + 8 * frac;
+    ctx.fillStyle = `rgba(191,244,255,${0.4 + 0.5 * frac})`;
+    const rr = r * (0.18 + 0.3 * frac) * (1 + 0.12 * Math.sin(t * 9));
+    ctx.beginPath(); ctx.arc(cx, cy, rr, 0, 6.283); ctx.fill();
+    ctx.restore();
+  }
   // унесённый заряд энергии («ходячая батарейка»)
   if (e.carry) {
     ctx.save();

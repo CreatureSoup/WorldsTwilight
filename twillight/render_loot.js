@@ -24,15 +24,7 @@ function drawLoot(ctx, loot, camera) {
     const scale = d.picked ? Math.max(0, 1 - d.suckT / SUCK_TIME) : 1;
     if (scale <= 0) continue;
     if (d.picked && d.ux !== undefined) drawGrabLegs(ctx, Math.round(camera.screenX(d.ux)), Math.round(d.uy - camera.y), cx, cy);
-    if (d.module) {                                  // снятый модуль: его форма (гексы+иконка), ∝ размеру
-      const mc = MODULE_DEFS[d.type].color;
-      ctx.globalAlpha = 0.18 * scale; ctx.fillStyle = mc;
-      ctx.beginPath(); ctx.arc(cx, cy, TILE * 0.5 * scale, 0, 6.283); ctx.fill(); ctx.globalAlpha = 1;
-      drawModulePiece(ctx, d.type, cx, cy, TILE * 0.4 * scale);
-      continue;
-    }
-
-    const r = TILE * 0.26 * scale;                   // ресурс ~ 1 гекс
+    const r = TILE * 0.26 * scale;                   // ресурс ~ 1 тайл
     ctx.globalAlpha = 0.22 * scale;
     ctx.fillStyle = def.color;
     ctx.beginPath(); ctx.arc(cx, cy, r * 1.7, 0, 6.283); ctx.fill();

@@ -19,6 +19,7 @@ const COLLECTOR_CAP = 6;   // потолок собирателей
 const RAIDER_SPEED = 5;    // быстрее копателя/собирателя (тайла/сек)
 const RAIDER_CAP = 3;      // потолок разведчиков
 const RAID_DRAIN = 50;     // сколько энергии (HP контура) высасывает за набег
+const RAID_DRAIN_TIME = 2.6; // сек: разведчик стоит у города и «заполняется» перед кражей (не мгновенно)
 const RAID_REACH_R = 5;    // тайлов — «достиг базы» (упирается в неразрушимый фундамент снизу)
 
 class Enemy {
@@ -32,6 +33,7 @@ class Enemy {
     this.state = 'seek';              // seek | return | goresource
     this.target = null;              // {x,y} для goto, иначе null → блуждание
     this.carry = null;               // ресурс у собирателя
+    this.draining = false; this.drainT = 0;  // разведчик у города: фаза «заполнения» перед кражей
     this.dead = false;
     this.state2 = IDLE; this.fromX = x; this.fromY = y; this.toX = x; this.toY = y; this.progress = 0;
     this.dx = 0; this.dy = 1; this.drilling = false;
@@ -108,6 +110,7 @@ class Enemy {
       }
       return;
     }
+    if (this.draining) return;   // разведчик стоит у города и высасывает контур — не двигается
     // гравитация: без опоры и снизу воздух — падаем (разведчик лёгкий — летит, не падает)
     if (this.type !== 'raider' && !this.anchoredAt(world, this.tileX, this.tileY) && world.tileAt(this.tileX, this.tileY + 1).type === AIR) {
       this.dx = 0; this.dy = 1; this.startMove(this.tileX, this.tileY + 1); this.commit = null; return;

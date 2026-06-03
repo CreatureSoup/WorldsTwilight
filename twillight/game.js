@@ -13,6 +13,7 @@ class Game {
     this.camera = new Camera(canvas.width, canvas.height);
     this.inventory = new Inventory();
     this.inventory.onStart = () => this.onInventoryStart();
+    this.upgrades = new Upgrades();
     this.save = loadSave();
 
     this.mode = 'menu';
@@ -21,7 +22,6 @@ class Game {
     this.city = null;
     this.loot = null;
     this.fx = new Fx();
-    this.radWidget = new RadWidget();
     this.intro = new Intro();
     this.cycle = new Cycle();
     this.enemies = [];         // враги диких гнёзд (волны по циклам)
@@ -60,23 +60,33 @@ class Game {
     const pos = (e) => ({ x: e.clientX * this.coordScale, y: e.clientY * this.coordScale });
     this.canvas.addEventListener('mousedown', (e) => {
       const { x, y } = pos(e);
-      if (this.mode === 'inventory') this.inventory.pointerDown(x, y);
+      if (this.mode === 'inventory') { e.preventDefault(); this.inventory.pointerDown(x, y); }
+      else if (this.mode === 'upgrades') { e.preventDefault(); this.upgrades.pointerDown(x, y); }
       else if (this.mode === 'menu' || this.mode === 'paused' || this.mode === 'gameover') this.menuClick(x, y);
-      else if (this.mode === 'playing') {
-        const ib = invBtnRect(this.designW);
-        if (x >= ib.x && x <= ib.x + ib.w && y >= ib.y && y <= ib.y + ib.h) this.openInventory(false);
-      }
+      // во время забега инвентарь не открывается — сборка модулей только перед стартом
     });
     this.canvas.addEventListener('mousemove', (e) => {
       const p = pos(e); this.menuMouse = p;            // ховер кнопок меню/паузы/гейм-овера
       if (this.mode === 'inventory') this.inventory.pointerMove(p.x, p.y);
+      else if (this.mode === 'upgrades') this.upgrades.pointerMove(p.x, p.y);
     });
     this.canvas.addEventListener('mouseup', (e) => {
       if (this.mode === 'inventory') { const { x, y } = pos(e); this.inventory.pointerUp(x, y); }
+      else if (this.mode === 'upgrades') this.upgrades.pointerUp();
     });
-    this.canvas.addEventListener('contextmenu', (e) => {
-      if (this.mode === 'inventory') { e.preventDefault(); const { x, y } = pos(e); this.inventory.rotateAt(x, y); }
+    // окно-уровень: если при быстром драге курсор ушёл с канваса — всё равно
+    // завершаем/двигаем перетаскивание (иначе ghost «залипает», дроп теряется).
+    window.addEventListener('mousemove', (e) => {
+      if (this.mode === 'inventory' && this.inventory.drag) { const { x, y } = pos(e); this.inventory.pointerMove(x, y); }
     });
+    window.addEventListener('mouseup', (e) => {
+      if (this.mode === 'inventory' && this.inventory.drag) { const { x, y } = pos(e); this.inventory.pointerUp(x, y); }
+      else if (this.mode === 'upgrades') this.upgrades.pointerUp();
+    });
+    this.canvas.addEventListener('wheel', (e) => {
+      if (this.mode === 'inventory') { e.preventDefault(); this.inventory.onWheel(e.deltaY * this.coordScale); }
+      else if (this.mode === 'upgrades') { e.preventDefault(); this.upgrades.onWheel(e.deltaY * this.coordScale); }
+    }, { passive: false });
   }
 
   menuButtons() {
@@ -89,9 +99,8 @@ class Game {
       const y0 = H / 2 - 60;
       bs = [
         { id: 'resume',    label: 'Продолжить',     x, y: y0,       w, h },
-        { id: 'inventory', label: 'Ядро / сборка',  x, y: y0 + 64,  w, h },
-        { id: 'restart',   label: 'Начать заново',  x, y: y0 + 128, w, h },
-        { id: 'mainmenu',  label: 'В главное меню', x, y: y0 + 192, w, h },
+        { id: 'restart',   label: 'Начать заново',  x, y: y0 + 64,  w, h },
+        { id: 'mainmenu',  label: 'В главное меню', x, y: y0 + 128, w, h },
       ];
     } else if (this.mode === 'gameover') {
       const bw = 220, bh = 42;
@@ -118,37 +127,16 @@ class Game {
   openInventory(preGame) { this.inventory.preGame = preGame; this.mode = 'inventory'; }
 
   onInventoryStart() {
-    if (!this.inventory.getStats().valid) return; // не выпускаем без обязательных модулей
-    if (this.inventory.needsExitConfirm() && !this.inventory.confirm) { // нет бура/кожуха → подтверждение выхода
-      this.inventory.confirm = () => this.doInventoryStart();
-      return;
-    }
+    if (!this.inventory.getStats().valid) return;
     this.doInventoryStart();
   }
   doInventoryStart() {
     const stats = this.inventory.getStats();
-    if (!this.unit) {        // печать нового тела → интро; всё с полки остаётся на базе
-      this.startSession(stats);
-      this.intro.reset();
-      this.mode = 'intro';
-    } else {                  // правка ядра на лету — груз/снятые модули с полки выпадают в мир
-      this.unit.setStats(stats);
-      this.spillShelfCargo();
-      this.mode = 'playing';
-    }
-  }
-
-  // Полка «Земля» в инвентаре = земля в мире: сброшенный туда груз при выходе
-  // выпадает дропами у юнита (с задержкой подбора, чтобы не всосался сразу).
-  spillShelfCargo() {
-    if (!this.loot) return;
-    const shelf = this.inventory.cargo.filter((c) => c.where === 'ground');
-    for (const c of shelf) this.loot.spawn(this.unit.tileX, this.unit.tileY, c.type);
-    if (shelf.length) this.inventory.cargo = this.inventory.cargo.filter((c) => c.where !== 'ground');
-    // снятые модули с полки → инертные дропы в мире, из инвентаря удаляются
-    const mods = [...this.inventory.modules.values()].filter((m) => m.where === 'ground');
-    for (const m of mods) { this.loot.spawnModule(this.unit.tileX, this.unit.tileY, m.type); this.inventory.modules.delete(m.id); }
-    if (mods.length) this.inventory.recompute();
+    // Модули во время забега не снимаются: в любой ситуации печать нового тела → интро.
+    // (Открытие «Ядра» в паузе допустимо, но даст ту же стартовую сборку — игрок просто посмотрит.)
+    this.startSession(stats);
+    this.intro.reset();
+    this.mode = 'intro';
   }
 
   startSession(stats) {
@@ -157,7 +145,6 @@ class Game {
     this.city = new City();
     this.loot = new Loot();
     this.fx.clear();
-    this.radWidget.reset();
     this.cycle.reset();
     this.enemies = [];
     this.lastCycleN = 0;
@@ -172,158 +159,40 @@ class Game {
     this.inventory.resetCargo();
     this.delivered = { iron: 0, organic: 0, crystal: 0 };
     this.deliveredTotal = 0;
-    if (!this.save.rep) this.save.rep = {};
-    this.quest = makeQuest(this.cycle.n);   // задание контрактного (домашнего) города
-    this.questMsg = null;                   // уведомление о результате (текст+таймер)
+    // Апгрейды сессии: набор по модулям + город (определяется на старте). Покупка
+    // пересчитывает статы юнита и/или апгрейды города.
+    this.upgrades.init(this.inventory.getStats(), this.cities[0].name);
+    this.upgrades.onChange = (kind, id) => {
+      this.unit.setStats(this.upgrades.applyToStats());
+      this.city.applyUpgrades(this.upgrades.cityTimerBonus(), this.upgrades.cityRingBonuses());
+      if (id === 'ping') this.world.reveal(this.unit.tileX, this.unit.tileY, 9);  // орбит-пинг: вскрыть участок
+    };
+    this.dugTiles = 0;        // проходка за забег: счётчик прокопанных тайлов
+    this.radLevel = 0;        // сглаженный фон помех (0..1) у полюсов — глитчи интерфейса
     this.overReason = null;
     this.camera.snap(this.unit);
     this.world.reveal(SPAWN_X, SPAWN_Y, 3.5); // база видна сразу (в т.ч. на интро)
     this.save.runs = (this.save.runs || 0) + 1;
     writeSave(this.save);
   }
-  endRun() { this.unit = null; this.world = null; this.city = null; this.loot = null; }
+  endRun() {
+    this.unit = null; this.world = null; this.city = null; this.loot = null;
+    // правки сборки между забегами НЕ переносятся: новый забег — стартовая комплектация
+    this.inventory.reset();
+  }
 
-  // Волны: с началом каждого цикла гнёзда досылают врагов из случайного гнезда.
-  onCycleStart(n) {
-    const nests = this.world.wilds; if (!nests.length) return;
-    const nest = () => nests[Math.floor(Math.random() * nests.length)];
-    const homeR = (w) => Math.max(w.rx, w.ry) + 1;  // «дом» = вся каверна гнезда, иначе центр недостижим
-    // копатель-разведчик: 1/цикл до числа цивилизованных городов, пока есть ненайденные
-    const diggers = this.enemies.filter((e) => e.type === 'digger').length;
-    if (this.cities.some((c) => !c.found) && diggers < this.cities.length) {
-      const w = nest(); this.enemies.push(new Enemy(w.cx, w.cy, 'digger', w.cx, w.cy, homeR(w)));
-    }
-    // собиратели: с цикла 2, 1/цикл до потолка
-    if (n >= 2 && this.enemies.filter((e) => e.type === 'collector').length < COLLECTOR_CAP) {
-      const w = nest(); this.enemies.push(new Enemy(w.cx, w.cy, 'collector', w.cx, w.cy, homeR(w)));
-    }
-    // разведчики (бой): с цикла 3, из гнезда, СВЯЗАННОГО тоннелем-магистралью с базой
-    // (копатель её прорывает, найдя базу); рейдер не копает — без хода не выйдет
-    if (n >= 3 && this.cities[0].found && this.enemies.filter((e) => e.type === 'raider').length < RAIDER_CAP) {
-      const home = this.cities[0];
-      const linked = nests.filter((w) => this.airPath(w.cx, w.cy, home.cx, home.cy, RAID_REACH_R));
-      if (linked.length) { const w = linked[Math.floor(Math.random() * linked.length)]; this.enemies.push(new Enemy(w.cx, w.cy, 'raider', w.cx, w.cy, homeR(w))); }
-    }
-  }
-  near(e, cx, cy, r) { const d = Math.abs(((e.tileX - cx) % MAP_W + MAP_W) % MAP_W); return Math.min(d, MAP_W - d) <= r && Math.abs(e.tileY - cy) <= r; }
-  nestAt(x, y) { return this.world.wilds.find((w) => w.cx === x && w.cy === y); }   // гнездо по координатам дома врага
-  nearestResource(cx, cy, r) {
-    let best = null, bestD = 1e9;
-    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-      const y = cy + dy; if (y < 0 || y >= MAP_H) continue;
-      const t = this.world.tileAt(cx + dx, y);
-      if (t.type === ROCK && t.resource) { const d = Math.abs(dx) + Math.abs(dy); if (d < bestD) { bestD = d; best = { x: wrapX(cx + dx), y }; } }
-    }
-    return best;
-  }
-  diggerBrain(e) {
-    if (e.state === 'seek') {
-      for (const c of this.cities) if (!c.found && this.near(e, c.cx, c.cy, c.dr)) {
-        c.found = true;
-        // к БАЗЕ дорываем магистраль (рейдеры не копают — им нужен ход), к чужим — сразу домой
-        if (c === this.cities[0]) { e.state = 'tocity'; e.target = { x: c.cx, y: c.cy }; }
-        else { e.state = 'return'; e.target = { x: e.homeX, y: e.homeY }; }
-        break;
-      }
-      // разведка завершена (все города найдены) → домой, иначе копатель блуждал бы вечно
-      if (e.state === 'seek' && this.cities.every((c) => c.found)) { e.state = 'return'; e.target = { x: e.homeX, y: e.homeY }; }
-    } else if (e.state === 'tocity') {
-      if (this.near(e, e.target.x, e.target.y, RAID_REACH_R)) { e.state = 'return'; e.target = { x: e.homeX, y: e.homeY }; } // магистраль достроена
-    } else if (e.state === 'return' && this.near(e, e.homeX, e.homeY, e.homeR)) e.dead = true; // вернулся в гнездо
-  }
-  collectorBrain(e) {
-    if (e.state === 'seek') {
-      const r = this.nearestResource(e.tileX, e.tileY, DETECT_RES);
-      if (r) { e.state = 'goresource'; e.target = { x: r.x, y: r.y }; }
-    } else if (e.state === 'goresource') {
-      const t = this.world.tileAt(e.target.x, e.target.y);
-      if (!t.resource) { e.state = 'seek'; e.target = null; }                       // ресурс пропал
-      else if (this.near(e, e.target.x, e.target.y, 1)) {                           // рядом → собрать 1
-        e.carry = t.resource; this.world.setAir(e.target.x, e.target.y);
-        e.state = 'return'; e.target = { x: e.homeX, y: e.homeY };
-      }
-    } else if (e.state === 'return' && this.near(e, e.homeX, e.homeY, e.homeR)) {                // донёс ресурс в гнездо
-      const n = this.nestAt(e.homeX, e.homeY); if (n) n.loot++;
-      e.dead = true;
-    }
-  }
-  // BFS-путь по проходимому ВОЗДУХУ (тайлы с опорой — где враг может стоять/лезть) от
-  // (sx,sy) до зоны радиуса r вокруг (gx,gy). Для рейдера, который не копает: ведёт по
-  // готовым тоннелям копателей в обход тупиков (жадный поиск застревает в лабиринте).
-  airPath(sx, sy, gx, gy, r) {
-    const W = this.world;
-    const start = sy * MAP_W + wrapX(sx);
-    const prev = new Map([[start, -1]]);
-    const q = [[wrapX(sx), sy]]; let head = 0, goal = -1;
-    while (head < q.length) {
-      const [x, y] = q[head++];
-      if (W.torDist(x, gx) <= r && Math.abs(y - gy) <= r) { goal = y * MAP_W + x; break; }
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx = wrapX(x + dx), ny = y + dy;
-        if (ny < 0 || ny >= MAP_H) continue;
-        const k = ny * MAP_W + nx;
-        if (prev.has(k) || W.tileAt(nx, ny).type !== AIR) continue;  // путь по воздуху (тоннели/пустоты)
-        prev.set(k, y * MAP_W + x); q.push([nx, ny]);
-      }
-    }
-    if (goal < 0) return null;
-    const path = [];
-    for (let k = goal; k !== -1; k = prev.get(k)) path.push({ x: k % MAP_W, y: Math.floor(k / MAP_W) });
-    return path.reverse();
-  }
-  // Разведчик: бежит к разведанной базе по тоннелям копателей (BFS, не копает), высасывает
-  // энергию контура и уносит заряд домой. В дебаге без урона (наблюдение).
-  raiderBrain(e) {
-    const toHome = !!e.carry;
-    const gx = toHome ? e.homeX : this.cities[0].cx, gy = toHome ? e.homeY : this.cities[0].cy;
-    const gr = toHome ? e.homeR : RAID_REACH_R;
-    if (this.near(e, gx, gy, gr)) {                              // у цели
-      if (!toHome) { if (!this.debug) this.city.damage(RAID_DRAIN); e.carry = 'charge'; } // высосал контур
-      else { const n = this.nestAt(e.homeX, e.homeY); if (n) n.charge++; e.dead = true; } // донёс заряд домой
-      return;
-    }
-    if (e.state2 !== IDLE) return;                               // путь нужен только при выборе следующего хода
-    const path = this.airPath(e.tileX, e.tileY, gx, gy, gr);
-    e.target = path && path.length > 1 ? { x: path[1].x, y: path[1].y } : { x: gx, y: gy };
-  }
-  updateEnemies(dt) {
-    if (this.cycle.n !== this.lastCycleN) { this.onCycleStart(this.cycle.n); this.lastCycleN = this.cycle.n; }
-    for (const e of this.enemies) {
-      if (e.type === 'digger') this.diggerBrain(e);
-      else if (e.type === 'collector') this.collectorBrain(e);
-      else this.raiderBrain(e);
-      e.update(dt, this.world);
-      if (e.dug) { this.loot.spawn(e.dug.x, e.dug.y, e.dug.type); e.dug = null; } // прокопанная жила падает лутом, не пропадает
-    }
-    this.enemies = this.enemies.filter((e) => !e.dead);
-  }
+  // AI диких гнёзд (спавн волн + поведение врагов + airPath) вынесен в ai.js —
+  // домешан в Game.prototype: onCycleStart/near/nestAt/nearestResource/diggerBrain/
+  // collectorBrain/airPath/raiderBrain/updateEnemies. Вызываются из loop/updateEnemies.
 
   // Сдача груза на принтере — по ОДНОЙ единице с интервалом (медленно): единица
-  // вылетает из юнита вверх (анимация), гекс освобождается.
+  // вылетает из юнита вверх (анимация), счётчик уменьшается.
   deliverCargo() {
-    const t = this.inventory.deliverOneBoardCargo();
+    const t = this.inventory.deliverOneCargo();
     if (!t) return;
     this.delivered[t] = (this.delivered[t] || 0) + 1; this.deliveredTotal++;
+    this.upgrades.addBank(t, 1);                                       // та же сдача копит банк апгрейдов
     this.fx.burst(this.unit.px, this.unit.py, [t]);
-    if (this.quest && this.quest.onDeliver(t)) this.completeQuest();   // сдача двигает задание
-  }
-
-  // Репутация домашнего (контрактного) города в save двигается ±1; уведомление в HUD.
-  questReward(delta) {
-    const name = this.cities[0].name;
-    this.save.rep[name] = Math.max(0, (this.save.rep[name] || 0) + delta);
-    writeSave(this.save);
-    return this.save.rep[name];
-  }
-  completeQuest() {
-    const rep = this.questReward(+1);
-    this.questMsg = { text: `Задание выполнено! Репутация «${this.cities[0].name}»: ${rep}`, t: QUEST_MSG_TIME, ok: true };
-    this.quest = makeQuest(this.cycle.n);
-  }
-  failQuest() {
-    const rep = this.questReward(-1);
-    this.questMsg = { text: `Задание провалено. Репутация «${this.cities[0].name}»: ${rep}`, t: QUEST_MSG_TIME, ok: false };
-    this.quest = makeQuest(this.cycle.n);
   }
 
   // База — клетки принтера и пол пещеры вокруг него; там таймер города заряжается.
@@ -339,15 +208,18 @@ class Game {
     drawWorld(ctx, this.world, this.unit, this.camera, this.debug);
     drawEnemies(ctx, this.enemies, this.camera);
     drawLoot(ctx, this.loot, this.camera);
-    if (!this.debug) drawFog(ctx, this.world, this.unit, this.camera, this.designW, this.designH); // дебаг — без тумана
-    drawTachikoma(ctx, this.world, this.unit, this.camera);
+    if (!this.debug) {
+      drawFog(ctx, this.world, this.unit, this.camera, this.designW, this.designH);
+      drawHeadlight(ctx, this.world, this.unit, this.camera, this.designW, this.designH);   // прожектор-конус у бура (тьма вокруг), с тенями от породы
+    }
+    drawTachikoma(ctx, this.world, this.unit, this.camera, { scale: UNIT_DRAW_SCALE });
     drawFx(ctx, this.fx, this.camera);
     drawCrtOverlay(ctx, this.designW, this.designH);   // виньетка + скан-лайны поверх мира (HUD крупнее)
-    drawHUD(ctx, this.world, this.unit, this.inventory, { fps: this.fps, delivered: this.deliveredTotal, radWidget: this.radWidget, cycle: this.cycle, quest: this.quest, questMsg: this.questMsg, rep: this.save.rep[this.cities[0].name] || 0 }, this.designW, this.designH);
+    drawHUD(ctx, this.world, this.unit, this.inventory, { fps: this.fps, delivered: this.deliveredTotal, cycle: this.cycle }, this.designW, this.designH);
     drawCity(ctx, this.city, this.designW);
     if (this.debug) {
       ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = `13px ${FONT_MONO}`; ctx.fillStyle = '#ffd24a';
-      ctx.fillText('DEBUG: камера свободна (WASD), туман выкл, юнит в безопасности — B выкл', this.designW / 2, this.designH - 48);
+      ctx.fillText('DEBUG: камера свободна (WASD), туман выкл, юнит в безопасности — B выкл · R +10 ресурсов', this.designW / 2, this.designH - 48);
       // список городов: разведаны ли копателями
       ctx.textAlign = 'right'; ctx.font = `12px ${FONT_MONO}`;
       const rx = this.designW - 14; let ly = 168;   // ниже панели задания (справа под кнопкой «Ядро»)
@@ -362,8 +234,18 @@ class Game {
         const sx = Math.round(this.camera.screenX(w.cx * TILE + TILE / 2)), sy = Math.round(w.cy * TILE - this.camera.y);
         ctx.fillText(`ресурс ${w.loot} · заряд ${w.charge}`, sx, sy - TILE * 2);
       }
+      // очаги радиации: центр + кольцо радиуса влияния (только дебаг)
+      for (const s of this.world.radSources) {
+        const sx = this.camera.screenX(s.x * TILE + TILE / 2), sy = s.y * TILE + TILE / 2 - this.camera.y;
+        ctx.strokeStyle = 'rgba(140,226,90,0.5)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(sx, sy, s.r * TILE, 0, 6.283); ctx.stroke();
+        ctx.fillStyle = '#c8e25a'; ctx.beginPath(); ctx.arc(sx, sy, 5, 0, 6.283); ctx.fill();
+        ctx.fillStyle = '#c8e25a'; ctx.fillText('☢', sx, sy - 10);
+      }
       ctx.textAlign = 'left';
     }
+    // помехи интерфейса от радиационного фона у полюсов (поверх всего; только в игре)
+    if (this.mode === 'playing' && !this.debug) drawInterference(ctx, this.canvas, this.radLevel, performance.now() / 1000);
   }
 
   loop(now) {
@@ -379,6 +261,7 @@ class Game {
       // дебаг-обзор: свободная камера (WASD/стрелки), туман выкл, юнит заморожен и в
       // безопасности; мир ЖИВЁТ (цикл/враги) — чтобы видеть, что происходит на карте.
       if (this.input.pressed('KeyB')) this.debug = false;
+      if (this.input.pressed('KeyR')) { for (const k of ['iron', 'organic', 'crystal']) this.upgrades.addBank(k, 10); }  // дебаг: +10 каждого ресурса в банк
       const sp = 16 * TILE * dt;
       if (this.input.left())  this.camera.x = wrapPx(this.camera.x - sp);
       if (this.input.right()) this.camera.x = wrapPx(this.camera.x + sp);
@@ -393,35 +276,45 @@ class Game {
       this.drawScene();
     } else if (this.mode === 'playing') {
       if (this.input.pressed('KeyB')) this.debug = true;
-      this.unit.load = this.inventory.boardLoad();   // вес = груз + съёмные модули
       this.unit.update(dt, this.input, this.world);
       if (this.unit.dug) { this.loot.spawn(wrapX(this.unit.dug.x), this.unit.dug.y, this.unit.dug.type); this.unit.dug = null; }
-      if (this.loot.update(dt, this.world, this.unit, this.inventory)) this.unit.setStats(this.inventory.getStats());
+      if (this.unit.broke) { this.dugTiles++; this.unit.broke = false; }   // проходка: считаем прокопанные тайлы
+      // фон помех (сглажен): полюса + очаги радиации у базы — интерфейс глючит
+      this.radLevel += (this.world.radAt(this.unit.tileX, this.unit.tileY) - this.radLevel) * Math.min(1, dt * 2.5);
+      this.loot.update(dt, this.world, this.unit, this.inventory, this.upgrades.pickupBonus());
       this.fx.update(dt);
       this.camera.follow(this.unit, dt);
-      this.world.reveal(this.unit.tileX, this.unit.tileY, SCANNER_R);
+      this.world.reveal(this.unit.tileX, this.unit.tileY, this.unit.stats.scanR || SCANNER_R);
       const atBase = this.atBase();
       if (atBase && this.inventory.cargoUsed()) {
         this.deliverCd = (this.deliverCd || 0) - dt;
         if (this.deliverCd <= 0) { this.deliverCargo(); this.deliverCd = DELIVER_INTERVAL; }
       } else this.deliverCd = 0;
+      // гаджет «Ремонт-дрон»: реген HP вне базы
+      if (!atBase && this.upgrades.gadgets.repair) this.unit.hp = Math.min(this.unit.stats.maxHp, this.unit.hp + REPAIR_RATE * dt);
       this.city.update(dt, atBase);
       this.cycle.update(dt);   // макро-таймер эскалации
-      if (this.quest && this.quest.checkDeadline(this.cycle.n)) this.failQuest();   // дедлайн в циклах
-      if (this.questMsg) { this.questMsg.t -= dt; if (this.questMsg.t <= 0) this.questMsg = null; }
       this.updateEnemies(dt);  // волны диких гнёзд
-      // скверна: локальный фон вытекает в HP вне базы; на базе принтер лечит юнит
-      const rad = this.world.radAt(this.unit.px / TILE, this.unit.py / TILE);
-      this.unit.hp = Math.max(0, this.unit.hp - Math.max(0, rad - this.unit.stats.radResist) * dt);
-      if (atBase) this.unit.hp = Math.min(this.unit.stats.maxHp, this.unit.hp + HEAL_RATE * dt);
-      this.radWidget.update(dt, rad, this.unit.stats.radResist);
-      const depth = Math.max(0, this.unit.tileY - CAVE_FLOOR_Y);
-      if (depth > this.save.bestDepth) { this.save.bestDepth = depth; writeSave(this.save); }
+      if (this.dugTiles > (this.save.bestDug || 0)) { this.save.bestDug = this.dugTiles; writeSave(this.save); }
       if (this.unit.hp <= 0) { this.overReason = 'unit'; this.mode = 'gameover'; }
       else if (this.city.dead) { this.overReason = 'city'; this.mode = 'gameover'; }
       else if (this.input.pressed('Escape')) this.mode = 'paused';
-      else if (this.input.pressed('KeyI')) this.openInventory(false);
+      else if (this.input.pressed('Space') && atBase) { this.upgrades.sel = 0; this.upgrades.scrollY = 0; this.mode = 'upgrades'; }   // спец-действие на базе
       this.drawScene();
+    } else if (this.mode === 'upgrades') {
+      if (this.input.pressed('Escape')) { this.upgrades.endHold(); this.mode = 'playing'; }
+      else {
+        if (this.input.pressed('KeyW', 'ArrowUp', 'KeyA', 'ArrowLeft')) this.upgrades.moveSel(-1);
+        else if (this.input.pressed('KeyS', 'ArrowDown', 'KeyD', 'ArrowRight')) this.upgrades.moveSel(1);
+        // покупка — УДЕРЖАНИЕ пробела (свежее нажатие стартует, отпускание отменяет)
+        if (this.input.pressed('Space', 'Enter', 'NumpadEnter')) { const tr = this.upgrades.selTrack(); this.upgrades.beginHold(tr && tr.id, 'key'); }
+        const buyHeld = this.input.keys.has('Space') || this.input.keys.has('Enter') || this.input.keys.has('NumpadEnter');
+        if (this.upgrades.holdSrc === 'key' && !buyHeld) this.upgrades.endHold();
+        this.upgrades.tickHold(dt);
+      }
+      this.city.update(dt, this.atBase());   // город продолжает заряжаться, пока открыто меню
+      this.drawScene();
+      this.upgrades.draw(ctx, this.designW, this.designH);
     } else if (this.mode === 'intro') {
       this.intro.update(dt);
       if (this.intro.done || this.input.pressed('Space', 'Enter', 'NumpadEnter')) this.mode = 'playing';
@@ -430,22 +323,19 @@ class Game {
       drawFog(ctx, this.world, this.unit, this.camera, this.designW, this.designH);
       drawIntro(ctx, this.intro, this.world, this.unit, this.camera, this.designW, this.designH);
     } else if (this.mode === 'gameover') {
-      this.drawScene();
-      drawGameOver(ctx, this.menuButtons(), this.designW, this.designH, this.overReason, {
-        depth: this.unit ? Math.max(0, this.unit.tileY - CAVE_FLOOR_Y) : 0,
-        delivered: this.deliveredTotal, byType: this.delivered, best: this.save.bestDepth, cycle: this.cycle.n,
-      });
-    } else if (this.mode === 'inventory') {
-      if (!this.inventory.confirm) {  // пока открыта модалка выхода — хоткеи заблокированы
-        if (this.input.pressed('Escape')) {
-          if (this.unit) {
-            const doExit = () => { this.unit.setStats(this.inventory.getStats()); this.spillShelfCargo(); this.mode = 'playing'; };
-            if (this.inventory.needsExitConfirm()) this.inventory.confirm = doExit; else doExit();
-          } else this.mode = 'menu';
-        }
-        if (this.input.pressed('Enter', 'NumpadEnter')) this.onInventoryStart(); // быстрый старт «В шахту»
-        if (this.input.pressed('KeyR')) this.inventory.rotateSelected();
+      // ENTER уводит в меню; рисуем сцену ТОЛЬКО если ещё в gameover — после
+      // endRun world/unit/city уже null и drawScene → drawWorld(null) бы крашился
+      // (канвас застрял бы с тёмным фоном — «чёрный экран»).
+      if (this.input.pressed('Enter', 'NumpadEnter')) { this.endRun(); this.mode = 'menu'; }
+      else {
+        this.drawScene();
+        drawGameOver(ctx, this.menuButtons(), this.designW, this.designH, this.overReason, {
+          dug: this.dugTiles, delivered: this.deliveredTotal, byType: this.delivered, best: this.save.bestDug || 0, cycle: this.cycle.n,
+        });
       }
+    } else if (this.mode === 'inventory') {
+      if (this.input.pressed('Escape')) this.mode = this.unit ? 'playing' : 'menu';
+      if (this.input.pressed('Enter', 'NumpadEnter')) this.onInventoryStart(); // быстрый старт «В шахту»
       this.inventory.draw(ctx, this.designW, this.designH);
     } else if (this.mode === 'paused') {
       if (this.input.pressed('Escape')) this.mode = 'playing';

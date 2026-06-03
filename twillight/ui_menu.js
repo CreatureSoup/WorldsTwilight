@@ -84,7 +84,7 @@ function drawMainMenu(ctx, save, buttons, W, H) {
   // нумерованный список — справа
   buttons.forEach((b, i) => menuLine(ctx, b, i + 1));
   ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
-  ctx.fillText(`ЛУЧШАЯ ГЛУБИНА: ${save.bestDepth}  ·  ЗАПУСКОВ: ${save.runs}`, W - 48, H * 0.42 + 64);
+  ctx.fillText(`ЛУЧШАЯ ПРОХОДКА: ${save.bestDug}  ·  ЗАПУСКОВ: ${save.runs}`, W - 48, H * 0.42 + 64);
   // низ: PCB-пальцы + serial-полоса
   edgeFingers(ctx, W / 2 - 120, H - 12, 240, 24, PAL.goldDim);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
@@ -136,7 +136,7 @@ function drawGameOver(ctx, buttons, W, H, reason, stats) {
   const byT = stats.byType || {};
   const cw = (W - 96 - 3 * 14) / 4, cy = H - 168, ch = 92;
   kpiCard(ctx, 48 + 0 * (cw + 14), cy, cw, ch, '// ЦИКЛ', `${stats.cycle || 0}`, '', PAL.chalk, 'дошёл');
-  kpiCard(ctx, 48 + 1 * (cw + 14), cy, cw, ch, '// ГЛУБИНА', `${stats.depth || 0}`, '', PAL.gold, `рекорд: ${stats.best || 0}`);
+  kpiCard(ctx, 48 + 1 * (cw + 14), cy, cw, ch, '// ПРОХОДКА', `${stats.dug || 0}`, '', PAL.gold, `рекорд: ${stats.best || 0}`);
   kpiCard(ctx, 48 + 2 * (cw + 14), cy, cw, ch, '// ДОБЫЧА', `${stats.delivered || 0}`, '', PAL.amber, `Fe ${byT.iron || 0} · Ор ${byT.organic || 0} · Кр ${byT.crystal || 0}`);
   kpiCard(ctx, 48 + 3 * (cw + 14), cy, cw, ch, '// СТАТУС', unit ? 'ЮНИТ' : 'СВЯЗЬ', '', PAL.bloodBright, unit ? 'разрушен' : 'оборвана');
   // нижняя серия + кнопка

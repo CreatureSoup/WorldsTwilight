@@ -7,7 +7,6 @@
 // — длинная мягкая тень-«труба», отброшенная НЕРОВНЫМ силуэтом породы (повторяет
 // рваную линию, а не сетку тайлов). На стенках — следы бура (горнопроходка).
 
-function layerIdx(h) { return h <= 1.5 ? 0 : h <= 2.5 ? 1 : 2; }
 const GAP_HEX  = ['#2a2012', '#231d14', '#181620']; // тёмный фон между осколками
 const SHADES   = [
   ['#5e4b2e', '#6b5535', '#776039'],
@@ -15,6 +14,28 @@ const SHADES   = [
   ['#393545', '#3f3a48', '#48434f'],
 ];
 const BACK_HEX = ['#473a27', '#3e3526', '#2e2b37']; // дно хода: темнее породы, но светлее тьмы
+
+// Геологические зоны раньше переключались РЕЗКО на границах твёрдости (y=MAP_H/2,
+// 0.78·MAP_H) → на сетке проступал горизонтальный шов (особенно на ровном дне хода
+// под прожектором). Теперь цвет базы интерполируется НЕПРЕРЫВНО: переход размазан по
+// полосе `_LBAND` тайлов вокруг границы — шва нет. `layerFloat(y)` ∈ [0..2].
+function _hx(h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
+const GAP_RGB = GAP_HEX.map(_hx), BACK_RGB = BACK_HEX.map(_hx), SHADES_RGB = SHADES.map((r) => r.map(_hx));
+const _LB1 = MAP_H * 0.5, _LB2 = MAP_H * 0.78, _LBAND = 9;
+function layerFloat(y) {
+  const a = Math.max(0, Math.min(1, (y - (_LB1 - _LBAND)) / (2 * _LBAND)));
+  const b = Math.max(0, Math.min(1, (y - (_LB2 - _LBAND)) / (2 * _LBAND)));
+  return a + b;
+}
+function _palAt(rgb, lf) { const i = Math.max(0, Math.min(rgb.length - 2, Math.floor(lf))), f = lf - i, A = rgb[i], B = rgb[i + 1];
+  return `rgb(${Math.round(A[0] + (B[0] - A[0]) * f)},${Math.round(A[1] + (B[1] - A[1]) * f)},${Math.round(A[2] + (B[2] - A[2]) * f)})`; }
+function backColor(y) { const lf = layerFloat(y); return lf === (lf | 0) ? BACK_HEX[lf] : _palAt(BACK_RGB, lf); }   // быстрый путь вне полос перехода
+function gapColor(y)  { const lf = layerFloat(y); return lf === (lf | 0) ? GAP_HEX[lf] : _palAt(GAP_RGB, lf); }
+function shadeColor(tone, y) {
+  const lf = layerFloat(y); if (lf === (lf | 0)) return SHADES[lf][tone];
+  const i = Math.min(1, lf | 0), f = lf - i, A = SHADES_RGB[i][tone], B = SHADES_RGB[i + 1][tone];
+  return `rgb(${Math.round(A[0] + (B[0] - A[0]) * f)},${Math.round(A[1] + (B[1] - A[1]) * f)},${Math.round(A[2] + (B[2] - A[2]) * f)})`;
+}
 
 function tileHash(x, y) {
   let h = (x * 374761393 + y * 668265263) | 0;
@@ -35,7 +56,6 @@ function drawChunks(ctx, world, camera, W, H) {
     for (let x = x0; x <= x1; x++) {
       const t = world.tileAt(x, y);
       if (t.type !== ROCK) continue;
-      const li = layerIdx(world.hardnessForY(y));
       const dens = t.dens;
       const n = Math.round(2 + dens * 7);
       const ssize = TILE * (0.12 + dens * 0.2);
@@ -65,8 +85,8 @@ function drawChunks(ctx, world, camera, W, H) {
         ctx.closePath();
         const tone = Math.floor(tileHash(x * 13 + k, y * 17 + k) * 3);
         const grad = ctx.createLinearGradient(0, cy - r, 0, cy + r);
-        grad.addColorStop(0, SHADES[li][Math.min(2, tone + 1)]);
-        grad.addColorStop(1, SHADES[li][tone]);
+        grad.addColorStop(0, shadeColor(Math.min(2, tone + 1), y));
+        grad.addColorStop(1, shadeColor(tone, y));
         ctx.fillStyle = grad;
         ctx.fill();
         // паутина трещин на самом осколке: глубина осколка вдоль оси бурения
@@ -176,21 +196,39 @@ function drawBackTexture(ctx, world, camera, W, H) {
     }
 }
 
-// Зубцы рваного края: набор прямоугольников, врезающихся от края тайла внутрь.
-// Тот же геометрический набор используется и для видимого края (заливка цветом
-// дна), и для силуэта тени (вырез destination-out) — чтобы тень шла по той же
-// неровной линии.
+// Рваный край прохода — НЕПРЕРЫВНЫЙ неровный контур (не прямоугольные зубцы и без
+// ровной линии по сетке). Заливаем «полосу» от кромки тайла (она утоплена под цвет
+// дна → невидима) внутрь породы до зубчатой линии value-шума. Шум берётся в МИРОВЫХ
+// координатах вдоль кромки → у соседних тайлов край стыкуется бесшовно; на концах
+// тайла глубина НЕ нулевая → нет периодических «защипов» на стыках. Минимальная
+// глубина `MIN` гарантирует, что плоских участков на линии сетки не остаётся.
+// Один контур кормит и видимый край (заливка цветом дна), и силуэт тени (destination-out).
+function _ragHash(n) { let h = (Math.imul(n | 0, 374761393) + 0x9e3779b9) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296; }
+// ЛИНЕЙНАЯ интерполяция (не smoothstep) → угловатые зубцы, а не пологие волны.
+function _ragLin(a) { const i = Math.floor(a), f = a - i; return _ragHash(i) * (1 - f) + _ragHash(i + 1) * f; }
+// Глубина эрозии кромки В ДОЛЯХ ТАЙЛА. Острый рваный профиль (высокочастотный
+// зубец + редкая глубокая выемка). Чистая функция мировой координаты вдоль кромки →
+// бесшовно у соседей. Тот же контур читает конус света (render_light.js) — клип по нему.
+function _ragDepth(along, side) {
+  const c = along + side * 5.7;
+  const v = 0.7 * _ragLin(c * 3.7) + 0.3 * _ragLin(c * 1.6 + 2.1);  // 0..1, угловато
+  return (0.1 + v * 0.9) * 0.34;   // мин. глубина (нет плоских участков на сетке) … до ~0.34 тайла
+}
 function raggedTeethRects(ctx, x, y, sx, sy, side) {
-  const K = 5, seg = TILE / K, maxD = TILE * 0.32;
-  for (let j = 0; j < K; j++) {
-    const d = Math.floor(tileHash(x * 13 + j * 7 + side * 101, y * 17 + j * 5 + side * 53) * maxD);
-    if (d <= 0) continue;
-    const w = Math.ceil(seg) + 1;
-    if (side === 0) ctx.fillRect(Math.round(sx + j * seg), sy + TILE - d, w, d + 1);
-    else if (side === 1) ctx.fillRect(Math.round(sx + j * seg), sy, w, d + 1);
-    else if (side === 2) ctx.fillRect(sx, Math.round(sy + j * seg), d + 1, w);
-    else ctx.fillRect(sx + TILE - d, Math.round(sy + j * seg), d + 1, w);
+  const N = 9;                                             // плотнее → острые зубцы читаются
+  ctx.beginPath();
+  if (side === 0 || side === 1) {                          // горизонтальная кромка (низ=0 / верх=1)
+    const baseY = side === 0 ? sy + TILE : sy, dir = side === 0 ? -1 : 1;
+    ctx.moveTo(sx, baseY); ctx.lineTo(sx + TILE, baseY);   // внешняя сторона полосы — по сетке (утоплена)
+    for (let i = N; i >= 0; i--)                            // внутренняя сторона — зубчатый контур
+      ctx.lineTo(sx + (i / N) * TILE, baseY + dir * _ragDepth(x + i / N, side) * TILE);
+  } else {                                                 // вертикальная кромка (лево=2 / право=3)
+    const baseX = side === 2 ? sx : sx + TILE, dir = side === 2 ? 1 : -1;
+    ctx.moveTo(baseX, sy); ctx.lineTo(baseX, sy + TILE);
+    for (let i = N; i >= 0; i--)
+      ctx.lineTo(baseX + dir * _ragDepth(y + i / N, side) * TILE, sy + (i / N) * TILE);
   }
+  ctx.closePath(); ctx.fill();
 }
 function raggedEdge(ctx, x, y, sx, sy, side, backHex) { ctx.fillStyle = backHex; raggedTeethRects(ctx, x, y, sx, sy, side); }
 
@@ -293,8 +331,8 @@ function drawWorld(ctx, world, unit, camera, debug) {
       if (t.type === BORDER) ctx.fillStyle = '#05070a';
       else if (t.type === INDESTRUCT) ctx.fillStyle = '#191d26';
       else if (t.type === AIR && y < SURFACE_ROWS) ctx.fillStyle = '#16202c';
-      else if (t.type === AIR) ctx.fillStyle = BACK_HEX[layerIdx(world.hardnessForY(y))];
-      else ctx.fillStyle = GAP_HEX[layerIdx(world.hardnessForY(y))];
+      else if (t.type === AIR) ctx.fillStyle = backColor(y);
+      else ctx.fillStyle = gapColor(y);
       ctx.fillRect(sx, sy, TILE + 1, TILE + 1);
       if (t.type === INDESTRUCT) { // плита-основание: банты сверху/снизу
         ctx.fillStyle = 'rgba(150,170,200,0.07)'; ctx.fillRect(sx, sy, TILE, 2);
@@ -330,7 +368,7 @@ function drawWorld(ctx, world, unit, camera, debug) {
     for (let x = x0; x <= x1; x++) {
       const t = world.tileAt(x, y);
       if (t.type !== ROCK) continue;
-      const sx = x * TILE - ox, sy = y * TILE - oy, back = BACK_HEX[layerIdx(world.hardnessForY(y))];
+      const sx = x * TILE - ox, sy = y * TILE - oy, back = backColor(y);
       if (airU(x, y + 1)) raggedEdge(ctx, x, y, sx, sy, 0, back);
       if (airU(x, y - 1)) raggedEdge(ctx, x, y, sx, sy, 1, back);
       if (airU(x - 1, y)) raggedEdge(ctx, x, y, sx, sy, 2, back);
@@ -363,37 +401,4 @@ function drawWorld(ctx, world, unit, camera, debug) {
 
   drawCityMarkers(ctx, world, camera, debug);
   drawWildMarkers(ctx, world, camera, debug);
-}
-
-// Туман войны + свет одним мягким градиентом. Диапазон с запасом в 1 тайл за
-// краями вьюпорта — иначе при движении у нижней/верхней кромки мелькает порода.
-let _fogC = null, _fogX = null;
-function drawFog(ctx, world, unit, camera, W, H) {
-  const x0 = Math.floor(camera.x / TILE) - 1, y0 = Math.max(0, Math.floor(camera.y / TILE) - 1);
-  const x1 = Math.floor((camera.x + W) / TILE) + 1;
-  const y1 = Math.min(MAP_H - 1, Math.floor((camera.y + H) / TILE) + 1);
-  const cols = x1 - x0 + 1, rows = y1 - y0 + 1;
-  if (cols <= 0 || rows <= 0) return;
-  if (!_fogC) { _fogC = document.createElement('canvas'); _fogX = _fogC.getContext('2d'); }
-  if (_fogC.width < cols || _fogC.height < rows) { _fogC.width = cols; _fogC.height = rows; }
-  const img = _fogX.createImageData(cols, rows), d = img.data;
-  const ux = unit.px / TILE - 0.5, uy = unit.py / TILE - 0.5;
-  for (let j = 0; j < rows; j++)
-    for (let i = 0; i < cols; i++) {
-      const tx = x0 + i, ty = y0 + j;
-      let a;
-      if (!world.isSeen(tx, ty)) a = 1;
-      else {
-        let dxw = tx - ux;                              // расстояние до света — по кольцу
-        if (dxw > MAP_W / 2) dxw -= MAP_W; else if (dxw < -MAP_W / 2) dxw += MAP_W;
-        const dist = Math.hypot(dxw, ty - uy);
-        a = Math.min(1, Math.max(0, (dist - LIGHT_R0) / (LIGHT_R1 - LIGHT_R0))) * FOG_EXPLORED;
-      }
-      const o = (j * cols + i) * 4;
-      d[o] = 7; d[o + 1] = 5; d[o + 2] = 10; d[o + 3] = Math.round(a * 255);  // PAL.void — тёплая темнота тумана
-    }
-  _fogX.putImageData(img, 0, 0);
-  const sm = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(_fogC, 0, 0, cols, rows, x0 * TILE - camera.x, y0 * TILE - camera.y, cols * TILE, rows * TILE);
-  ctx.imageSmoothingEnabled = sm;
 }

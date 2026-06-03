@@ -13,6 +13,7 @@ class World {
     this.seen = new Uint8Array(MAP_W * MAP_H); // туман войны
     this.caverns = [];                          // дружественные чужие города
     this.wilds = [];                            // дикие города-гнёзда (источники волн)
+    this.radSources = [];                       // очаги сильной радиации (помехи интерфейсу)
     this.generate();
   }
 
@@ -64,6 +65,7 @@ class World {
   }
   layerName(y) {
     if (y < SURFACE_ROWS) return 'поверхность';
+    for (const c of CEILING_CRUSTS) if (y >= c.y0 && y <= c.y1) return 'кровля';
     if (y < CAVE_Y0) return 'свод';
     if (y <= CAVE_FLOOR_Y) return 'город';
     if (y >= CRUST_Y0 && y <= CRUST_Y1) return 'корка';
@@ -130,17 +132,41 @@ class World {
     if (r < pCrystal + pOrganic) return 'organic';
     return 'iron';
   }
-  // Локальный фон скверны (HP/сек до резиста): база растёт с глубиной + периодическое
-  // поле очагов/оазисов (бесшовно по кольцу). Принимает дробные координаты.
+  // Радиационный ФОН у полюсов (0..1) — НЕ урон, а интенсивность помех интерфейсу.
+  // Растёт к поверхности (выше города) и ко дну (глубже RAD_BOT_Y); середина «тихая».
+  poleRad(y) {
+    const top = RAD_TOP_Y > 0 ? Math.max(0, (RAD_TOP_Y - y) / RAD_TOP_Y) : 0;
+    const bot = Math.max(0, (y - RAD_BOT_Y) / (MAP_H - RAD_BOT_Y));
+    return Math.min(1, Math.max(top, bot));
+  }
+  // Итоговый фон в точке (0..1): максимум из полюсов и вклада ближайших очагов
+  // (в центре очага 1, линейно к нулю на радиусе r) — «гейгер»: ближе очаг — сильнее.
   radAt(x, y) {
-    const depth = Math.max(0, y - CAVE_FLOOR_Y);
-    const base = 0.3 + (depth / (MAP_H - CAVE_FLOOR_Y)) * 2.6; // масштабируется с глубиной карты
-    return base * (0.2 + this.pnoise(x, y, 6) * 1.7);
+    let v = this.poleRad(y);
+    for (const s of this.radSources) {
+      const dx = this.torDist(x, s.x), dy = y - s.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < s.r) v = Math.max(v, 1 - d / s.r);
+    }
+    return Math.min(1, v);
+  }
+
+  // Очаги радиации: рассеяны недалеко от базы (по X — разброс от спавна, по глубине —
+  // ниже города). Невидимы в мире; «находятся» по нарастанию помех при приближении.
+  genRadSources() {
+    const list = [];
+    for (let i = 0; i < RAD_SOURCES; i++) {
+      const x = wrapX(SPAWN_X + Math.round((this.rand() * 2 - 1) * RAD_SOURCE_SPREAD));
+      const y = RAD_SOURCE_BAND[0] + Math.floor(this.rand() * (RAD_SOURCE_BAND[1] - RAD_SOURCE_BAND[0] + 1));
+      list.push({ x, y, r: RAD_SOURCE_R });
+    }
+    return list;
   }
 
   generate() {
     this.caverns = this.genCaverns();
     this.wilds = this.genWilds();
+    this.radSources = this.genRadSources();
     for (let y = 0; y < MAP_H; y++)
       for (let x = 0; x < MAP_W; x++) {
         let type = AIR, hardness = 0, dens = 0, resource = null;
@@ -151,14 +177,19 @@ class World {
         else if (this.inWild(x, y)) type = AIR;         // дикие гнёзда (без фундамента — будущий рейд)
         else {
           type = ROCK;
-          if (y >= CRUST_Y0 && y <= CRUST_Y1) {         // спрессованный хлам: барьер
-            dens = 1; hardness = this.hardnessForY(y) * CRUST_HARD;
+          let crustHard = null;
+          if (y >= CRUST_Y0 && y <= CRUST_Y1) crustHard = CRUST_HARD;
+          else for (const c of CEILING_CRUSTS) if (y >= c.y0 && y <= c.y1) { crustHard = c.hard; break; }
+          if (crustHard !== null) {                     // корка снизу или кровля сверху — барьер без жил и пустот
+            dens = 1; hardness = this.hardnessForY(y) * crustHard;
           } else {
             const zone = this.pnoise(x, y, 4), fine = this.tileNoise(x * 3 + 1, y * 5 + 7);
             dens = Math.min(1, Math.max(0, zone * 0.72 + fine * 0.32 + 0.04));
             hardness = this.hardnessForY(y) * (0.5 + dens);
             resource = this.resourceFor(x, y);
-            if (this.pnoise(x, y, VOID_SCALE) > VOID_THRESHOLD) { type = AIR; hardness = 0; dens = 0; resource = null; } // пустота
+            // Природные пустоты — только НИЖЕ города (между крустами вверху коридоров не нужно:
+            // подъём к поверхности — это копание через барьеры, а не свободный проход).
+            if (y > CAVE_FLOOR_Y && this.pnoise(x, y, VOID_SCALE) > VOID_THRESHOLD) { type = AIR; hardness = 0; dens = 0; resource = null; }
           }
         }
         this.tiles[y * MAP_W + x] = { type, hardness, resource, dig: 0, dens };

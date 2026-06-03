@@ -2,29 +2,41 @@
 
 // City — нарративный таймер гибернации. Реактор города стоит в юните, поэтому
 // пока юнит вне базы, город обесточивается: идёт обратный отсчёт; на базе он
-// сбрасывается. Когда отсчёт дошёл до нуля — город теряет HP по кольцам
+// дозаряжается (`charging`). Когда отсчёт дошёл до нуля — город теряет HP по кольцам
 // инфраструктуры; обнулённое кольцо не восстановить. Когда колец не осталось —
-// город уходит в гибернацию (`dead`): канал связи ИИ с юнитом обрывается = конец
-// игры. Кольца теряются снаружи внутрь (внешнее — первым).
+// город уходит в гибернацию (`dead`) = конец игры. Кольца теряются снаружи внутрь.
+// `timerMax` и HP колец АПГРЕЙДЯТСЯ в сессии (апгрейды города: «батареи»/«контуры»).
 class City {
   constructor() {
-    this.timer = CITY_TIMER_MAX;
-    this.rings = [];
+    this.timerMax = CITY_TIMER_MAX;       // апгрейд «ёмкость батарей» поднимает
+    this.timer = this.timerMax;
+    this.rings = [];                       // прочность каждого кольца апгрейдится отдельно
     for (let i = 0; i < CITY_RINGS; i++) this.rings.push({ hp: CITY_RING_HP, max: CITY_RING_HP, lost: false });
     this.dying = false;
     this.dead = false;
+    this.charging = false;  // на базе и таймер растёт
+    this.full = false;      // на базе и таймер полон
   }
 
   totalHp() { return this.rings.reduce((s, r) => s + r.hp, 0); }
-  maxHp() { return CITY_RINGS * CITY_RING_HP; }
-  // внешнее (последний индекс) — текущее теряемое кольцо
+  maxHp() { return this.rings.reduce((s, r) => s + (r.lost ? 0 : r.max), 0); }
   activeRing() {
     for (let i = this.rings.length - 1; i >= 0; i--) if (!this.rings[i].lost) return i;
     return -1;
   }
 
-  // Прямой урон рейдом по кольцам (снаружи внутрь). Пробитое кольцо теряется
-  // навсегда; если на базе — недопробитое активное кольцо позже дозарядится (update).
+  // Апгрейды города (in-session): запас таймера + прочность КАЖDОГО кольца отдельно
+  // (`ringBonus[i]` по индексу: 0=ядро, последнее=внешний). Живые кольца дозаряжаются
+  // до нового максимума (награда за покупку).
+  applyUpgrades(timerBonus, ringBonus) {
+    this.timerMax = CITY_TIMER_MAX + (timerBonus || 0);
+    this.timer = Math.min(this.timerMax, this.timer);
+    for (let i = 0; i < this.rings.length; i++) {
+      const r = this.rings[i], m = CITY_RING_HP + ((ringBonus && ringBonus[i]) || 0);
+      r.max = m; if (!r.lost) r.hp = m;
+    }
+  }
+
   damage(amount) {
     if (this.dead) return;
     let dmg = amount;
@@ -40,11 +52,12 @@ class City {
 
   update(dt, atBase) {
     if (this.dead) return;
+    this.charging = false; this.full = false;
 
     if (atBase) {
-      // на базе: таймер быстро дозаряжается (супер-чарж, не мгновенно),
-      // недопотерянное кольцо восстановлено
-      this.timer = Math.min(CITY_TIMER_MAX, this.timer + CITY_TIMER_RECHARGE * dt);
+      // на базе: таймер дозаряжается (супер-чарж), недопотерянное кольцо восстановлено
+      if (this.timer < this.timerMax) { this.timer = Math.min(this.timerMax, this.timer + CITY_TIMER_RECHARGE * dt); this.charging = true; }
+      else this.full = true;
       this.dying = false;
       const i = this.activeRing();
       if (i >= 0) this.rings[i].hp = this.rings[i].max;

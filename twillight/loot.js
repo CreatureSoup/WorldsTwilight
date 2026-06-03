@@ -1,8 +1,8 @@
 'use strict';
 
 // Loot — выпавший ресурс в шахте. При выкапывании ресурсного тайла падает на пол
-// (гравитация, по тайлам). Когда юнит проходит над дропом — он всасывается в
-// гексы инвентаря; если мест нет — после всасывания выбрасывается обратно.
+// (гравитация, по тайлам). Когда юнит проходит над дропом — он всасывается в трюм;
+// если трюм ПОЛОН — дроп НЕ подбирается и остаётся лежать (заберём после сдачи).
 const DROP_GRAV = 1500;   // px/сек² — притяжение дропа
 const DROP_VMAX = 900;    // px/сек — терминальная скорость падения
 const DROP_REST = 0.66;   // доля тайла: где дроп «лежит» на полу
@@ -17,7 +17,6 @@ class Drop {
     this.py = y * TILE + TILE / 2;
     this.vy = 0;
     this.cooldown = cooldown; // лежит на земле, пока не истечёт (нельзя подобрать)
-    this.module = false;      // снятый модуль: лежит инертно (не подбирается авто)
     this.picked = false;      // идёт анимация всасывания → потом удаление
     this.suckT = 0;
   }
@@ -46,25 +45,17 @@ class Drop {
     }
     this.px = this.tileX * TILE + TILE / 2;
   }
-
-  // нет места: подпрыгнуть и по возможности соскочить с тайла юнита вбок
-  eject(world, unit) {
-    this.cooldown = PICKUP_ARM;
-    this.vy = -260;
-    for (const dx of [unit.dx || 1, -(unit.dx || 1)]) {
-      if (world.tileAt(this.tileX + dx, this.tileY).type === AIR) { this.tileX = wrapX(this.tileX + dx); break; }
-    }
-  }
 }
 
 class Loot {
   constructor() { this.drops = []; }
   spawn(x, y, type, cooldown) { this.drops.push(new Drop(x, y, type, cooldown)); }
-  spawnModule(x, y, type) { const d = new Drop(x, y, type); d.module = true; this.drops.push(d); }
 
-  // Возвращает true, если в этот кадр модуль был переустановлен (для рефреша статов).
-  update(dt, world, unit, inv) {
-    let installed = false;
+  // Модули во время забега не выпадают (in-game removal убрали из дизайна).
+  // Дроп — только ресурсы; подбор увеличивает счётчик груза до `inventory.cargoCapacity()`.
+  // `rBonus` — прибавка радиуса подхвата (гаджет «Авто-сборщик»).
+  update(dt, world, unit, inv, rBonus) {
+    const R = PICKUP_R + (rBonus || 0);
     for (const d of this.drops) {
       if (d.picked) {
         d.suckT += dt;
@@ -77,16 +68,11 @@ class Loot {
       }
       d.update(dt, world);
       if (d.cooldown > 0) continue;        // ещё лежит — подобрать нельзя
+      if (inv.cargoFree() <= 0) continue;  // трюм полон — НЕ подбираем (дроп остаётся лежать, заберём после сдачи)
       const dxw = Math.abs(((d.tileX - unit.tileX) % MAP_W + MAP_W) % MAP_W); // радиус подхвата (тороидально по X)
-      if (Math.min(dxw, MAP_W - dxw) > PICKUP_R || Math.abs(d.tileY - unit.tileY) > PICKUP_R) continue;
-      if (d.module) {                       // модуль — переустановка на доску (как подбор)
-        if (inv.tryInstall(d.type)) { d.picked = true; d.suckT = 0; d.sx = d.px; d.sy = d.py; d.ux = unit.px; d.uy = unit.py; installed = true; }
-      } else {                              // ресурс — лапы тянут в гексы груза
-        if (inv.addCargo(d.type)) { d.picked = true; d.suckT = 0; d.sx = d.px; d.sy = d.py; d.ux = unit.px; d.uy = unit.py; }
-        else d.eject(world, unit);
-      }
+      if (Math.min(dxw, MAP_W - dxw) > R || Math.abs(d.tileY - unit.tileY) > R) continue;
+      if (inv.addCargo(d.type)) { d.picked = true; d.suckT = 0; d.sx = d.px; d.sy = d.py; d.ux = unit.px; d.uy = unit.py; }
     }
     this.drops = this.drops.filter((d) => !(d.picked && d.suckT >= SUCK_TIME));
-    return installed;
   }
 }
