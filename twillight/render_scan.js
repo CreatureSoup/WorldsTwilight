@@ -80,6 +80,14 @@ function drawScanFx(ctx, game, camera) {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
 
+  // 0) ПОДСВЕТКА ОБЪЕКТА цветом скана (пульс) — хлам «горит» под лучом, пока качаются данные
+  const pul = 0.5 + 0.5 * Math.sin(t * 4.5);
+  const og = ctx.createRadialGradient(tx, ty, 1, tx, ty, 15);
+  og.addColorStop(0, `rgba(95,170,240,${0.30 + 0.18 * pul})`); og.addColorStop(1, 'rgba(95,170,240,0)');
+  ctx.fillStyle = og; ctx.beginPath(); ctx.arc(tx, ty, 15, 0, 6.283); ctx.fill();
+  ctx.fillStyle = `rgba(120,190,250,${0.22 + 0.12 * pul})`;   // силуэт хлама (тот же контур, что в _drawJunk)
+  ctx.beginPath(); ctx.moveTo(tx - 10, ty + 6); ctx.lineTo(tx - 4, ty - 4); ctx.lineTo(tx + 3, ty - 2); ctx.lineTo(tx + 10, ty + 6); ctx.closePath(); ctx.fill();
+
   // 1) ПОЛУПРОЗРАЧНЫЙ объёмный КОНУС света от излучателя к объекту (мягкий, гаснет к краю)
   ctx.beginPath();
   ctx.moveTo(src.x, src.y);

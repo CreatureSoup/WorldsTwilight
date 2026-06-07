@@ -21,6 +21,7 @@ class Game {
     this.unit = null;
     this.city = null;
     this.loot = null;
+    this.falling = null;
     this.fx = new Fx();
     this.intro = new Intro();
     this.cycle = new Cycle();
@@ -146,6 +147,7 @@ class Game {
     this.unit.hull = (this.inventory && this.inventory.hull) || 'scout';   // тип корпуса (scout | core-кольцо)
     this.city = new City();
     this.loot = new Loot();
+    this.falling = new FallingRocks();   // нестабильная порода → падающие валуны
     this.fx.clear();
     this.cycle.reset();
     this.enemies = [];
@@ -184,7 +186,7 @@ class Game {
     writeSave(this.save);
   }
   endRun() {
-    this.unit = null; this.world = null; this.city = null; this.loot = null;
+    this.unit = null; this.world = null; this.city = null; this.loot = null; this.falling = null;
     // правки сборки между забегами НЕ переносятся: новый забег — стартовая комплектация
     this.inventory.reset();
   }
@@ -246,6 +248,7 @@ class Game {
       drawFog(ctx, this.world, this.unit, this.camera, this.designW, this.designH);
       drawHeadlight(ctx, this.world, this.unit, this.camera, this.designW, this.designH);   // прожектор-конус у бура (тьма вокруг), с тенями от породы
     }
+    if (typeof drawFalling === 'function' && this.falling) drawFalling(ctx, this.falling, this.camera);   // летящие валуны — ПОВЕРХ тумана (опасность всегда видна)
     if (typeof partsHull === 'function' && this.unit) partsHull(this.unit.hull);   // спрайты по типу корпуса (ноги+кольцо+детали)
     const tOff = this.debugTentacles ? tentacleBodyOffset() : null;   // корпус едет на щупальцах
     const ringDef = this.unit && typeof UNIT_DEFS !== 'undefined' && UNIT_DEFS[this.unit.hull];
@@ -332,6 +335,7 @@ class Game {
       if (this.unit.dug) { this.loot.spawn(wrapX(this.unit.dug.x), this.unit.dug.y, this.unit.dug.type); this.unit.dug = null; }
       if (this.unit.broke) { this.dugTiles++; this.unit.broke = false; }   // проходка: считаем прокопанные тайлы
       this.updateServers(dt);   // авто-скан выкопанных серверов → данные + лог
+      this.falling.update(dt, this.world, this.unit);   // нестабильная порода: срыв валунов + урон
 
       // фон помех (сглажен): полюса + очаги радиации у базы — интерфейс глючит
       this.radLevel += (this.world.radAt(this.unit.tileX, this.unit.tileY) - this.radLevel) * Math.min(1, dt * 2.5);
@@ -408,4 +412,8 @@ class Game {
   }
 }
 
-window.addEventListener('load', () => { window.game = new Game(document.getElementById('game')); });
+// Старт игры. Зовётся загрузчиком (index.html) ПОСЛЕ выполнения всех модулей (порядок async=false),
+// плюс фолбэк на window.load. Флаг (а НЕ `!window.game`) для идемпотентности: `window.game`
+// уже занят браузером — это элемент <canvas id="game"> (именованный глобал), `!window.game` ложен.
+window.bootGame = function () { if (window._gameBooted) return; window._gameBooted = true; window.game = new Game(document.getElementById('game')); };
+if (document.readyState === 'complete') window.bootGame(); else window.addEventListener('load', window.bootGame);

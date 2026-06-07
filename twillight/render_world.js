@@ -378,6 +378,9 @@ function drawWorld(ctx, world, unit, camera, debug) {
   // 2b) жилы ресурса в породе
   drawResourceVeins(ctx, world, ox, oy, x0, y0, x1, y1);
 
+  // 2c) трещины нестабильной породы (поверх кладки/жил)
+  if (typeof drawUnstableCracks === 'function') drawUnstableCracks(ctx, world, x0, y0, x1, y1, ox, oy);
+
   // 3) фактура дна ходов (клип по прорытому)
   ctx.save();
   ctx.beginPath();

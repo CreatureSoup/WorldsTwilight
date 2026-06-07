@@ -15,6 +15,7 @@ class World {
     this.wilds = [];                            // дикие города-гнёзда (источники волн)
     this.radSources = [];                       // очаги сильной радиации (помехи интерфейсу)
     this.servers = [];                          // старые серверы в породе — источники данных
+    this.unstableTriggers = [];                 // очередь «потеряла опору» (setAir → клетка сверху), читает falling.js
     this.generate();
   }
 
@@ -232,6 +233,34 @@ class World {
       const t = this.tiles[s.ty * MAP_W + wrapX(s.tx)];
       t.type = ROCK; t.hardness = this.hardnessForY(s.ty) * 1.2; t.dig = 0; t.resource = null; t.dens = 1; t.server = s;
     }
+    this.genUnstable();   // нестабильная порода (после серверов/фундамента — их не помечаем)
+  }
+  // Помечаем часть породы НИЖЕ города как «нестабильную» (падающие валуны) — НЕ большими кластерами,
+  // а МЕЛКИМИ группами по 1-3 соседних тайла, разбросанными так, чтобы покрытие было ~20%. Только где
+  // СНИЗУ есть опора на старте (не висит над пустотой сразу) и не круста/сервер/фундамент.
+  genUnstable() {
+    const inCeil = (y) => { for (const c of CEILING_CRUSTS) if (y >= c.y0 && y <= c.y1) return true; return false; };
+    const eligible = (t, y) => t && t.type === ROCK && !t.server && !(y >= CRUST_Y0 && y <= CRUST_Y1) && !inCeil(y);
+    for (let y = CAVE_FLOOR_Y + 2; y < MAP_H - 1; y++)
+      for (let x = 0; x < MAP_W; x++) {
+        const t = this.tiles[y * MAP_W + x];
+        if (!eligible(t, y) || t.unstable) continue;
+        if (!isSolid(this.tiles[(y + 1) * MAP_W + x])) continue;          // нужна опора снизу на старте
+        if (this.tiles[y * MAP_W + wrapX(x - 1)].unstable) continue;      // не сливаемся с соседней группой слева
+        if (this.hash(x * 31 + 7, y * 17 + 3) >= UNSTABLE_SEED_CHANCE) continue;   // «зерно» группы
+        const size = 1 + Math.floor(this.hash(x * 13 + 1, y * 29 + 5) * 3);        // 1..3 тайла подряд
+        for (let k = 0; k < size; k++) {
+          const xx = wrapX(x + k), tt = this.tiles[y * MAP_W + xx];
+          if (!eligible(tt, y) || !isSolid(this.tiles[(y + 1) * MAP_W + xx])) break;
+          tt.unstable = true;
+        }
+      }
+    // ТЕСТ: гарантированная группа у базы (пара тайлов вглубь сбоку от старта) — быстро проверить падение.
+    const startCx = Math.round((CAVE_X0 + CAVE_X1) / 2);
+    for (let dx = 6; dx <= 8; dx++) {
+      const t = this.tiles[(CAVE_FLOOR_Y + 2) * MAP_W + wrapX(startCx + dx)];
+      if (t && t.type === ROCK && !t.server) t.unstable = true;
+    }
   }
   layFoundation(x0, x1, y) {
     if (y < 0 || y >= MAP_H) return;
@@ -245,5 +274,10 @@ class World {
     if (y >= MAP_H) return { type: BORDER, hardness: 0, resource: null, dig: 0, dens: 0 };
     return this.tiles[y * MAP_W + wrapX(x)];
   }
-  setAir(x, y) { const t = this.tileAt(x, y); if (t.type === ROCK) { if (t.server) t.server.dug = true; t.type = AIR; t.hardness = 0; t.dig = 0; t.resource = null; t.dug = true; } } // dug=прорытый ход (не природная пустота) — враги избегают своих ходов; сервер → «хлам» (источник данных)
+  setAir(x, y) {
+    const t = this.tileAt(x, y);
+    if (t.type === ROCK) { if (t.server) t.server.dug = true; t.type = AIR; t.hardness = 0; t.dig = 0; t.resource = null; t.dug = true; } // dug=прорытый ход (не природная пустота) — враги избегают своих ходов; сервер → «хлам» (источник данных)
+    const a = this.tileAt(x, y - 1);   // клетка СВЕРХУ потеряла опору? нестабильная — в очередь на срыв (falling.js)
+    if (a.type === ROCK && a.unstable) this.unstableTriggers.push({ x: wrapX(x), y: y - 1 });
+  }
 }

@@ -163,29 +163,34 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
     ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
   }
 
-  // ===== BOTTOM-RIGHT: круговой прогресс извлечения данных (когда сканируем сервер-хлам) =====
+  // ===== BOTTOM-RIGHT: круговой прогресс извлечения данных (когда сканируем сервер-хлам) — 2× =====
   if (dbg.scan || dbg.scanDoneT > 0) {
-    const ccx = W - 54, ccy = H - 100, r = 19, frac = dbg.scan ? dbg.scan.data : 1;
-    ctx.lineWidth = 4; ctx.lineCap = 'round';
+    const ccx = W - 62, ccy = H - 152, r = 38, frac = dbg.scan ? dbg.scan.data : 1;
+    ctx.lineWidth = 8; ctx.lineCap = 'round';
     ctx.strokeStyle = PAL.earth; ctx.beginPath(); ctx.arc(ccx, ccy, r, 0, 6.283); ctx.stroke();
     ctx.strokeStyle = PAL.cobalt; ctx.beginPath(); ctx.arc(ccx, ccy, r, -Math.PI / 2, -Math.PI / 2 + 6.283 * frac); ctx.stroke();
     ctx.lineCap = 'butt';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = PAL.chalk; ctx.font = `700 13px ${FONT_DISPLAY}`; ctx.fillText(`${Math.round(frac * 100)}`, ccx, ccy + 1);
-    ctx.textBaseline = 'top'; ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = dbg.scan ? PAL.cobalt : PAL.toxic;
-    ctx.fillText(dbg.scan ? 'ИЗВЛЕЧЕНИЕ ДАННЫХ' : 'ДАННЫЕ ИЗВЛЕЧЕНЫ', ccx, ccy + r + 5);
+    ctx.fillStyle = PAL.chalk; ctx.font = `700 26px ${FONT_DISPLAY}`; ctx.fillText(`${Math.round(frac * 100)}`, ccx, ccy + 2);
+    ctx.textBaseline = 'top'; ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = dbg.scan ? PAL.cobalt : PAL.toxic;
+    ctx.fillText(dbg.scan ? 'ИЗВЛЕЧЕНИЕ ДАННЫХ' : 'ДАННЫЕ ИЗВЛЕЧЕНЫ', ccx, ccy + r + 8);
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
 
-  // ===== BOTTOM-RIGHT угол: лог событий (последние 3, таймстэмп = цикл сессии) =====
-  if (dbg.log && dbg.log.length) {
-    const rx = W - 12, last = dbg.log.slice(-3);
+  // ===== BOTTOM-RIGHT угол: лог событий — ВСЕГДА виден (пустое состояние на старте) =====
+  {
+    const rx = W - 12, last = (dbg.log && dbg.log.length) ? dbg.log.slice(-3) : null;
     ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
     ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.gold; ctx.fillText('// ЛОГ СОБЫТИЙ', rx, H - 54);
-    last.forEach((e, i) => {
-      ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
-      ctx.fillText(`Ц${e.cycle} · ${e.text}`, rx, H - 40 + i * 13);
-    });
+    if (last) {
+      last.forEach((e, i) => {
+        ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
+        ctx.fillText(`Ц${e.cycle} · ${e.text}`, rx, H - 40 + i * 13);
+      });
+    } else {
+      ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.ash;
+      ctx.fillText('— нет событий —', rx, H - 40);
+    }
     ctx.textAlign = 'left';
   }
 
