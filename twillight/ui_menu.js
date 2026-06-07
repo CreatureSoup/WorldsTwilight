@@ -103,10 +103,10 @@ function drawMainMenu(ctx, save, buttons, W, H) {
   const storyEndY = wrapText(ctx, 'Ты — ИИ. Принтер ещё работает. Снаружи — скверна и древние города, которые ничего о тебе не знают.', hx, hy + 84, 360, 17);
   // директивы сессии — крупные буллеты под сюжетным текстом
   drawDirectives(ctx, hx, storyEndY + 28, true);
-  // нумерованный список — справа
+  // нумерованный вертикальный список — внизу справа
   buttons.forEach((b, i) => menuLine(ctx, b, i + 1));
   ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
-  ctx.fillText(`ЛУЧШАЯ ПРОХОДКА: ${save.bestDug}  ·  ЗАПУСКОВ: ${save.runs}`, W - 48, H * 0.42 + 64);
+  ctx.fillText(`ЛУЧШАЯ ПРОХОДКА: ${save.bestDug}  ·  ЗАПУСКОВ: ${save.runs}  ·  БАНК: ${save.meta || 0} МТ`, W - 48, 96);
   // низ: PCB-пальцы + serial-полоса
   edgeFingers(ctx, W / 2 - 120, H - 12, 240, 24, PAL.goldDim);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
@@ -141,29 +141,79 @@ function kpiCard(ctx, x, y, w, h, k, v, unit, color, delta) {
   if (delta) { ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.ash; ctx.fillText(delta, x + 14, y + h - 16); }
 }
 
-function drawGameOver(ctx, buttons, W, H, reason, stats) {
-  stats = stats || {};
-  ctx.fillStyle = 'rgba(12,5,6,0.84)'; ctx.fillRect(0, 0, W, H);
+// L-уголки рамки панели (как у кнопок) — 4 угла.
+function _panelCorners(ctx, x, y, w, h, col, s) {
+  s = s || 9; ctx.strokeStyle = col; ctx.lineWidth = 1.4; ctx.beginPath();
+  ctx.moveTo(x, y + s); ctx.lineTo(x, y); ctx.lineTo(x + s, y);
+  ctx.moveTo(x + w - s, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + s);
+  ctx.moveTo(x + w, y + h - s); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - s, y + h);
+  ctx.moveTo(x + s, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - s);
+  ctx.stroke();
+}
+
+// Финальный экран: пересчёт метрик забега в МЕГА-ТОКЕНЫ с АНИМИРОВАННЫМИ счётчиками в РАМКЕ-панели
+// (строки набегают по очереди: значение × коэф = токены), итог в токен-бейдже + банк копятся.
+// meta = { rows:[{label,accent,value,coef,tokens}], total }; overT — таймер; bank — банк ПОСЛЕ зачисления.
+function drawGameOver(ctx, buttons, W, H, reason, meta, overT, bank) {
+  meta = meta || { rows: [], total: 0 }; overT = overT || 0; bank = bank || 0;
+  const ease = (p) => (p <= 0 ? 0 : p >= 1 ? 1 : 1 - (1 - p) * (1 - p));
+  const unit = reason === 'unit';
+  drawStaticBg(ctx, W, H);
+  ctx.fillStyle = 'rgba(10,4,5,0.82)'; ctx.fillRect(0, 0, W, H);
   hazardTape(ctx, 0, 0, W, 7, PAL.blood);
   hazardTape(ctx, 0, H - 7, W, 7, PAL.blood);
-  const unit = reason === 'unit';
+
+  // ── шапка ──
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.bloodBright;
-  ctx.fillText(unit ? '⚠ КОРПУС УТРАЧЕН · 0xE204' : '⚠ СВЯЗЬ ПРЕРВАНА · 0xE204', W / 2, H * 0.18);
-  ctx.font = `800 56px ${FONT_DISPLAY}`; ctx.fillStyle = PAL.chalk;
-  ctx.fillText(unit ? 'ЮНИТ РАЗРУШЕН' : 'СВЯЗЬ ПОТЕРЯНА', W / 2, H * 0.30);
-  ctx.fillStyle = PAL.bone; ctx.font = `13px ${FONT_BODY}`;
-  ctx.fillText(unit ? 'Скверна разъела корпус.' : 'Город ушёл в гибернацию — канал связи оборван.', W / 2, H * 0.30 + 28);
-  // KPI-карточки (4)
-  const byT = stats.byType || {};
-  const cw = (W - 96 - 3 * 14) / 4, cy = H - 168, ch = 92;
-  kpiCard(ctx, 48 + 0 * (cw + 14), cy, cw, ch, '// ЦИКЛ', `${stats.cycle || 0}`, '', PAL.chalk, 'дошёл');
-  kpiCard(ctx, 48 + 1 * (cw + 14), cy, cw, ch, '// ПРОХОДКА', `${stats.dug || 0}`, '', PAL.gold, `рекорд: ${stats.best || 0}`);
-  kpiCard(ctx, 48 + 2 * (cw + 14), cy, cw, ch, '// ДОБЫЧА', `${stats.delivered || 0}`, '', PAL.amber, `Fe ${byT.iron || 0} · Ор ${byT.organic || 0} · Кр ${byT.crystal || 0}`);
-  kpiCard(ctx, 48 + 3 * (cw + 14), cy, cw, ch, '// СТАТУС', unit ? 'ЮНИТ' : 'СВЯЗЬ', '', PAL.bloodBright, unit ? 'разрушен' : 'оборвана');
-  // нижняя серия + кнопка
-  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
-  ctx.fillText('SEED 0x7A3F · СОХРАНЕНО В АРХИВЕ', 48, H - 30);
+  ctx.fillText(unit ? '⚠ КОРПУС УТРАЧЕН · 0xE204' : '⚠ СВЯЗЬ ПРЕРВАНА · 0xE204', W / 2, 48);
+  ctx.font = `800 44px ${FONT_DISPLAY}`; ctx.fillStyle = PAL.chalk;
+  ctx.fillText(unit ? 'ЮНИТ РАЗРУШЕН' : 'СВЯЗЬ ПОТЕРЯНА', W / 2, 90);
+  ctx.fillStyle = PAL.bone; ctx.font = `12px ${FONT_BODY}`;
+  ctx.fillText(unit ? 'Скверна разъела корпус.' : 'Город ушёл в гибернацию — канал связи оборван.', W / 2, 112);
+
+  // ── панель пересчёта ──
+  const px = 44, pw = W - 88, py = 142, ph = 304;
+  ctx.fillStyle = 'rgba(16,12,14,0.92)'; ctx.fillRect(px, py, pw, ph);
+  ctx.strokeStyle = PAL.goldDim; ctx.lineWidth = 1; ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
+  _panelCorners(ctx, px, py, pw, ph, PAL.gold);
+  ctx.fillStyle = 'rgba(34,25,10,0.7)'; ctx.fillRect(px, py, pw, 26);
+  ctx.textAlign = 'left'; ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.gold;
+  ctx.fillText('// ПЕРЕСЧЁТ ЗАБЕГА · ' + META_NAME, px + 14, py + 17);
+  ctx.textAlign = 'right'; ctx.fillStyle = PAL.bloodBright;
+  ctx.fillText(unit ? 'СТАТУС · КОРПУС' : 'СТАТУС · СВЯЗЬ', px + pw - 14, py + 17);
+
+  // ── строки ──
+  const rx0 = px + 18, rx1 = px + pw - 18, rowY = py + 58, lineH = 30;
+  let shownTotal = 0;
+  meta.rows.forEach((r, i) => {
+    const p = ease((overT - 0.3 - i * 0.38) / 0.7);
+    const dval = Math.round(r.value * p), dtok = Math.round(r.tokens * p);
+    shownTotal += dtok;
+    const ry = rowY + i * lineH, ac = PAL[r.accent] || PAL.gold;
+    ctx.globalAlpha = p > 0.001 ? 1 : 0.28;
+    ctx.fillStyle = ac; ctx.fillRect(rx0, ry - 9, 7, 7);
+    ctx.fillStyle = PAL.bone; ctx.font = `13px ${FONT_BODY}`; ctx.textAlign = 'left'; ctx.fillText(r.label, rx0 + 16, ry);
+    ctx.font = `11px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter; ctx.textAlign = 'right'; ctx.fillText(`${dval} × ${r.coef}`, rx1 - 74, ry);
+    ctx.font = `700 15px ${FONT_MONO}`; ctx.fillStyle = ac; ctx.textAlign = 'right'; ctx.fillText(`+${dtok}`, rx1, ry);
+  });
+  ctx.globalAlpha = 1;
+  const divY = rowY + meta.rows.length * lineH - 4;
+  ctx.strokeStyle = 'rgba(120,110,95,0.4)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(rx0, divY); ctx.lineTo(rx1, divY); ctx.stroke();
+
+  // ── итог-бейдж ──
+  const bY = divY + 14, bH = py + ph - bY - 14;
+  ctx.fillStyle = 'rgba(44,32,12,0.55)'; ctx.fillRect(px + 10, bY, pw - 20, bH);
+  const tcx = px + 36, tcy = bY + bH / 2;
+  ctx.beginPath(); ctx.moveTo(tcx, tcy - 15); ctx.lineTo(tcx + 15, tcy); ctx.lineTo(tcx, tcy + 15); ctx.lineTo(tcx - 15, tcy); ctx.closePath();
+  ctx.strokeStyle = PAL.gold; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.fillStyle = PAL.goldBright; ctx.beginPath(); ctx.arc(tcx, tcy, 4, 0, 6.283); ctx.fill();
+  ctx.textAlign = 'left'; ctx.font = `10px ${FONT_MONO}`; ctx.fillStyle = PAL.bone; ctx.fillText('ИТОГО ЗА ЗАБЕГ', tcx + 26, bY + 22);
+  const dispBank = (bank - meta.total) + shownTotal;
+  ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.toxic; ctx.fillText(`В БАНКЕ: ${dispBank} ${META_ABBR}`, tcx + 26, bY + bH - 12);
+  ctx.textAlign = 'right'; ctx.font = `800 40px ${FONT_DISPLAY}`; ctx.fillStyle = PAL.goldBright; ctx.fillText(`+${shownTotal}`, rx1 - 40, tcy + 13);
+  ctx.font = `10px ${FONT_MONO}`; ctx.fillStyle = PAL.gold; ctx.fillText(META_ABBR, rx1, tcy + 13);
+
   drawButtons(ctx, buttons);
-  ctx.textAlign = 'left';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 }

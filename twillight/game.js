@@ -15,6 +15,7 @@ class Game {
     this.inventory.onStart = () => this.onInventoryStart();
     this.upgrades = new Upgrades();
     this.save = loadSave();
+    if (typeof metaBindSave === 'function') metaBindSave(this.save);   // metaHas(id) для эффектов узлов в забеге
 
     this.mode = 'menu';
     this.world = null;
@@ -95,8 +96,12 @@ class Game {
     const W = this.designW, H = this.designH, w = 260, h = 50, x = W / 2 - w / 2;
     let bs = [];
     if (this.mode === 'menu') {
-      const lw = 340, lx = W - 48 - lw;
-      bs = [{ id: 'start', label: 'Новый забег', desc: 'seed · random', x: lx, y: H * 0.42, w: lw, h: 46, primary: true }];
+      // вертикальный список (menuLine) внизу-справа — не перекрывает заголовок/сюжет/директивы
+      const lw = 340, lx = W - 48 - lw, bh = 46, mt = (this.save && this.save.meta) || 0;
+      bs = [
+        { id: 'start', label: 'Новый забег', desc: 'seed · random', x: lx, y: H - 132, w: lw, h: bh, primary: true },
+        { id: 'progress', label: 'Прогресс', desc: 'сеть памяти · ' + mt + ' МТ', x: lx, y: H - 132 + 54, w: lw, h: bh },
+      ];
     } else if (this.mode === 'paused') {
       const y0 = H / 2 - 60;
       bs = [
@@ -120,6 +125,7 @@ class Game {
   }
   doMenuAction(id) {
     if (id === 'start') this.openInventory(true);
+    else if (id === 'progress') { this.mode = 'progress'; if (typeof metaDomShow === 'function') metaDomShow(this); }   // экран — DOM-оверлей (meta_dom.js)
     else if (id === 'resume') this.mode = 'playing';
     else if (id === 'inventory') this.openInventory(false);
     else if (id === 'restart') { this.endRun(); this.openInventory(true); }
@@ -178,6 +184,10 @@ class Game {
     this.eventLog = [];       // лог крупных событий (таймстэмп = цикл сессии) — виджет справа внизу
     this.activeScan = null;   // сервер-хлам, который сейчас сканируется (для прогресс-бара/лучей)
     this._scanDoneT = 0;      // таймер надписи «ДАННЫЕ ИЗВЛЕЧЕНЫ» после выкачки
+    this.dataCount = 0;       // извлечено серверов данных за забег (вход в мета-пересчёт)
+    this.directivesDone = 0;  // выполнено директив за забег (задел: система директив ещё впереди)
+    this.metaResult = null;   // результат мета-пересчёта (считается один раз на gameover)
+    this.overT = 0;           // таймер финального экрана — для анимации счётчиков
     this.radLevel = 0;        // сглаженный фон помех (0..1) у полюсов — глитчи интерфейса
     this.overReason = null;
     this.camera.snap(this.unit);
@@ -187,8 +197,25 @@ class Game {
   }
   endRun() {
     this.unit = null; this.world = null; this.city = null; this.loot = null; this.falling = null;
+    this.metaResult = null;
     // правки сборки между забегами НЕ переносятся: новый забег — стартовая комплектация
     this.inventory.reset();
+  }
+
+  // Пересчёт метрик забега в МЕТА-ТОКЕНЫ (коэффициенты META_COEF). Результат — строки для
+  // анимированного экрана (значение × коэф = токены) + итог. Считается один раз на gameover.
+  computeMeta() {
+    const resMined = this.deliveredTotal + (this.inventory && this.inventory.cargoUsed ? this.inventory.cargoUsed() : 0);
+    const rows = [
+      { label: 'ЦИКЛЫ',     accent: 'cobalt', value: this.cycle.n,        coef: META_COEF.cycle },
+      { label: 'ПРОХОДКА',  accent: 'gold',   value: this.dugTiles,       coef: META_COEF.dug },
+      { label: 'РЕСУРСЫ',   accent: 'amber',  value: resMined,            coef: META_COEF.resource },
+      { label: 'ДАННЫЕ',    accent: 'cobalt', value: this.dataCount,      coef: META_COEF.data },
+      { label: 'ДИРЕКТИВЫ', accent: 'toxic',  value: this.directivesDone, coef: META_COEF.directive },
+    ];
+    let total = 0;
+    for (const r of rows) { r.tokens = Math.round(r.value * r.coef); total += r.tokens; }
+    return { rows, total };
   }
 
   // Лог крупных событий: таймстэмп — номер цикла сессии. Виджет показывает последние.
@@ -210,7 +237,7 @@ class Game {
     }
     if (active) {
       active.data = Math.min(1, active.data + dt / SCAN_TIME);
-      if (active.data >= 1) { active.done = true; this.logEvent('НАЙДЕНЫ НОВЫЕ ДАННЫЕ'); this._scanDoneT = 2.4; active = null; }
+      if (active.data >= 1) { active.done = true; this.dataCount++; this.logEvent('НАЙДЕНЫ НОВЫЕ ДАННЫЕ'); this._scanDoneT = 2.4; active = null; }
     }
     this.activeScan = active;
     if (this._scanDoneT > 0) this._scanDoneT -= dt;
@@ -387,13 +414,21 @@ class Game {
       // ENTER уводит в меню; рисуем сцену ТОЛЬКО если ещё в gameover — после
       // endRun world/unit/city уже null и drawScene → drawWorld(null) бы крашился
       // (канвас застрял бы с тёмным фоном — «чёрный экран»).
+      if (!this.metaResult) {   // ОДИН РАЗ: пересчёт забега → токены + зачисление в банк save.meta
+        this.metaResult = this.computeMeta();
+        this.save.meta = (this.save.meta || 0) + this.metaResult.total;
+        writeSave(this.save);
+        this.overT = 0;
+      }
+      this.overT += dt;         // таймер для анимации счётчиков
       if (this.input.pressed('Enter', 'NumpadEnter')) { this.endRun(); this.mode = 'menu'; }
       else {
         this.drawScene();
-        drawGameOver(ctx, this.menuButtons(), this.designW, this.designH, this.overReason, {
-          dug: this.dugTiles, delivered: this.deliveredTotal, byType: this.delivered, best: this.save.bestDug || 0, cycle: this.cycle.n,
-        });
+        drawGameOver(ctx, this.menuButtons(), this.designW, this.designH, this.overReason, this.metaResult, this.overT, this.save.meta);
       }
+    } else if (this.mode === 'progress') {
+      // экран рисует DOM-оверлей (meta_dom.js), ввод/выход — там же; canvas под ним просто тёмный
+      ctx.fillStyle = PAL.void; ctx.fillRect(0, 0, this.designW, this.designH);
     } else if (this.mode === 'inventory') {
       if (this.input.pressed('Escape')) this.mode = this.unit ? 'playing' : 'menu';
       if (this.input.pressed('Enter', 'NumpadEnter')) this.onInventoryStart(); // быстрый старт «В шахту»

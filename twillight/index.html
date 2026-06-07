@@ -38,9 +38,11 @@
        Не блокирует перерисовку → прогресс-бар анимируется. Игру стартует bootGame по завершении. -->
   <script>
     (function () {
-      var files = ['constants', 'save', 'world', 'input', 'unit', 'camera', 'city', 'cycle', 'unitdefs', 'anim', 'rig', 'inventory', 'upgrades', 'loot', 'effects', 'falling', 'intro', 'enemy',
-        'render_resource', 'render_module', 'render_world', 'render_falling', 'render_loot', 'render_fx', 'render_parts', 'render_unit', 'render_ring', 'render_light', 'render_scan', 'render_enemy', 'render_intro', 'render_city', 'render_glitch', 'legik', 'tentacles', 'rigbridge', 'rig-core', 'hud', 'ui_menu', 'game', 'ai'];
+      var files = ['constants', 'save', 'meta', 'world', 'input', 'unit', 'camera', 'city', 'cycle', 'unitdefs', 'anim', 'rig', 'inventory', 'upgrades', 'loot', 'effects', 'falling', 'intro', 'enemy',
+        'render_resource', 'render_module', 'render_world', 'render_falling', 'render_loot', 'render_fx', 'render_parts', 'render_unit', 'render_ring', 'render_light', 'render_scan', 'render_enemy', 'render_intro', 'render_city', 'render_glitch', 'legik', 'tentacles', 'rigbridge', 'rig-core', 'hud', 'ui_menu', 'meta_dom', 'game', 'ai'];
       var total = files.length, v = Date.now(), loaded = 0;
+      // CSS DOM-оверлея мета-экрана (cache-bust как у JS)
+      var mcss = document.createElement('link'); mcss.rel = 'stylesheet'; mcss.href = 'meta_dom.css?v=' + v; document.head.appendChild(mcss);
       var fill = document.getElementById('ld-fill'), pct = document.getElementById('ld-pct');
       function tick() {
         loaded++;
