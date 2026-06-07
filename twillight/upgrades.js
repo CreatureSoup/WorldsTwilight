@@ -16,7 +16,7 @@ const UPG_TRACKS = [
   { id: 'drill',   cat: 'unit', label: 'СИЛА БУРА',  sub: 'Скорость прохода породы', accent: '#f08a2a', icon: 'drill',
     need: (s) => s.canDig, step: 0.2, base: (s) => s.digMult, fmt: (v) => '×' + v.toFixed(1) },
   { id: 'engine',  cat: 'unit', label: 'ПРИВОД',     sub: 'Скорость хода',          accent: '#3a7ec8', icon: 'engine',
-    need: (s) => s.canMove, step: 0.5, base: (s) => s.moveSpeed, fmt: (v) => v.toFixed(1) + ' т/с' },
+    need: (s) => s.canMove, step: 0.4, base: (s) => s.moveSpeed, fmt: (v) => v.toFixed(1) + ' т/с' },
   { id: 'scanner', cat: 'unit', label: 'СЕНСОР',     sub: 'Радиус сканера',         accent: '#d4a042', icon: 'scanner',
     need: (s) => s.scanR > 0, step: 0.5, base: (s) => s.scanR, fmt: (v) => 'R ' + v.toFixed(1) },
   { id: 'cargo',   cat: 'unit', label: 'ЁМКОСТЬ',    sub: 'Слотов под ресурс',      accent: '#c8e25a', icon: 'cargo',

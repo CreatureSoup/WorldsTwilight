@@ -214,9 +214,9 @@ function _ragDepth(along, side) {
   const v = 0.7 * _ragLin(c * 3.7) + 0.3 * _ragLin(c * 1.6 + 2.1);  // 0..1, угловато
   return (0.1 + v * 0.9) * 0.34;   // мин. глубина (нет плоских участков на сетке) … до ~0.34 тайла
 }
-function raggedTeethRects(ctx, x, y, sx, sy, side) {
+// Зубчатый контур эрозийной каймы (без beginPath/fill — добавляется в общий путь).
+function _appendTeeth(ctx, x, y, sx, sy, side) {
   const N = 9;                                             // плотнее → острые зубцы читаются
-  ctx.beginPath();
   if (side === 0 || side === 1) {                          // горизонтальная кромка (низ=0 / верх=1)
     const baseY = side === 0 ? sy + TILE : sy, dir = side === 0 ? -1 : 1;
     ctx.moveTo(sx, baseY); ctx.lineTo(sx + TILE, baseY);   // внешняя сторона полосы — по сетке (утоплена)
@@ -228,9 +228,34 @@ function raggedTeethRects(ctx, x, y, sx, sy, side) {
     for (let i = N; i >= 0; i--)
       ctx.lineTo(baseX + dir * _ragDepth(y + i / N, side) * TILE, sy + (i / N) * TILE);
   }
-  ctx.closePath(); ctx.fill();
+  ctx.closePath();
 }
+function raggedTeethRects(ctx, x, y, sx, sy, side) { ctx.beginPath(); _appendTeeth(ctx, x, y, sx, sy, side); ctx.fill(); }
 function raggedEdge(ctx, x, y, sx, sy, side, backHex) { ctx.fillStyle = backHex; raggedTeethRects(ctx, x, y, sx, sy, side); }
+
+// Клип по ВИДИМОМУ воздуху: тоннели/каверны + эрозийная кайма (которую raggedEdge красит
+// цветом дна → визуально это воздух). Щупальца юнита рисуются ТОЛЬКО внутри → за породой
+// они СКРЫТЫ (юнит не «вылезает»), а точки, ушедшие в камень, окклюдируются по ТОЙ ЖЕ
+// видимой кромке (`_ragDepth`), что и рендер мира — без рассинхрона сетка/визуал.
+function clipVisibleAir(ctx, world, camera) {
+  const W = camera.viewW, H = camera.viewH, ox = Math.round(camera.x), oy = Math.round(camera.y);
+  const x0 = Math.floor(camera.x / TILE), y0 = Math.max(0, Math.floor(camera.y / TILE));
+  const x1 = Math.floor((camera.x + W) / TILE), y1 = Math.min(MAP_H - 1, Math.floor((camera.y + H) / TILE));
+  const airU = (x, y) => world.tileAt(x, y).type === AIR && y >= SURFACE_ROWS;
+  ctx.beginPath();
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      const sx = x * TILE - ox, sy = y * TILE - oy;
+      if (airU(x, y)) { ctx.rect(sx, sy, TILE + 1, TILE + 1); continue; }
+      if (world.tileAt(x, y).type === ROCK) {              // кайма со стороны воздуха = видимый воздух
+        if (airU(x, y + 1)) _appendTeeth(ctx, x, y, sx, sy, 0);
+        if (airU(x, y - 1)) _appendTeeth(ctx, x, y, sx, sy, 1);
+        if (airU(x - 1, y)) _appendTeeth(ctx, x, y, sx, sy, 2);
+        if (airU(x + 1, y)) _appendTeeth(ctx, x, y, sx, sy, 3);
+      }
+    }
+  ctx.clip();
+}
 
 // Следы бура на стенках: короткие дугообразные борозды вдоль породы + тонкий
 // блик-рельеф рядом — ощущение прорытости (как в горнопроходке).

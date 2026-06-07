@@ -5,6 +5,8 @@
 // пульс-LED индикаторы. Шрифты Tektur/JetBrains Mono/Plex, палитра PAL.
 function blinkA() { return 0.35 + 0.55 * (0.5 + 0.5 * Math.sin(performance.now() / 320)); }
 function pulseDot(ctx, x, y, r, color) { ctx.save(); ctx.globalAlpha = blinkA(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill(); ctx.restore(); }
+// мигающий КВАДРАТ (центр x,y, сторона s) — буллет директивы/индикатор.
+function pulseSquare(ctx, x, y, s, color) { ctx.save(); ctx.globalAlpha = blinkA(); ctx.fillStyle = color; ctx.fillRect(Math.round(x - s / 2), Math.round(y - s / 2), s, s); ctx.restore(); }
 
 // Болт-голова (шестигранник с прорезью) — в углах техно-панелей.
 function boltHead(ctx, cx, cy, s, color) {
@@ -145,6 +147,46 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
     ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
     ctx.fillText(`СЛЕД. ЧЕРЕЗ ${Math.ceil(dbg.cycle.timeLeft())}С`, gx, 26);
     ctx.textBaseline = 'alphabetic';
+  }
+
+  // ===== ПРАВО, ПОД виджетом города: цели сессии (директивы) — компактно, мигающий квадрат на цель =====
+  if (typeof SESSION_GOALS !== 'undefined') {
+    const rx = W - 12; let dyG = 70;   // ниже капсулы гибернации (она занимает верх справа)
+    ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.gold; ctx.fillText('// ТВОИ ДИРЕКТИВЫ', rx, dyG); dyG += 14;
+    for (const g of SESSION_GOALS) {
+      ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.bone; ctx.textAlign = 'right';
+      ctx.fillText(g.short, rx - 10, dyG + 1);
+      pulseSquare(ctx, rx - 3, dyG + 4, 6, PAL[g.accent] || PAL.gold);
+      dyG += 12;
+    }
+    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+  }
+
+  // ===== BOTTOM-RIGHT: круговой прогресс извлечения данных (когда сканируем сервер-хлам) =====
+  if (dbg.scan || dbg.scanDoneT > 0) {
+    const ccx = W - 54, ccy = H - 100, r = 19, frac = dbg.scan ? dbg.scan.data : 1;
+    ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.strokeStyle = PAL.earth; ctx.beginPath(); ctx.arc(ccx, ccy, r, 0, 6.283); ctx.stroke();
+    ctx.strokeStyle = PAL.cobalt; ctx.beginPath(); ctx.arc(ccx, ccy, r, -Math.PI / 2, -Math.PI / 2 + 6.283 * frac); ctx.stroke();
+    ctx.lineCap = 'butt';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = PAL.chalk; ctx.font = `700 13px ${FONT_DISPLAY}`; ctx.fillText(`${Math.round(frac * 100)}`, ccx, ccy + 1);
+    ctx.textBaseline = 'top'; ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = dbg.scan ? PAL.cobalt : PAL.toxic;
+    ctx.fillText(dbg.scan ? 'ИЗВЛЕЧЕНИЕ ДАННЫХ' : 'ДАННЫЕ ИЗВЛЕЧЕНЫ', ccx, ccy + r + 5);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  }
+
+  // ===== BOTTOM-RIGHT угол: лог событий (последние 3, таймстэмп = цикл сессии) =====
+  if (dbg.log && dbg.log.length) {
+    const rx = W - 12, last = dbg.log.slice(-3);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+    ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.gold; ctx.fillText('// ЛОГ СОБЫТИЙ', rx, H - 54);
+    last.forEach((e, i) => {
+      ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
+      ctx.fillText(`Ц${e.cycle} · ${e.text}`, rx, H - 40 + i * 13);
+    });
+    ctx.textAlign = 'left';
   }
 
   // ===== BOTTOM: подсказка управления =====

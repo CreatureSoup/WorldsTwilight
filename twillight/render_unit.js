@@ -6,7 +6,9 @@
 // сдвигом ног в корпус), а ноги ложатся к СУЩЕСТВУЮЩЕЙ стенке, бур — по ходу.
 function drawTachikoma(ctx, world, unit, camera, opts) {
   opts = opts || {};
-  const cx = Math.round(camera.screenX(unit.px)), cy = Math.round(unit.py - camera.y);
+  if (typeof partsHull === 'function') partsHull(unit.hull);   // спрайты по типу корпуса
+
+  const cx = Math.round(camera.screenX(unit.px) + (opts.dx || 0)), cy = Math.round(unit.py - camera.y + (opts.dy || 0));  // dx/dy — сдвиг (опора на щупальца, прототип)
   const t = performance.now() / 1000;
 
   // Опора + ориентация для лазания.
@@ -21,7 +23,7 @@ function drawTachikoma(ctx, world, unit, camera, opts) {
   }
 
   // Рендерим риг в НЕЙТРАЛЬНОЙ горизонтали (dy=0) — поворот делаем внешним transform.
-  const ru = { hull: unit.hull, dx: face, dy: 0, faceX: face, state: unit.state, crouchT: unit.crouchT, noAnim: unit.noAnim, drilling: unit.drilling, stats: unit.stats };
+  const ru = { hull: unit.hull, dx: face, dy: 0, faceX: face, state: unit.state, crouchT: unit.crouchT, noAnim: unit.noAnim, noBob: !!opts.hideLegs, drilling: unit.drilling, stats: unit.stats };
   const rig = resolveUnitRig(cx, cy, ru, t, 'down');
 
   // Сильный даунскейл (≈16×): качественный сэмплинг гасит мерцание.
@@ -56,7 +58,7 @@ function drawTachikoma(ctx, world, unit, camera, opts) {
   items.sort((a, b) => a.z - b.z);
   const crouch = unit.crouchT > 0;
   for (const it of items) {
-    if (it.leg) { drawLeg(ctx, it.leg, rig.R); continue; }
+    if (it.leg) { if (!opts.hideLegs) drawLeg(ctx, it.leg, rig.R); continue; }   // hideLegs — прототип щупалец (tentacles.js)
     const p = it.part;
     ctx.save();
     if (crouch) { ctx.translate(rig.legHub.x, rig.legHub.y); ctx.scale(1, 0.7); ctx.translate(-rig.legHub.x, -rig.legHub.y); }
@@ -72,16 +74,29 @@ function drawTachikoma(ctx, world, unit, camera, opts) {
 // конус света двигается синхронно с дышащим юнитом. Возвращает вершину `ax,ay` (чуть
 // впереди по ходу) и направление луча `fx,fy`.
 function unitLightAnchor(world, unit, camera) {
-  const cx = Math.round(camera.screenX(unit.px)), cy = Math.round(unit.py - camera.y);
+  // конус сидит на корпусе → следует за тем же лаг-офсетом тела, что и спрайт (drawTachikoma opts.dx),
+  // иначе при ходьбе на щупальцах прожектор «уезжает» вперёд от отстающего корпуса.
+  const bo = (typeof tentacleBodyOffset === 'function' && typeof game !== 'undefined' && game && game.debugTentacles) ? tentacleBodyOffset() : null;
+  const cx = Math.round(camera.screenX(unit.px) + (bo ? bo.x : 0)), cy = Math.round(unit.py - camera.y + (bo ? bo.y : 0));
   const t = performance.now() / 1000;
+  // ЮНИТ-КОЛЬЦО: конус от бура (на кольце), направление = угол кластера (куда бурим). FK-риг тут не
+  // применим (модули заданы ang/rad, не f/s) — отдельная ветка.
+  const rdef = typeof UNIT_DEFS !== 'undefined' && UNIT_DEFS[unit.hull];
+  if (rdef && rdef.kind === 'ring') {
+    const aim = unit._ringAim || 0, flip = unit._ringFlip ? -1 : 1, R = (TILE - 8) / 2 * unitDrawScale(unit);
+    const drill = rdef.parts.find((p) => p.kind === 'drill'), dist = (drill ? drill.rad : rdef.ringR + 0.6) * R;
+    const dAng = (drill ? (drill.ang || 0) * Math.PI / 180 : 0) + aim;   // реальное направление бура (его угол крепления + доворот)
+    const fx = flip * Math.cos(dAng), fy = Math.sin(dAng);              // flip — зеркало X (строго налево)
+    return { ax: cx + fx * dist, ay: cy + fy * dist, fx, fy };
+  }
   const sup = supportDirOf(world, unit), climbing = sup !== 'down';
   let face = unit.faceX === -1 ? -1 : 1, theta = 0;
   if (climbing) { const wr = sup === 'right', up = unit.dy <= 0; face = (wr ? 1 : -1) * (up ? 1 : -1); theta = -face * Math.PI / 2; }
-  const ru = { hull: unit.hull, dx: face, dy: 0, faceX: face, state: unit.state, crouchT: unit.crouchT, noAnim: unit.noAnim, drilling: unit.drilling, stats: unit.stats };
+  const ru = { hull: unit.hull, dx: face, dy: 0, faceX: face, state: unit.state, crouchT: unit.crouchT, noAnim: unit.noAnim, noBob: !!bo, drilling: unit.drilling, stats: unit.stats };
   const rig = resolveUnitRig(cx, cy, ru, t, 'down');
   const node = rig.parts.find((p) => p.kind === 'reactor') || rig.parts.find((p) => p.kind === 'drill') || { x: cx, y: cy };
   let nx = node.x, ny = node.y;
-  const k = UNIT_DRAW_SCALE;
+  const k = unitDrawScale(unit);
   if (!climbing) {
     const stat = resolveUnitRig(cx, cy, { hull: unit.hull, dx: face, dy: 0, faceX: face, state: IDLE, crouchT: 0, noAnim: true, stats: unit.stats }, t, 'down');
     let footY = cy; for (const leg of stat.legs) for (const sg of leg.segs) footY = Math.max(footY, sg.jy, sg.ly);

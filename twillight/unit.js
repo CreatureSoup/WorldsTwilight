@@ -21,8 +21,10 @@ class Unit {
     this.setStats(stats);
   }
   setStats(stats) {
+    const prevMax = this.stats ? this.stats.maxHp : null;
     this.stats = stats;
     if (this.hp === undefined) this.hp = stats.maxHp;
+    else if (prevMax != null && stats.maxHp > prevMax) this.hp += stats.maxHp - prevMax;  // апгрейд корпуса лечит НА ПРИБАВКУ (не полностью)
     this.hp = Math.min(this.hp, stats.maxHp);
   }
   // опора: только соседняя порода (клинг). Никаких «искусственных» полов —
@@ -45,14 +47,29 @@ class Unit {
     this.drilling = false;
     if (this.dx === 1 || this.dx === -1) this.faceX = this.dx;  // запомнить горизонталь до возможной смены на «вверх/вниз»
 
+    // «Замок» свежепрокопанного тайла: разовое нажатие (пробил → отпустил) НЕ въезжает в дыру —
+    // юнит стоит. Тем же УДЕРЖАНИЕМ заходит лишь спустя `DRILL_HOLD_ADVANCE` (непрерывный тоннель).
+    // Снимается при отпускании направления (следующее нажатие — свежее).
+    if (this._dugBlock) {
+      if (!(input.up() || input.down() || input.left() || input.right())) this._dugBlock = null;
+      else this._dugBlockT += dt;
+    }
+
     if (this.state === MOVING) {
       this.progress += this.moveSpeed * dt;
-      if (this.progress >= 1) {
+      // НЕПРЕРЫВНОЕ ПАДЕНИЕ: при завершении тайла, если всё ещё свободное падение (нет опоры, снизу
+      // воздух), сразу цепляем следующий тайл, ПЕРЕНОСЯ остаток progress — без кадра-заморозки на стыке.
+      // Иначе py замирал на тайл-границе (1 кадр) → скачок скорости → ложный «удар» squash на КАЖДОМ
+      // тайле (дёргано). Чейн только для падения (moveSpeed===FALL_SPEED); обычный ход — как было.
+      while (this.progress >= 1) {
         this.tileX = wrapX(this.toX); this.tileY = this.toY; // переход через шов мира
         this.px = this.tileX * TILE + TILE / 2;
         this.py = this.tileY * TILE + TILE / 2;
-        this.state = IDLE;
-      } else {
+        const falling = this.moveSpeed === FALL_SPEED && !this.isAnchored(world) && world.tileAt(this.tileX, this.tileY + 1).type === AIR;
+        if (falling) { this.fromX = this.tileX; this.fromY = this.tileY; this.toX = this.tileX; this.toY = this.tileY + 1; this.progress -= 1; }
+        else { this.state = IDLE; this.progress = 0; break; }
+      }
+      if (this.state === MOVING) {
         const fx = this.fromX * TILE + TILE / 2, fy = this.fromY * TILE + TILE / 2;
         const tx = this.toX * TILE + TILE / 2, ty = this.toY * TILE + TILE / 2;
         this.px = fx + (tx - fx) * this.progress;
@@ -130,12 +147,21 @@ class Unit {
           world.setAir(nx, ny);
           this.broke = true;
           if (res) this.dug = { x: nx, y: ny, type: res };
-          this.startMove(nx, ny, this.effectiveSpeed());
+          // ⚠️ НЕ ДОБАВЛЯЙ здесь startMove! На кадре ПРОБИТИЯ юнит ОСТАЁТСЯ НА МЕСТЕ (решено с игроком).
+          //    Ставим «замок» на прокопанный тайл: тем же удержанием въедем только спустя DRILL_HOLD_ADVANCE
+          //    (тоннель), а разовое нажатие (отпустил) — стоим. Избыток мощности бура в движение НЕ переходит.
+          this._dugBlock = { x: nx, y: ny }; this._dugBlockT = 0;
         }
         return;
       }
-      // ход в воздух (вбок/вниз) — только с опоры; подъём «вверх» обработан выше
-      if (t.type === AIR && s.canMove && anchored) { this.startMove(nx, ny, this.effectiveSpeed()); return; }
+      // ход в воздух (вбок/вниз) — только с опоры; подъём «вверх» обработан выше.
+      // НО не въезжаем в ТОЛЬКО ЧТО прокопанный тайл тем же удержанием раньше DRILL_HOLD_ADVANCE
+      // (разовое нажатие → стой; держишь дольше → заходишь = непрерывный тоннель).
+      if (t.type === AIR && s.canMove && anchored) {
+        if (this._dugBlock && this._dugBlock.x === nx && this._dugBlock.y === ny && this._dugBlockT < DRILL_HOLD_ADVANCE) return;
+        this._dugBlock = null;
+        this.startMove(nx, ny, this.effectiveSpeed()); return;
+      }
     }
 
     // гравитация: без опоры и снизу пусто — падаем

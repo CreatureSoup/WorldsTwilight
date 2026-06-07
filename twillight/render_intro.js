@@ -18,22 +18,31 @@ function drawIntro(ctx, intro, world, unit, camera, W, H) {
     ctx.fillRect(prx, pry, PRINTER.w * TILE, PRINTER.h * TILE);
   }
 
-  // печать юнита: заливка снизу вверх + сканлайн на кромке
-  const revealH = R * 2 + 16, bottom = cy + R + 8, top = bottom - printT * revealH;
+  // печать юнита: заливка снизу вверх + сканлайн на кромке. Кольцо рисуем как в игре
+  // (ноги-щупальца ПОД + модули/реактор), иначе FK-риг (scout). Реактор ВЫКЛ до установки
+  // (`unit.reactorOn` ставится по фазе в game.intro-апдейте → drawRingUnit рисует `reactor:off`).
+  const ring = typeof UNIT_DEFS !== 'undefined' && UNIT_DEFS[unit.hull] && UNIT_DEFS[unit.hull].kind === 'ring';
+  const revealH = ring ? TILE * 2.6 : R * 2 + 16, halfW = ring ? TILE * 2 : R + 10;
+  const bottom = cy + (ring ? TILE * 1.4 : R + 8), top = bottom - printT * revealH;
   ctx.save();
-  ctx.beginPath(); ctx.rect(cx - R - 10, top, (R + 10) * 2, bottom - top); ctx.clip();
-  drawTachikoma(ctx, world, unit, camera, { scale: UNIT_DRAW_SCALE });
+  ctx.beginPath(); ctx.rect(cx - halfW, top, halfW * 2, bottom - top); ctx.clip();
+  if (ring) {
+    if (typeof drawTentacles === 'function') drawTentacles(ctx, camera);   // ноги (живые из intro-апдейта)
+    drawRingUnit(ctx, world, unit, camera, { scale: unitDrawScale(unit) });
+  } else {
+    drawTachikoma(ctx, world, unit, camera, { scale: unitDrawScale(unit) });
+  }
   ctx.restore();
   if (printT > 0 && printT < 1) {
-    ctx.fillStyle = 'rgba(120,220,255,0.22)'; ctx.fillRect(cx - R - 8, top, (R + 8) * 2, 3);
+    ctx.fillStyle = 'rgba(120,220,255,0.22)'; ctx.fillRect(cx - halfW + 2, top, halfW * 2 - 4, 3);
     ctx.strokeStyle = 'rgba(160,235,255,0.95)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(cx - R - 8, top); ctx.lineTo(cx + R + 8, top); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - halfW + 2, top); ctx.lineTo(cx + halfW - 2, top); ctx.stroke();
   }
 
-  // реактор: летит из принтера в центр юнита
-  if (t >= INTRO_PRINT && settleT < 1) {
+  // реактор: летит из принтера в центр юнита (пока не «вставлен» — reactT<1)
+  if (t >= INTRO_PRINT && reactT < 1) {
     const ox = pcx + (cx - pcx) * reactT, oy = pcyTop + (cy - pcyTop) * reactT;
-    const rr = R * 0.5 * (reactT < 1 ? 1 : 1 - settleT);
+    const rr = R * 0.5;
     ctx.fillStyle = 'rgba(58,209,122,0.25)';
     ctx.beginPath(); ctx.arc(ox, oy, rr * 1.9, 0, 6.283); ctx.fill();
     ctx.fillStyle = '#3ad17a';

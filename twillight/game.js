@@ -27,6 +27,7 @@ class Game {
     this.enemies = [];         // враги диких гнёзд (волны по циклам)
     this.lastCycleN = 0;
     this.debug = false;        // B — дебаг-обзор карты (свободная камера, без тумана)
+    this.debugTentacles = true;  // ноги-щупальца (IK, legik.js) — ПО УМОЛЧАНИЮ; T переключает на FK для сравнения
     this.last = performance.now();
     this.fps = 60;
 
@@ -142,6 +143,7 @@ class Game {
   startSession(stats) {
     this.world = new World();
     this.unit = new Unit(SPAWN_X, SPAWN_Y, stats);
+    this.unit.hull = (this.inventory && this.inventory.hull) || 'scout';   // тип корпуса (scout | core-кольцо)
     this.city = new City();
     this.loot = new Loot();
     this.fx.clear();
@@ -157,17 +159,23 @@ class Game {
     this.cities = [{ cx: homeCx, cy: homeCy, dr: homeR, found: false, name: 'База' }]
       .concat(this.world.caverns.map((c) => ({ cx: c.cx, cy: c.cy, dr: Math.max(c.rx, c.ry) + DETECT_CITY_PAD, found: false, name: c.name })));
     this.inventory.resetCargo();
+    this.inventory.unit = this.unit;   // груз читает эффективную ёмкость из unit.stats (единый источник)
     this.delivered = { iron: 0, organic: 0, crystal: 0 };
     this.deliveredTotal = 0;
     // Апгрейды сессии: набор по модулям + город (определяется на старте). Покупка
     // пересчитывает статы юнита и/или апгрейды города.
     this.upgrades.init(this.inventory.getStats(), this.cities[0].name);
     this.upgrades.onChange = (kind, id) => {
+      // ЕДИНЫЙ путь: пересобрали эффективные статы (база сборки + апгрейды) → в unit.stats.
+      // Все потребители (движение/бур/сканер/HP/ГРУЗ) читают unit.stats — отдельных кэшей нет.
       this.unit.setStats(this.upgrades.applyToStats());
       this.city.applyUpgrades(this.upgrades.cityTimerBonus(), this.upgrades.cityRingBonuses());
       if (id === 'ping') this.world.reveal(this.unit.tileX, this.unit.tileY, 9);  // орбит-пинг: вскрыть участок
     };
     this.dugTiles = 0;        // проходка за забег: счётчик прокопанных тайлов
+    this.eventLog = [];       // лог крупных событий (таймстэмп = цикл сессии) — виджет справа внизу
+    this.activeScan = null;   // сервер-хлам, который сейчас сканируется (для прогресс-бара/лучей)
+    this._scanDoneT = 0;      // таймер надписи «ДАННЫЕ ИЗВЛЕЧЕНЫ» после выкачки
     this.radLevel = 0;        // сглаженный фон помех (0..1) у полюсов — глитчи интерфейса
     this.overReason = null;
     this.camera.snap(this.unit);
@@ -179,6 +187,31 @@ class Game {
     this.unit = null; this.world = null; this.city = null; this.loot = null;
     // правки сборки между забегами НЕ переносятся: новый забег — стартовая комплектация
     this.inventory.reset();
+  }
+
+  // Лог крупных событий: таймстэмп — номер цикла сессии. Виджет показывает последние.
+  logEvent(text) {
+    const n = (this.cycle && this.cycle.n) || 1;
+    this.eventLog.push({ cycle: n, text });
+    if (this.eventLog.length > 16) this.eventLog.shift();
+  }
+  // Сканирование выкопанных серверов: ближайший в радиусе SCAN_RADIUS качает данные (dt/SCAN_TIME);
+  // уход прерывает (прогресс сохранён в server.data — вернулся, докачал). По концу — лог-событие.
+  updateServers(dt) {
+    if (!this.world || !this.unit) return;
+    let active = null, best = Infinity;
+    for (const s of this.world.servers) {
+      if (!s.dug || s.done) continue;
+      const dx = wrapDeltaPx(this.unit.px, (s.tx + 0.5) * TILE), dy = this.unit.py - (s.ty + 0.5) * TILE;
+      const d = Math.hypot(dx, dy);
+      if (d <= SCAN_RADIUS * TILE && d < best) { best = d; active = s; }
+    }
+    if (active) {
+      active.data = Math.min(1, active.data + dt / SCAN_TIME);
+      if (active.data >= 1) { active.done = true; this.logEvent('НАЙДЕНЫ НОВЫЕ ДАННЫЕ'); this._scanDoneT = 2.4; active = null; }
+    }
+    this.activeScan = active;
+    if (this._scanDoneT > 0) this._scanDoneT -= dt;
   }
 
   // AI диких гнёзд (спавн волн + поведение врагов + airPath) вынесен в ai.js —
@@ -206,16 +239,32 @@ class Game {
     const ctx = this.ctx;
     ctx.fillStyle = PAL.pit; ctx.fillRect(0, 0, this.designW, this.designH);
     drawWorld(ctx, this.world, this.unit, this.camera, this.debug);
+    if (typeof drawServers === 'function') drawServers(ctx, this.world, this.camera, this.debug);   // серверы/хлам (туман приглушит невидимые; в дебаге — все)
     drawEnemies(ctx, this.enemies, this.camera);
     drawLoot(ctx, this.loot, this.camera);
     if (!this.debug) {
       drawFog(ctx, this.world, this.unit, this.camera, this.designW, this.designH);
       drawHeadlight(ctx, this.world, this.unit, this.camera, this.designW, this.designH);   // прожектор-конус у бура (тьма вокруг), с тенями от породы
     }
-    drawTachikoma(ctx, this.world, this.unit, this.camera, { scale: UNIT_DRAW_SCALE });
+    if (typeof partsHull === 'function' && this.unit) partsHull(this.unit.hull);   // спрайты по типу корпуса (ноги+кольцо+детали)
+    const tOff = this.debugTentacles ? tentacleBodyOffset() : null;   // корпус едет на щупальцах
+    const ringDef = this.unit && typeof UNIT_DEFS !== 'undefined' && UNIT_DEFS[this.unit.hull];
+    const isRing = !!(ringDef && ringDef.kind === 'ring');
+    if (isRing) {
+      // КОЛЬЦО: ноги (щупальца) рисуются ПОД кольцом/модулями (клип по видимому воздуху → не «вылезает»),
+      // затем кластер кольца+модулей ПОВЕРХ. Кластер вращается к направлению бурения, ноги — нет.
+      if (this.debugTentacles && this.unit) { ctx.save(); clipVisibleAir(ctx, this.world, this.camera); drawTentacles(ctx, this.camera); ctx.restore(); }
+      drawRingUnit(ctx, this.world, this.unit, this.camera, { scale: unitDrawScale(this.unit), dx: tOff ? tOff.x : 0, dy: tOff ? tOff.y : 0 });
+    } else {
+      drawTachikoma(ctx, this.world, this.unit, this.camera, { scale: unitDrawScale(this.unit), hideLegs: this.debugTentacles, dx: tOff ? tOff.x : 0, dy: tOff ? tOff.y : 0 });
+      if (this.debugTentacles && this.unit) {              // щупальца — ЗА породой (клип по видимому воздуху): юнит не «вылезает»
+        ctx.save(); clipVisibleAir(ctx, this.world, this.camera); drawTentacles(ctx, this.camera); ctx.restore();
+      }
+    }
+    if (typeof drawScanFx === 'function' && !this.debug) drawScanFx(ctx, this, this.camera);   // лучи сканера к серверу-хламу (поверх юнита)
     drawFx(ctx, this.fx, this.camera);
     drawCrtOverlay(ctx, this.designW, this.designH);   // виньетка + скан-лайны поверх мира (HUD крупнее)
-    drawHUD(ctx, this.world, this.unit, this.inventory, { fps: this.fps, delivered: this.deliveredTotal, cycle: this.cycle }, this.designW, this.designH);
+    drawHUD(ctx, this.world, this.unit, this.inventory, { fps: this.fps, delivered: this.deliveredTotal, cycle: this.cycle, scan: this.activeScan, scanDoneT: this._scanDoneT, log: this.eventLog }, this.designW, this.designH);
     drawCity(ctx, this.city, this.designW);
     if (this.debug) {
       ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = `13px ${FONT_MONO}`; ctx.fillStyle = '#ffd24a';
@@ -276,9 +325,14 @@ class Game {
       this.drawScene();
     } else if (this.mode === 'playing') {
       if (this.input.pressed('KeyB')) this.debug = true;
+      if (this.input.pressed('KeyT')) this.debugTentacles = !this.debugTentacles;   // прототип щупалец
       this.unit.update(dt, this.input, this.world);
+      if (this.debugTentacles) updateTentacles(dt, this.unit, this.world);
+      if (typeof updateRingAim === 'function' && UNIT_DEFS[this.unit.hull] && UNIT_DEFS[this.unit.hull].kind === 'ring') updateRingAim(dt, this.unit);   // доворот кластера кольца к направлению бурения
       if (this.unit.dug) { this.loot.spawn(wrapX(this.unit.dug.x), this.unit.dug.y, this.unit.dug.type); this.unit.dug = null; }
       if (this.unit.broke) { this.dugTiles++; this.unit.broke = false; }   // проходка: считаем прокопанные тайлы
+      this.updateServers(dt);   // авто-скан выкопанных серверов → данные + лог
+
       // фон помех (сглажен): полюса + очаги радиации у базы — интерфейс глючит
       this.radLevel += (this.world.radAt(this.unit.tileX, this.unit.tileY) - this.radLevel) * Math.min(1, dt * 2.5);
       this.loot.update(dt, this.world, this.unit, this.inventory, this.upgrades.pickupBonus());
@@ -317,7 +371,10 @@ class Game {
       this.upgrades.draw(ctx, this.designW, this.designH);
     } else if (this.mode === 'intro') {
       this.intro.update(dt);
-      if (this.intro.done || this.input.pressed('Space', 'Enter', 'NumpadEnter')) this.mode = 'playing';
+      // реактор ВКЛ только ПОСЛЕ установки (фаза печати/влёта → выкл, drawRingUnit рисует reactor:off)
+      if (this.unit) this.unit.reactorOn = this.intro.t >= (INTRO_PRINT + INTRO_REACTOR);
+      if (this.debugTentacles && this.unit) updateTentacles(dt, this.unit, this.world);   // живые ноги-щупальца в интро
+      if (this.intro.done || this.input.pressed('Space', 'Enter', 'NumpadEnter')) { if (this.unit) this.unit.reactorOn = true; this.mode = 'playing'; }
       ctx.fillStyle = PAL.pit; ctx.fillRect(0, 0, this.designW, this.designH);
       drawWorld(ctx, this.world, this.unit, this.camera);
       drawFog(ctx, this.world, this.unit, this.camera, this.designW, this.designH);

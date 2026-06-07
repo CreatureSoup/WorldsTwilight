@@ -11,6 +11,26 @@ function wrapText(ctx, text, x, y, maxW, lh) {
     else line = t;
   }
   if (line) ctx.fillText(line, x, yy);
+  return yy;   // baseline последней строки
+}
+
+// Директивы сессии — крупные «дизайнерские» буллеты с мигающим квадратом (один пигмент на цель).
+function drawDirectives(ctx, x, y, big) {
+  if (typeof SESSION_GOALS === 'undefined') return;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.gold;
+  ctx.fillText('// ТВОИ ДИРЕКТИВЫ ──────────', x, y);
+  let yy = y + (big ? 19 : 15);
+  SESSION_GOALS.forEach((g, i) => {
+    const c = PAL[g.accent] || PAL.gold, sq = big ? 9 : 7, rowH = big ? 22 : 17;
+    pulseSquare(ctx, x + sq / 2, yy + (big ? 7 : 5), sq, c);                 // мигающий квадрат-буллет
+    ctx.font = `bold ${big ? 10 : 8}px ${FONT_MONO}`; ctx.fillStyle = PAL.ash; ctx.textAlign = 'left';
+    ctx.fillText(('0' + (i + 1)).slice(-2), x + sq + 8, yy + (big ? 2 : 1));  // индекс директивы
+    ctx.font = `${big ? 11 : 9}px ${FONT_MONO}`; ctx.fillStyle = PAL.chalk;
+    ctx.fillText(g.text, x + sq + 28, yy + (big ? 2 : 1));
+    yy += rowH;
+  });
+  ctx.textBaseline = 'alphabetic';
 }
 
 const MENU_GLINTS = [[0.22, 0.34, 'gold', 3], [0.78, 0.62, 'amber', 2.5], [0.86, 0.28, 'blood', 2], [0.40, 0.74, 'toxic', 2], [0.62, 0.20, 'cobalt', 1.6]];
@@ -80,7 +100,9 @@ function drawMainMenu(ctx, save, buttons, W, H) {
   ctx.font = `800 72px ${FONT_DISPLAY}`; ctx.fillStyle = PAL.chalk; ctx.fillText('СУМЕРКИ', hx, hy - 16);
   ctx.fillStyle = PAL.gold; ctx.fillText('МИРА', hx, hy + 54);
   ctx.fillStyle = PAL.bone; ctx.font = `12px ${FONT_BODY}`;
-  wrapText(ctx, 'Ты — ИИ. Принтер ещё работает. Снаружи — скверна и древние города, которые ничего о тебе не знают.', hx, hy + 84, 360, 17);
+  const storyEndY = wrapText(ctx, 'Ты — ИИ. Принтер ещё работает. Снаружи — скверна и древние города, которые ничего о тебе не знают.', hx, hy + 84, 360, 17);
+  // директивы сессии — крупные буллеты под сюжетным текстом
+  drawDirectives(ctx, hx, storyEndY + 28, true);
   // нумерованный список — справа
   buttons.forEach((b, i) => menuLine(ctx, b, i + 1));
   ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;

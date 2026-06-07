@@ -23,9 +23,10 @@ const SLOT_META = {
 
 class Inventory {
   constructor() {
-    this.hull = 'scout';
+    this.hull = 'core';   // дефолтный юнит — кольцевой (старый scout пока не используется)
     this.modules = {};          // category → moduleType (пусто = слот не занят)
     this.cargo = { iron: 0, organic: 0, crystal: 0 };
+    this.unit = null;           // юнит забега — ЕДИНЫЙ источник эффективных статов (с апгрейдами); null = экран сборки
 
     this.drag = null;           // { type, category } — перетаскиваемый шаблон
     this.mouse = { x: 0, y: 0 };
@@ -47,7 +48,7 @@ class Inventory {
     for (const slot of HULL_DEFS[this.hull].slots)
       for (const key in MODULE_DEFS) if (MODULE_DEFS[key].category === slot) { this.modules[slot] = key; break; }
   }
-  reset() { this.defaultBuild(); this.resetCargo(); this.drag = null; this.scrollY = 0; }
+  reset() { this.defaultBuild(); this.resetCargo(); this.unit = null; this.drag = null; this.scrollY = 0; }
   resetCargo() { for (const k in this.cargo) this.cargo[k] = 0; }
 
   // Производные статы по установленным модулям. HP — из корпуса.
@@ -71,7 +72,7 @@ class Inventory {
 
   // ---- Груз ----
   cargoUsed()    { return this.cargo.iron + this.cargo.organic + this.cargo.crystal; }
-  cargoCapacity(){ return this.getStats().capacity; }
+  cargoCapacity(){ return this.unit ? this.unit.stats.capacity : this.getStats().capacity; }  // в забеге — эффективная ёмкость юнита (с апгрейдами), иначе по сборке
   cargoFree()    { return Math.max(0, this.cargoCapacity() - this.cargoUsed()); }
   cargoCounts()  { return { ...this.cargo }; }
   addCargo(type) {
@@ -120,15 +121,39 @@ class Inventory {
   // Масштаб «вписать риг в панель»: по габаритам деталей+ног (со спрайтами длинные),
   // крупно (множитель подобран, чтобы юнит занимал бо́льшую часть панели).
   blueprintScale(L) {
-    const rig = resolveUnitRig(0, 0, this._dummyUnit(true), 0);
+    const rig = resolveUnitRig(0, 0, this._dummyUnit(true), 0), def = UNIT_DEFS[this.hull] || {};
     let maxR = rig.R * 1.5;
-    for (const p of rig.parts) maxR = Math.max(maxR, Math.hypot(p.x, p.y) + rig.R);
+    if (def.kind === 'ring') {   // кольцо: габарит по выносу модулей (rig.parts тут NaN), + ноги
+      for (const p of def.parts) if (p.kind !== 'leg') maxR = Math.max(maxR, ((p.rad || def.ringR || 1) + 1.1) * rig.R);
+    } else {
+      for (const p of rig.parts) maxR = Math.max(maxR, Math.hypot(p.x, p.y) + rig.R);
+    }
     for (const lg of rig.legs) for (const sg of lg.segs) maxR = Math.max(maxR, Math.hypot(sg.lx, sg.ly), Math.hypot(sg.jx, sg.jy));
     const b = L.blueprint, half = Math.min(b.w, b.h - 30) / 2;
     return Math.max(1, half * 1.55 / maxR);
   }
   // t — общее время для idle-анимации (чтобы кольца гнёзд следовали за деталями).
   _rigTime() { return performance.now() / 1000; }
+  // IK-щупальца для превью (как в игре, а не FK-ноги), на ФЕЙКОВОМ полу. Юнит в (0, TILE*0.5),
+  // пол снизу (ty>=1). Конфиги в ДИЗАЙН-px (scale 1 — внешний `S` масштабирует панель целиком).
+  _previewLegRig() {
+    if (typeof makeLegRig !== 'function' || typeof updateLegRig !== 'function' || typeof legConfigsFromUnit !== 'function') return null;
+    const sig = this.hull + ':' + JSON.stringify(this.modules);
+    if (!this._plRig || this._plSig !== sig) {
+      this._plRig = makeLegRig(legConfigsFromUnit(this._dummyUnit(false), 1), 1);
+      this._plSig = sig;
+      // Пол на ~60% ВЫЛЕТА ноги: ноги вытянуты к полу, но не поджаты и не у предела.
+      let reach = 0; for (const L of this._plRig.legs) reach = Math.max(reach, L.reach || 0);
+      this._plWy = TILE - reach * 0.6;
+    }
+    const world = { tileAt: (tx, ty) => ({ type: ty >= 1 ? ROCK : AIR }) };   // фейковый пол снизу (48px)
+    this._plRig.supportAngle = 0;
+    // ФИКС. dt (не из реального времени рендера): экспон-сглаживание ног (`smk=dt*30`) при «гуляющем»
+    // dt давало мелкое дрожание стоп — а на крупном масштабе панели (×S) оно ВИДНО. idle-«дыхание»
+    // внутри legik берёт реальное `performance.now()`, так что движение остаётся живым.
+    updateLegRig(this._plRig, 1 / 60, 0, this._plWy, world, { x: 0, y: 0 });
+    return this._plRig;
+  }
   computeSlots() {
     const L = this.layout; if (!L) return [];
     const b = L.blueprint, S = this.blueprintScale(L);
@@ -244,8 +269,22 @@ class Inventory {
     // ЖИВОЙ риг юнита со спрайтами (по фактической сборке: нет модуля → деталь скрыта)
     const S = this.blueprintScale(L);
     const fakeCam = { x: 0, y: 0, screenX: (px) => px };
+    const dum = this._dummyUnit(false), ringDef = UNIT_DEFS[this.hull] && UNIT_DEFS[this.hull].kind === 'ring';
     ctx.save(); ctx.translate(b.cx, b.cy); ctx.scale(S, S);
-    drawTachikoma(ctx, null, this._dummyUnit(false), fakeCam);
+    if (ringDef) {   // КОЛЬЦО: ноги-ЩУПАЛЬЦА (IK, как в игре) ПОД + кольцо-реактор/модули
+      if (typeof partsHull === 'function') partsHull(dum.hull);
+      const lr = this._previewLegRig();
+      if (lr) {   // IK-щупальца на фейковом полу + корпус едет на их bodyOff (как в игре)
+        drawLegRig(ctx, lr, { y: this._plWy, screenX: (px) => px });
+        drawRingUnit(ctx, null, dum, fakeCam, { scale: 1, dx: lr.bodyOff.x, dy: lr.bodyOff.y });
+      } else {    // фолбэк: FK-ноги
+        const rig = resolveUnitRig(0, 0, this._dummyUnit(true), this._rigTime());
+        for (const leg of rig.legs) drawLeg(ctx, leg, rig.R);
+        drawRingUnit(ctx, null, dum, fakeCam, { scale: 1 });
+      }
+    } else {
+      drawTachikoma(ctx, null, dum, fakeCam);
+    }
     ctx.restore();
 
     // гнёзда — лёгкие кольца-цели поверх деталей: установленный — тонкое кольцо,

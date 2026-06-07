@@ -5,6 +5,15 @@
 // translate→flip→rotate, поэтому одна и та же деталь (процедурная ИЛИ спрайт)
 // верно ложится во всех позах: лево = зеркало, вверх/вниз = поворот.
 const PART_SPRITES = {};   // kind → {img,w,h,px,py,...}; есть запись → рисуем спрайт
+let _partsProc = false;    // отладка: рисовать ВСЕ детали ПРОЦЕДУРНО (игнорировать спрайты)
+function partsProcedural(on) { _partsProc = !!on; }
+function partsProcOn() { return _partsProc; }   // активны ли спрайты (false=да): кольцу — спрайт vs процедурный тор
+// СПРАЙТЫ ПРИВЯЗАНЫ К ТИПУ КОРПУСА: ключ `<hull>:<id>`. Рендер ставит `partsHull(unit.hull)` перед
+// отрисовкой, `spriteFor(id)` ищет namespaced-ключ (с откатом на плоский `id` — для редактора, где
+// авторится один корпус плоскими ключами). Так core/scout не делят ассеты, без гонок.
+let _partsHull = '';
+function partsHull(h) { _partsHull = h || ''; }
+function spriteFor(id) { if (_partsProc || !id) return null; return (_partsHull && PART_SPRITES[_partsHull + ':' + id]) || PART_SPRITES[id] || null; }
 const CABLE_COL = { power: PAL.amber, data: PAL.cobalt, hydraulic: PAL.toxic };
 
 // Положить спрайт на деталь. scale — масштаб картинки (px/px); по умолчанию вписать
@@ -21,17 +30,18 @@ function clearPartSprite(kind) { delete PART_SPRITES[kind]; }
 // из assets/scout/scout-rig.json (экспорт tools/rig_editor.html). Грузим из файлов
 // `new Image()` — работает и при открытии index.html двойным кликом (file://),
 // в отличие от fetch() самого JSON. Пути с пробелом — URL-кодируем.
+// Ключи namespaced по корпусу (`scout:<id>`) — спрайты привязаны к типу юнита (см. spriteFor).
 const PART_SPRITE_SRC = {
-  reactor:      { url: 'assets/scout/reactor.png',     scale: 0.10050251256281408, offX: 0,    offY: 0,     rot: 0 },
-  drill:        { url: 'assets/scout/drill.png',       scale: 0.10050251256281408, offX: 0,    offY: 0,     rot: 0 },
-  hold:         { url: 'assets/scout/cargo.png',       scale: 0.101,               offX: 0,    offY: 0,     rot: 0 },
-  engine:       { url: 'assets/scout/engine.png',      scale: 0.08048289738430583, offX: 0,    offY: 0,     rot: 0 },
-  'legR:thigh': { url: 'assets/scout/leg_01.png',      scale: 0.048,               offX: 13.4, offY: -10.2, rot: 100 },
-  'legR:shin':  { url: 'assets/scout/leg_02%201.png',  scale: 0.06,                offX: -0.9, offY: 7.4,   rot: 0 },
-  'legR:foot':  { url: 'assets/scout/leg_03.png',      scale: 0.055,               offX: -3,   offY: 7,     rot: 0 },
-  'legL:thigh': { url: 'assets/scout/leg_01.png',      scale: 0.048,               offX: 10.2, offY: -10.4, rot: 100 },
-  'legL:shin':  { url: 'assets/scout/leg_02%201.png',  scale: 0.06,                offX: 0.5,  offY: 7.4,   rot: 0 },
-  'legL:foot':  { url: 'assets/scout/leg_03.png',      scale: 0.055,               offX: -1,   offY: 7.7,   rot: 0 },
+  'scout:reactor':    { url: 'assets/scout/reactor.png',     scale: 0.10050251256281408, offX: 0,    offY: 0,     rot: 0 },
+  'scout:drill':      { url: 'assets/scout/drill.png',       scale: 0.10050251256281408, offX: 0,    offY: 0,     rot: 0 },
+  'scout:hold':       { url: 'assets/scout/cargo.png',       scale: 0.101,               offX: 0,    offY: 0,     rot: 0 },
+  'scout:engine':     { url: 'assets/scout/engine.png',      scale: 0.08048289738430583, offX: 0,    offY: 0,     rot: 0 },
+  'scout:legR:thigh': { url: 'assets/scout/leg_01.png',      scale: 0.048,               offX: 13.4, offY: -10.2, rot: 100 },
+  'scout:legR:shin':  { url: 'assets/scout/leg_02%201.png',  scale: 0.06,                offX: -0.9, offY: 7.4,   rot: 0 },
+  'scout:legR:foot':  { url: 'assets/scout/leg_03.png',      scale: 0.055,               offX: -3,   offY: 7,     rot: 0 },
+  'scout:legL:thigh': { url: 'assets/scout/leg_01.png',      scale: 0.048,               offX: 10.2, offY: -10.4, rot: 100 },
+  'scout:legL:shin':  { url: 'assets/scout/leg_02%201.png',  scale: 0.06,                offX: 0.5,  offY: 7.4,   rot: 0 },
+  'scout:legL:foot':  { url: 'assets/scout/leg_03.png',      scale: 0.055,               offX: -1,   offY: 7.7,   rot: 0 },
 };
 for (const k in PART_SPRITE_SRC) {
   const c = PART_SPRITE_SRC[k], im = new Image();
@@ -67,7 +77,7 @@ function drawCable(ctx, ax, ay, bx, by, type, t) {
 // ищем по ID детали (opts.id) — у каждой детали свой ассет. Если ассета нет и
 // `proc:false` — деталь НЕ рисуется (и в редакторе не экспортируется).
 function drawPart(ctx, kind, x, y, S, angle, flip, t, opts) {
-  const sp = PART_SPRITES[opts && opts.id];
+  const sp = spriteFor(opts && opts.id);
   if (!sp && opts && opts.proc === false) return;
   ctx.save();
   ctx.translate(x, y);
@@ -95,7 +105,7 @@ function drawLeg(ctx, leg, R) {
   if (leg.rot) ctx.rotate(leg.rot);
   if (leg.flip) ctx.scale(-1, 1);
   for (const sg of leg.segs) {
-    const sp = PART_SPRITES[sg.spriteId];
+    const sp = spriteFor(sg.spriteId);
     if (sp) {  // пивот (центр вращения) = px/py спрайта (правится offX/offY/колесом в редакторе)
       ctx.save(); ctx.translate(sg.lx, sg.ly); ctx.rotate(sg.A - Math.PI / 2);
       if (sp.rot) ctx.rotate(sp.rot * Math.PI / 180);

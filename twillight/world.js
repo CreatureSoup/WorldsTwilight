@@ -14,6 +14,7 @@ class World {
     this.caverns = [];                          // дружественные чужие города
     this.wilds = [];                            // дикие города-гнёзда (источники волн)
     this.radSources = [];                       // очаги сильной радиации (помехи интерфейсу)
+    this.servers = [];                          // старые серверы в породе — источники данных
     this.generate();
   }
 
@@ -121,6 +122,33 @@ class World {
     return this.placeNest(bands, WILD_NESTS, avoid).map((w) => ({ ...w, hp: WILD_HP, maxHp: WILD_HP, loot: 0, charge: 0 }));
   }
 
+  // Старые серверы — точечные источники данных, вкраплённые в породу (не в пещерах/крусте).
+  // Каждый: {tx,ty, dug, data(0..1), done}. Тайл сервера делается ПОРОДОЙ (копается); найти —
+  // по маркеру в раскрытой туманом породе. Разнесены по тору 2D друг от друга и от городов.
+  genServers() {
+    const H = MAP_H, list = [];
+    const bands = [[Math.round(H * 0.33), Math.round(H * 0.54)], [Math.round(H * 0.58), Math.round(H * 0.82)]];
+    const startCx = (CAVE_X0 + CAVE_X1) / 2;
+    // ТЕСТ: гарантированный сервер у базы — пара тайлов вниз от пола стартовой пещеры (быстро дотянуться
+    // и проверить дайджест dig→хлам→скан без глубокой копки). Сдвиг по X от принтера → не в фундаменте.
+    list.push({ tx: wrapX(Math.round(startCx) + 4), ty: CAVE_FLOOR_Y + 3, dug: false, data: 0, done: false });
+    const avoid = this.caverns.concat(this.wilds).concat([{ cx: startCx, cy: CAVE_FLOOR_Y }]);
+    for (let i = 0; i < SERVER_COUNT; i++) {
+      const band = bands[i % bands.length];
+      let tx = -1, ty = 0;
+      for (let tries = 0; tries < 120; tries++) {
+        const x = Math.floor(this.rand() * MAP_W), y = band[0] + Math.floor(this.rand() * (band[1] - band[0] + 1));
+        if (this.inCave(x, y) || this.inCavern(x, y) || this.inWild(x, y)) continue;
+        if (y >= CRUST_Y0 && y <= CRUST_Y1) continue;
+        const farCity = avoid.every((a) => this.torDist(x, a.cx) >= 5 || Math.abs(y - a.cy) >= 6);
+        const farSrv = list.every((s) => this.torDist(x, s.tx) >= 8 || Math.abs(y - s.ty) >= 6);
+        if (farCity && farSrv) { tx = x; ty = y; break; }
+      }
+      if (tx >= 0) list.push({ tx: wrapX(tx), ty, dug: false, data: 0, done: false });
+    }
+    return list;
+  }
+
   resourceFor(x, y) {
     const depth = Math.max(0, y - CAVE_FLOOR_Y);
     const pRes = Math.min(0.32, 0.06 + 0.015 * (depth / 10));
@@ -198,6 +226,12 @@ class World {
     // у чужих — под маркером). Остальной пол пещеры — обычная порода (копается).
     this.layFoundation(PRINTER.x - 1, PRINTER.x + PRINTER.w, CAVE_FLOOR_Y + 1);
     for (const c of this.caverns) this.layFoundation(c.cx - 1, c.cx + 1, c.floorY + 1);
+    // Серверы: тайл делаем ПОРОДОЙ с маркером `server` (всегда копается, не в пустоте).
+    this.servers = this.genServers();
+    for (const s of this.servers) {
+      const t = this.tiles[s.ty * MAP_W + wrapX(s.tx)];
+      t.type = ROCK; t.hardness = this.hardnessForY(s.ty) * 1.2; t.dig = 0; t.resource = null; t.dens = 1; t.server = s;
+    }
   }
   layFoundation(x0, x1, y) {
     if (y < 0 || y >= MAP_H) return;
@@ -211,5 +245,5 @@ class World {
     if (y >= MAP_H) return { type: BORDER, hardness: 0, resource: null, dig: 0, dens: 0 };
     return this.tiles[y * MAP_W + wrapX(x)];
   }
-  setAir(x, y) { const t = this.tileAt(x, y); if (t.type === ROCK) { t.type = AIR; t.hardness = 0; t.dig = 0; t.resource = null; t.dug = true; } } // dug=прорытый ход (не природная пустота) — враги избегают своих ходов
+  setAir(x, y) { const t = this.tileAt(x, y); if (t.type === ROCK) { if (t.server) t.server.dug = true; t.type = AIR; t.hardness = 0; t.dig = 0; t.resource = null; t.dug = true; } } // dug=прорытый ход (не природная пустота) — враги избегают своих ходов; сервер → «хлам» (источник данных)
 }
