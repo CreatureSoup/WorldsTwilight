@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Rig Editor — Сумерки мира</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Tektur:wght@600;800&display=swap" rel="stylesheet">
+<style>
+  :root{--void:#07050a;--pit:#0d0a0e;--night:#14100c;--bronze:#2a2018;--carbon:#3a302a;--ash:#5a5046;--pewter:#7a705e;--bone:#b8a896;--chalk:#e8dcc4;--gold:#d4a042;--cobalt:#3a7ec8;--toxic:#c8e25a;--blood:#a8281c;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--pit);color:var(--bone);font:13px 'JetBrains Mono',monospace;display:flex;height:100vh;overflow:hidden}
+  #stage{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+  #bar{display:flex;align-items:center;gap:14px;padding:8px 12px;background:var(--night);border-bottom:1px solid var(--bronze);flex-wrap:wrap}
+  #bar h1{font:800 15px 'Tektur',sans-serif;color:var(--chalk);margin:0;letter-spacing:1px}
+  #canvasWrap{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:
+    repeating-linear-gradient(0deg,#0b0810 0 1px,transparent 1px 24px),
+    repeating-linear-gradient(90deg,#0b0810 0 1px,transparent 1px 24px),var(--void);min-height:0}
+  canvas{background:transparent;display:block}
+  #panel{width:340px;background:var(--night);border-left:1px solid var(--bronze);overflow-y:auto;padding:10px}
+  .sec{border:1px solid var(--bronze);border-radius:4px;margin-bottom:10px;padding:8px}
+  .sec>h2{font:700 10px 'JetBrains Mono';color:var(--gold);margin:0 0 8px;letter-spacing:1.5px;text-transform:uppercase}
+  .row{display:flex;align-items:center;gap:6px;margin:4px 0;flex-wrap:wrap}
+  label{color:var(--pewter);font-size:11px}
+  button{background:var(--bronze);color:var(--chalk);border:1px solid var(--carbon);border-radius:3px;padding:4px 8px;cursor:pointer;font:inherit;font-size:11px}
+  button:hover{background:var(--carbon)}
+  button.on{background:var(--gold);color:var(--void);border-color:var(--gold)}
+  button.sm{padding:2px 6px;font-size:10px}
+  input[type=number]{width:50px;background:var(--pit);color:var(--chalk);border:1px solid var(--bronze);border-radius:3px;padding:2px 4px;font:inherit;font-size:11px}
+  input[type=range]{flex:1}
+  select{background:var(--pit);color:var(--chalk);border:1px solid var(--bronze);border-radius:3px;font:inherit;font-size:11px;padding:1px}
+  textarea{width:100%;height:120px;background:var(--pit);color:var(--toxic);border:1px solid var(--bronze);border-radius:3px;font:inherit;font-size:10px;resize:vertical}
+  .hint{color:var(--ash);font-size:10px;line-height:1.4}
+  .part{border:1px solid var(--bronze);border-radius:3px;padding:6px;margin-bottom:6px}
+  .part.sel{border-color:var(--gold);background:#1c1610}
+  .part .hd{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+  .part .hd b{color:var(--chalk)}
+  .part .hd .k{color:var(--pewter);font-size:10px}
+  .part input[type=number]{width:42px}
+  #modeSw button{font-weight:700}
+  body.mode-asset .rigRow{opacity:.32}        /* в АССЕТ-режиме кинематика приглушена */
+  body:not(.mode-asset) .assetRow{opacity:.32} /* в СКЕЛЕТ-режиме поля ассета приглушены */
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="bar">
+      <h1>RIG EDITOR</h1>
+      <span class="row" id="modeSw"><label>Режим</label><button id="modeRig" class="on" title="СКЕЛЕТ: двигать детали, тянуть угол/длину костей. Спрайты не трогаются.">◆ скелет</button><button id="modeAsset" title="АССЕТ: размер (колесо), пивот (зелёная ручка), поворот (Shift+колесо). Кости не трогаются.">✦ ассет</button></span>
+      <span class="row"><label>Корпус</label><select id="hull"></select></span>
+      <span class="row"><label>Зум</label><input type="range" id="zoom" min="2" max="14" step="0.5" value="7" style="width:120px"><span id="zoomVal"></span></span>
+      <button id="play" class="on">⏸ пауза</button>
+      <button id="guideBtn" class="on" title="тайл-сетка (пол↔потолок = 1 тайл): тяни ПОТОЛОК = масштаб тайла (сетка масштабируется), тяни ПОЛ = сдвиг сетки. Масштаб юнита (×) и позиция стоп над полом — внизу, сохраняются в проект. Только в режиме «скелет».">⊞ тайл-сетка</button>
+      <span class="row"><label>скор</label><input type="number" id="speed" value="1" step="0.25" min="0" style="width:46px"></span>
+      <button id="ikBtn" title="IK-превью щупалец: мини-симуляция (юнит шагает/карабкается сам) — оценить ходьбу/лазание и доводить спрайты на сегментах. Спрайт-пивот/масштаб/поворот правятся в карточках сегментов и видны сразу.">⊕ IK-превью</button>
+      <span class="row" id="ikScenes" style="display:none;gap:4px">
+        <button class="iksc on" data-sc="corridor">коридор</button><button class="iksc" data-sc="floor">пол</button><button class="iksc" data-sc="wall">стена</button><button class="iksc" data-sc="ceiling">потолок</button>
+        <button id="ikWalkBtn" title="ходьба: юнит шагает (по полу/коридору) или карабкается (стена/потолок)">▶ ходьба</button>
+      </span>
+      <span id="scaleNote" class="hint"></span>
+    </div>
+    <div id="canvasWrap"><canvas id="c" width="640" height="640"></canvas></div>
+  </div>
+
+  <div id="panel">
+    <div class="sec">
+      <h2>Проект</h2>
+      <div class="row"><button id="projSave" class="sm">💾 сохранить</button><input type="file" id="projLoad" accept="application/json" style="font-size:11px;width:130px"><span id="projStatus" class="hint"></span></div>
+      <div class="row"><button id="projGame" class="sm on">→ В ИГРУ</button><button id="projGameClr" class="sm">стереть из игры</button></div>
+      <div class="hint">Снимок юнита (блупринт + ассеты) в JSON. «→ В ИГРУ» кладёт настроенного юнита в localStorage — игра подхватит его на старте забега (тот же origin). «стереть» убирает.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Поза / направление</h2>
+      <div class="row">
+        <button data-pose="left">← влево</button><button data-pose="right" class="on">вправо →</button>
+        <button data-pose="up">↑ вверх</button><button data-pose="down">↓ вниз</button>
+      </div>
+      <div class="row"><label>Состояние</label>
+        <button data-state="idle" class="on">idle</button><button data-state="move">ход</button>
+        <button data-state="dig">копание</button><button data-state="static">стоп (статика)</button>
+        <button id="crouch">присед</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h2>Модули (отсоединение)</h2>
+      <div class="row"><button data-mod="drill" class="on">бур</button><button data-mod="engine" class="on">двигатель</button><button data-mod="cargo" class="on">трюм</button><button data-mod="scanner" class="on">сенсор</button><button data-mod="shield" class="on">кожух</button></div>
+      <div class="hint">Выключи — деталь с `need` и её кабель исчезают, как в мире при снятии.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Детали <span class="hint" id="detHint"></span></h2>
+      <div id="parts"></div>
+      <div class="row"><select id="addKind"></select><button id="addPart" class="sm">+ деталь</button><button id="addPair" class="sm">+ пара ног</button></div>
+      <div class="hint">Ноги (kind:leg) — экранно снизу, не крутятся с корпусом; «зеркало» даёт вторую ногу пары. У каждой ноги своя карточка ассета.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Кабели (мускулы)</h2>
+      <table id="cables" style="width:100%;border-collapse:collapse;font-size:10px"><tbody></tbody></table>
+      <div class="row" style="margin-top:6px"><select id="cFrom"></select><select id="cTo"></select>
+        <select id="cType"><option value="power">power</option><option value="data">data</option><option value="hydraulic">hydraulic</option></select>
+        <button id="cAdd" class="sm">+ кабель</button></div>
+      <div class="row" style="margin-top:6px"><label>ассет:</label><input type="file" id="cableFile" accept="image/*" style="width:74px;font-size:10px">
+        <select id="cableMethod"><option value="none">фон:есть</option><option value="wand">палочка</option><option value="chroma">хром</option></select>
+        <input type="number" id="cableTol" value="40" step="2" style="width:38px"><button id="cableClr" class="sm">×</button></div>
+      <div class="hint">Один ассет на все кабели: тянется по длине A→B, задний слой.</div>
+    </div>
+
+    <div class="sec">
+      <h2>idle-качание массы</h2>
+      <div class="row"><label>ампл</label><input type="number" id="bobAmp" step="0.01" min="0"><label>скор</label><input type="number" id="bobSpd" step="0.1" min="0"><label>ноги dropY</label><input type="number" id="legDrop" step="0.05"></div>
+    </div>
+
+    <div class="sec">
+      <h2>Экспорт</h2>
+      <div class="row"><button id="exp" class="sm">UNIT_DEFS →</button><button id="expSpr" class="sm">PART_SPRITE_SRC →</button><button id="copy" class="sm">копировать оба</button></div>
+      <textarea id="out" readonly></textarea>
+      <textarea id="outSpr" readonly style="height:80px"></textarea>
+    </div>
+  </div>
+
+<script>
+  // Cache-busting: тянем общие модули игры свежими (иначе браузер кэширует старый rig.js и т.п.).
+  for (const f of ['constants', 'unitdefs', 'anim', 'rig', 'render_parts', 'render_ring', 'legik'])
+    document.write(`<script src="../${f}.js?v=${Date.now()}"><\/script>`);
+</script>
+<script>
+'use strict';
+const R = (TILE - 8) / 2;
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const $ = (id) => document.getElementById(id);
+
+const PART_KINDS = { leg: 'нога', engine: 'двигатель', weapon: 'оружие', custom: 'кастом', sensor: 'сенсор', hold: 'трюм', reactor: 'реактор', drill: 'бур', shield: 'кожух' };
+
+// stats — все модули «есть» по умолчанию (флаги в `unitHasPart`): иначе детали с `need` (engine/cargo/scanner/dig/shield) не попадают в `rig.parts` и не рисуются даже со спрайтом.
+const unit = { hull: 'scout', dx: 1, dy: 0, faceX: 1, drilling: false, state: IDLE, crouchT: 0, noAnim: false, reactorOn: true, tileX: 0, tileY: 0, px: 0, py: 0, stats: { canDig: true, canMove: true, capacity: 1, scanR: 1, radResist: 1.2 } };
+
+let clock = 0, playing = true, lastTs = 0, zoom = 7, selId = null, drag = null;
+let selSeg = null;     // {legId, idx} — выбранный сегмент ноги для драг-ручек
+let segDrag = null;    // 'tip' | 'pivot' — что тянем
+let reactorDrag = null;   // ключ ассета реактора при перетаскивании его центра (offX/offY)
+let editMode = 'rig';  // 'rig' (скелет: позиции/углы/длины) | 'asset' (спрайт: размер/пивот/поворот) — разделены, чтобы не задевать лишнее
+let guideOn = true;                       // линейка пол/потолок (тайл-сетка) — только в режиме «скелет»
+let guide = { ceilY: -36, floorY: 60 };   // в дизайн-px (1 тайл = TILE); подгонка размера/позиции юнита под игровую сетку
+let guideDrag = null, guideGrab = null;   // 'floor'|'ceil'|'both'
+function saveGuide() { try { localStorage.setItem('rigGuide', JSON.stringify({ ceilY: guide.ceilY, floorY: guide.floorY, on: guideOn })); } catch (e) {} }
+function loadGuide() { try { const g = JSON.parse(localStorage.getItem('rigGuide') || 'null'); if (g) { if (typeof g.ceilY === 'number') guide.ceilY = g.ceilY; if (typeof g.floorY === 'number') guide.floorY = g.floorY; guideOn = g.on !== false; } } catch (e) {} }
+const assetFile = {}, assetSrc = {}, assetCfg = {};   // keyed by part id
+
+// ---------- IK-превью щупалец (общий движок legik.js, фейковый мир) ----------
+let ikPreview = false, ikScene = 'corridor', ikWalk = false, ikRig = null, ikUnit = { wx: 0, wy: 0 };
+// Фейковый мир: бесконечный кейс среды (порода/воздух как функция тайла).
+function ikFakeWorld(scene) {
+  return { tileAt(tx, ty) {
+    let solid = false;
+    if (scene === 'corridor') solid = (ty !== 0);          // воздух только ряд 0, порода сверху и снизу
+    else if (scene === 'floor') solid = (ty >= 1);          // порода только снизу
+    else if (scene === 'wall') solid = (tx >= 1);           // порода справа — лазание
+    else if (scene === 'ceiling') solid = (ty <= -1);       // порода сверху — карабкается под потолком
+    return { type: solid ? ROCK : AIR };
+  } };
+}
+function ikSig() {   // подпись структуры ног (id+длины сегментов) — пересборка только при её смене
+  const def = UNIT_DEFS[unit.hull];
+  return def.parts.filter((p) => p.kind === 'leg' && p.ik).map((p) => p.id + ':' + (p.segments || []).map((s) => s.len).join(',')).join('|');
+}
+const IK_SUPPORT = { corridor: 0, floor: 0, wall: -Math.PI / 2, ceiling: Math.PI };  // куда «низ» ног и поворот корпуса
+function ikBuild() {
+  ikRig = makeLegRig(legConfigsFromUnit(unit)); ikRig._sig = ikSig();
+  ikRig.supportAngle = IK_SUPPORT[ikScene] || 0;
+  ikUnit = (ikScene === 'wall') ? { wx: TILE * 0.5, wy: 0 } : { wx: 0, wy: TILE * 0.5 };
+}
+function ikUpdate(dt) {
+  if (!ikRig || ikRig._sig !== ikSig()) ikBuild();   // длины/число сегментов поменяли в карточках → пересобрать
+  const world = ikFakeWorld(ikScene), sp = ikWalk ? TILE * 2.4 : 0, vertical = (ikScene === 'wall');
+  if (vertical) ikUnit.wy += sp * dt; else ikUnit.wx += sp * dt;
+  updateLegRig(ikRig, dt, ikUnit.wx, ikUnit.wy, world, { x: vertical ? 0 : sp, y: vertical ? sp : 0 });
+}
+function drawIKScene(ctx, rig, t) {
+  const off = ikRig ? ikRig.bodyOff : { x: 0, y: 0 }, world = ikFakeWorld(ikScene);
+  const utx = Math.floor(ikUnit.wx / TILE), uty = Math.floor(ikUnit.wy / TILE);
+  ctx.fillStyle = '#2a2418';                                // контекст: фейковые тайлы породы
+  for (let ty = uty - 7; ty <= uty + 7; ty++) for (let tx = utx - 7; tx <= utx + 7; tx++)
+    if (world.tileAt(tx, ty).type !== AIR) ctx.fillRect(tx * TILE - ikUnit.wx, ty * TILE - ikUnit.wy, TILE + 0.5, TILE + 0.5);
+  ctx.save(); ctx.translate(off.x, off.y); ctx.rotate(ikRig ? ikRig.supportAngle || 0 : 0);   // корпус повёрнут к опоре (стена/потолок) + едет на ногах
+  for (const c of rig.cables) drawCable(ctx, c.ax, c.ay, c.bx, c.by, c.type, t);
+  for (const p of rig.parts.slice().sort((a, b) => a.z - b.z)) drawPart(ctx, p.kind, p.x, p.y, p.scale, p.angle, p.flip, t, p);
+  ctx.restore();
+  drawLegRig(ctx, ikRig, { y: ikUnit.wy, screenX: (px) => px - ikUnit.wx });   // IK-ноги (юнит в центре)
+}
+
+// ---------- рендер ----------
+function draw() {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const t = clock, rig = resolveUnitRig(0, 0, unit, t);
+  ctx.save(); ctx.translate(cv.width / 2, cv.height / 2); ctx.scale(zoom, zoom);
+  if (ikPreview) { drawIKScene(ctx, rig, t); ctx.restore(); window._rig = rig; return; }   // IK-превью: своя сцена (мир+корпус+IK-ноги)
+  ctx.strokeStyle = 'rgba(122,112,94,0.25)'; ctx.lineWidth = 0.5;
+  ctx.beginPath(); ctx.moveTo(-cv.width, 0); ctx.lineTo(cv.width, 0); ctx.moveTo(0, -cv.height); ctx.lineTo(0, cv.height); ctx.stroke();
+  if (editMode === 'rig' && guideOn) drawGuideBg(ctx);   // линейка пол/потолок — ФОН (юнит рисуется поверх)
+  if (UNIT_DEFS[unit.hull].kind === 'ring') {            // НОВЫЙ ТИП: кольцо + модули по окружности + ноги ПОД
+    drawRingEditor(ctx, rig, t);
+    ctx.restore();
+    if (editMode === 'rig' && guideOn) drawGuideLabels(ctx);
+    window._rig = rig; return;
+  }
+  for (const c of rig.cables) drawCable(ctx, c.ax, c.ay, c.bx, c.by, c.type, t);   // кабели — задний слой
+  const items = [];                                                                // детали + ноги в ОДНОМ глобальном порядке по z
+  for (const leg of rig.legs) items.push({ z: leg.z, leg });
+  for (const p of rig.parts) items.push({ z: p.z, part: p });
+  items.sort((a, b) => a.z - b.z);
+  const crouch = unit.crouchT > 0;
+  for (const it of items) {
+    if (it.leg) { drawLeg(ctx, it.leg, rig.R); continue; }
+    const p = it.part;
+    ctx.save();
+    if (crouch) { ctx.translate(rig.legHub.x, rig.legHub.y); ctx.scale(1, 0.7); ctx.translate(-rig.legHub.x, -rig.legHub.y); }
+    drawPart(ctx, p.kind, p.x, p.y, p.scale, p.angle, p.flip, t, p);
+    ctx.restore();
+  }
+  const segSel = !!selSeg, rigMode = editMode === 'rig';
+  for (const p of rig.parts) {  // масс-детали: хваты в РИГ-режиме яркие (тянутся), в АССЕТ-режиме/при правке сегмента — приглушены
+    const sel = p.id === selId; ctx.globalAlpha = (rigMode && !segSel) ? 1 : 0.18;
+    ctx.beginPath(); ctx.arc(p.x, p.y, sel ? 2.4 : 1.6, 0, 6.283); ctx.fillStyle = sel ? '#f2c878' : 'rgba(232,220,196,0.5)'; ctx.fill();
+    if (sel) { ctx.strokeStyle = '#f2c878'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, 6.283); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
+  if (!segSel) {  // хаб + маркеры стыков ног — подсказки кликабельности (статичная поза, как и ручки)
+    ctx.beginPath(); ctx.arc(rig.legHub.x, rig.legHub.y, 1.6, 0, 6.283); ctx.fillStyle = '#3a7ec8'; ctx.fill();
+    for (const leg of editRig().legs) { const fx = leg.flip ? -1 : 1; for (const sg of leg.segs) { ctx.beginPath(); ctx.arc(leg.hipX + fx * sg.jx, leg.hipY + sg.jy, 1.2, 0, 6.283); ctx.fillStyle = 'rgba(58,126,200,0.45)'; ctx.fill(); } }
+  }
+  const sh = segHandles();
+  if (sh) {
+    ctx.strokeStyle = 'rgba(242,200,120,0.85)'; ctx.lineWidth = 1; ctx.setLineDash([2, 1.5]); ctx.lineCap = 'round';  // кость (не хват) — пунктир
+    ctx.beginPath(); ctx.moveTo(sh.pivot.x, sh.pivot.y); ctx.lineTo(sh.tip.x, sh.tip.y); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = 'butt';
+    if (rigMode) {  // СКЕЛЕТ: золотой круг (корень) = позиция ноги (f/s), синий круг (стык) = угол+длина
+      const nodeDot = (p, col) => { ctx.beginPath(); ctx.arc(p.x, p.y, 4.6, 0, 6.283); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 0.9; ctx.strokeStyle = '#0d0a0e'; ctx.stroke(); ctx.beginPath(); ctx.arc(p.x, p.y, 1.6, 0, 6.283); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill(); };
+      nodeDot(sh.pivot, '#f2c878');  // корень — двигает всю ногу (f/s)
+      nodeDot(sh.tip, '#3a7ec8');    // стык — угол/длина
+    } else if (sh.center) {  // АССЕТ: зелёный квадрат = пивот спрайта. Синего нет.
+      const x = sh.center.x, y = sh.center.y, h = 4.4;
+      ctx.beginPath(); ctx.rect(x - h, y - h, h * 2, h * 2); ctx.fillStyle = '#5fbf6a'; ctx.fill(); ctx.lineWidth = 0.9; ctx.strokeStyle = '#0d0a0e'; ctx.stroke();
+      ctx.beginPath(); ctx.rect(x - 1.4, y - 1.4, 2.8, 2.8); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill();
+    }
+  }
+  ctx.restore();
+  if (editMode === 'rig' && guideOn) drawGuideLabels(ctx);   // подписи пол/потолок — в ЭКРАННЫХ координатах
+  window._rig = rig;
+}
+// ЮНИТ-КОЛЬЦО в редакторе: ноги (FK) ПОД, тор-реактор в центре, модули по окружности (ang+aim, rad),
+// ориентированы наружу. aim берётся из позы (←→↑↓ задают dx/dy/faceX) → видно поворот кластера.
+function ringAimEditor() { return (unit.dx || unit.dy) ? Math.atan2(unit.dy, unit.dx) : (unit.faceX < 0 ? Math.PI : 0); }
+function ringModPos(p, aim) { const a = (p.ang || 0) * Math.PI / 180 + aim; return { x: Math.cos(a) * (p.rad || 0) * R, y: Math.sin(a) * (p.rad || 0) * R, a }; }
+function drawRingEditor(ctx, rig, t) {
+  const def = UNIT_DEFS[unit.hull], aim = ringAimEditor();
+  for (const leg of rig.legs) drawLeg(ctx, leg, rig.R);          // ноги (FK) — ПОД (как в игре)
+  window._ringMods = [];
+  // реактор-кольцо + модули — ЕДИНЫЙ порядок по z
+  const items = def.parts.filter((p) => p.kind !== 'leg').slice().sort((a, b) => (a.z || 0) - (b.z || 0));
+  for (const p of items) {
+    if (p.kind === 'reactor') { drawRingCore(ctx, 0, 0, def.ringR * R, t, def, unit.reactorOn !== false); continue; }
+    const m = ringModPos(p, aim);
+    drawPart(ctx, p.kind, m.x, m.y, R * 1.15, m.a, false, t, p);
+    window._ringMods.push({ id: p.id, x: m.x, y: m.y });
+  }
+  for (const m of window._ringMods) {                            // ручки модулей (точка крепления) — клик/тяга
+    const sel = m.id === selId;
+    ctx.beginPath(); ctx.arc(m.x, m.y, sel ? 3 : 1.8, 0, 6.283); ctx.fillStyle = sel ? '#f2c878' : 'rgba(232,220,196,0.55)'; ctx.fill();
+    if (sel) { ctx.strokeStyle = '#f2c878'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.arc(m.x, m.y, 5, 0, 6.283); ctx.stroke(); }
+  }
+  if (selId === 'reactor' && editMode === 'asset') {             // ЗЕЛЁНЫЙ КВАДРАТ = центр спрайта реактора (тяни → offX/offY)
+    const rk = reactorAssetKey(), sp = rk && PART_SPRITES[rk];
+    if (sp) { const x = sp.offX, y = sp.offY, h = 4.4;
+      ctx.beginPath(); ctx.rect(x - h, y - h, h * 2, h * 2); ctx.fillStyle = '#5fbf6a'; ctx.fill(); ctx.lineWidth = 0.9; ctx.strokeStyle = '#0d0a0e'; ctx.stroke();
+      ctx.beginPath(); ctx.rect(x - 1.4, y - 1.4, 2.8, 2.8); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill(); }
+  }
+  const sh = segHandles();                                       // ручки сегментов ног — как обычно
+  if (sh) {
+    ctx.strokeStyle = 'rgba(242,200,120,0.85)'; ctx.lineWidth = 1; ctx.setLineDash([2, 1.5]); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(sh.pivot.x, sh.pivot.y); ctx.lineTo(sh.tip.x, sh.tip.y); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = 'butt';
+    if (editMode === 'rig') {
+      const nodeDot = (p, col) => { ctx.beginPath(); ctx.arc(p.x, p.y, 4.6, 0, 6.283); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 0.9; ctx.strokeStyle = '#0d0a0e'; ctx.stroke(); ctx.beginPath(); ctx.arc(p.x, p.y, 1.6, 0, 6.283); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill(); };
+      nodeDot(sh.pivot, '#f2c878'); nodeDot(sh.tip, '#3a7ec8');
+    } else if (sh.center) {
+      const x = sh.center.x, y = sh.center.y, h = 4.4;
+      ctx.beginPath(); ctx.rect(x - h, y - h, h * 2, h * 2); ctx.fillStyle = '#5fbf6a'; ctx.fill(); ctx.lineWidth = 0.9; ctx.strokeStyle = '#0d0a0e'; ctx.stroke();
+    }
+  }
+}
+// ПОЛ↔ПОТОЛОК = ОДИН игровой тайл; `tilePx` = floorY-ceilY. Рисуем ПОЛНУЮ тайл-сетку
+// этого шага (анкер: floorY по вертикали, x=0 по горизонтали) → двигаешь потолок =
+// масштаб сетки, двигаешь пол = сдвиг сетки. Пол/потолок выделены (границы «тайла юнита»).
+function guideTilePx() { return Math.max(6, guide.floorY - guide.ceilY); }
+function drawGuideBg(ctx) {
+  const tile = guideTilePx(), halfW = cv.width / (2 * zoom), halfH = cv.height / (2 * zoom);
+  ctx.strokeStyle = 'rgba(122,112,94,0.16)'; ctx.lineWidth = 0.4;
+  const hl = (y) => { ctx.beginPath(); ctx.moveTo(-halfW, y); ctx.lineTo(halfW, y); ctx.stroke(); };
+  const vl = (x) => { ctx.beginPath(); ctx.moveTo(x, -halfH); ctx.lineTo(x, halfH); ctx.stroke(); };
+  for (let y = guide.floorY; y >= -halfH; y -= tile) hl(y);
+  for (let y = guide.floorY + tile; y <= halfH; y += tile) hl(y);
+  for (let x = 0; x <= halfW; x += tile) vl(x);
+  for (let x = -tile; x >= -halfW; x -= tile) vl(x);
+  const line = (y, col) => {
+    ctx.strokeStyle = col; ctx.lineWidth = 0.7; ctx.setLineDash([5, 3]); ctx.beginPath(); ctx.moveTo(-halfW, y); ctx.lineTo(halfW, y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(-halfW + 8 / zoom, y, 3.2, 0, 6.283); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 0.5; ctx.strokeStyle = '#0d0a0e'; ctx.stroke();  // язычок-хват
+  };
+  line(guide.floorY, '#c8e25a');  // пол — toxic
+  line(guide.ceilY, '#3a7ec8');   // потолок — cobalt
+}
+// Метрики юнита относительно сетки (для точного позиционирования в игре):
+//   scale = TILE/tilePx — игровой UNIT_DRAW_SCALE, при котором юнит займёт ту же долю
+//     тайла, что в редакторе (не зависит от абсолютного размера рига);
+//   footTiles — стопы над линией пола, в тайлах (≥0 если над полом).
+function unitMetrics() {
+  const tilePx = guideTilePx(), rig = window._rig;
+  let feetY = null;
+  if (rig) for (const leg of rig.legs) for (const sg of leg.segs) { const y = leg.hipY + sg.jy; if (feetY === null || y > feetY) feetY = y; }
+  return { tilePx: +tilePx.toFixed(1), scale: +(TILE / tilePx).toFixed(4), footTiles: feetY === null ? 0 : +((guide.floorY - feetY) / tilePx).toFixed(3) };
+}
+function drawGuideLabels(ctx) {
+  const toScreen = (y) => cv.height / 2 + y * zoom, m = unitMetrics();
+  ctx.save(); ctx.font = "700 11px 'JetBrains Mono', monospace"; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#c8e25a'; ctx.fillText('ПОЛ', 14, toScreen(guide.floorY) - 9);
+  ctx.fillStyle = '#3a7ec8'; ctx.fillText('ПОТОЛОК', 14, toScreen(guide.ceilY) - 9);
+  ctx.fillStyle = '#b8a896'; ctx.fillText(`1 тайл = ${m.tilePx}px · юнит ×${m.scale} · стопы ${m.footTiles}т над полом`, 14, (toScreen(guide.floorY) + toScreen(guide.ceilY)) / 2);
+  ctx.restore();
+}
+function loop(ts) { const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0); lastTs = ts; if (playing && !unit.noAnim) clock += dt * (+$('speed').value || 0); if (ikPreview) ikUpdate(dt); draw(); requestAnimationFrame(loop); }
+
+// ---------- ввод ----------
+function canvasToDesign(e) { const r = cv.getBoundingClientRect(); const mx = (e.clientX - r.left) * (cv.width / r.width), my = (e.clientY - r.top) * (cv.height / r.height); return { x: (mx - cv.width / 2) / zoom, y: (my - cv.height / 2) / zoom }; }
+// СТАТИЧНАЯ поза (без свинга/боба): редактирование детерминированно и НЕ зависит от фазы анимации
+// (иначе idle-свинг запекается в ang и нога «уезжает» со временем).
+function editRig() { const s = unit.noAnim; unit.noAnim = true; const r = resolveUnitRig(0, 0, unit, clock); unit.noAnim = s; return r; }
+// Ручки выбранного сегмента ноги: синяя — стык/направление+длина; зелёная — выравнивание спрайта (точка поворота).
+function segHandles() {
+  if (!selSeg) return null;
+  const leg = editRig().legs.find((l) => l.legId === selSeg.legId); if (!leg) return null;
+  const sg = leg.segs.find((s) => s.idx === selSeg.idx); if (!sg) return null;  // по ДЕФ-индексу: leg.segs отсортирован по z, позиция в массиве ≠ def-индекс
+  const fx = leg.flip ? -1 : 1, L2D = (lx, ly) => ({ x: leg.hipX + fx * lx, y: leg.hipY + ly });
+  const sp = PART_SPRITES[sg.spriteId]; let center = null;
+  if (sp) { const rot = sg.A - Math.PI / 2 + (sp.rot || 0) * Math.PI / 180, c = Math.cos(rot), s = Math.sin(rot); center = L2D(sg.lx + sp.offX * c - sp.offY * s, sg.ly + sp.offX * s + sp.offY * c); }
+  return { leg, sg, fx, pivot: L2D(sg.lx, sg.ly), tip: L2D(sg.jx, sg.jy), center };
+}
+// Хит-тест сегмента ноги на холсте (расстояние до отрезка пивот→стык) — клик выбирает сегмент.
+function ptSegDist(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+  let u = l2 ? ((px - ax) * dx + (py - ay) * dy) / l2 : 0; u = Math.max(0, Math.min(1, u));
+  return Math.hypot(px - (ax + u * dx), py - (ay + u * dy));
+}
+function nearestLegSeg(d) {
+  const rig = editRig();
+  let best = null, bd = 9;
+  for (const leg of rig.legs) {
+    const fx = leg.flip ? -1 : 1;
+    for (const sg of leg.segs) {  // sg.idx — ДЕФ-индекс (leg.segs отсортирован по z, не по порядку определения)
+      const dist = ptSegDist(d.x, d.y, leg.hipX + fx * sg.lx, leg.hipY + sg.ly, leg.hipX + fx * sg.jx, leg.hipY + sg.jy);
+      if (dist < bd) { bd = dist; best = { legId: leg.legId, idx: sg.idx, dist }; }
+    }
+  }
+  return best;
+}
+function syncSegByKey(segKey) { const row = document.querySelector(`[data-seg="${segKey}"]`); if (row) syncSegAsset(segKey, row); }
+function updateSegFields(legId, idx) { const sd = partById(legId).segments[idx], row = document.querySelector(`[data-seg="${legId}:${sd.id}"]`); if (!row) return; row.querySelector('[data-sk=len]').value = sd.len; row.querySelector('[data-sk=ang]').value = sd.ang; }
+
+cv.addEventListener('pointerdown', (e) => {
+  const d = canvasToDesign(e), rig = window._rig; if (!rig) return;
+  const sh = segHandles();
+  if (sh) {  // только ручки ТЕКУЩЕГО режима: скелет → корень(позиция)+стык(угол/длина); ассет → зелёный пивот
+    if (editMode === 'rig') {
+      const dt = Math.hypot(sh.tip.x - d.x, sh.tip.y - d.y), dp = Math.hypot(sh.pivot.x - d.x, sh.pivot.y - d.y);
+      if (Math.min(dt, dp) < 7) { segDrag = dp < dt ? 'root' : 'tip'; cv.setPointerCapture(e.pointerId); return; }
+    } else if (sh.center && Math.hypot(sh.center.x - d.x, sh.center.y - d.y) < 7) { segDrag = 'pivot'; cv.setPointerCapture(e.pointerId); return; }
+  }
+  if (editMode === 'rig' && guideOn) {  // линейка пол/потолок: тяни линию (масштаб пролёта) / Shift = двигать обе (позиция)
+    const df = Math.abs(d.y - guide.floorY), dc = Math.abs(d.y - guide.ceilY);
+    if (Math.min(df, dc) < 4) { guideDrag = e.shiftKey ? 'both' : (dc < df ? 'ceil' : 'floor'); guideGrab = { y: d.y, floorY: guide.floorY, ceilY: guide.ceilY }; cv.setPointerCapture(e.pointerId); return; }
+  }
+  if (selId === 'reactor' && editMode === 'asset') {   // зелёный квадрат реактора → тянем центр спрайта (offX/offY)
+    const rk = reactorAssetKey(), sp = rk && PART_SPRITES[rk];
+    if (sp && Math.hypot(sp.offX - d.x, sp.offY - d.y) < 8) { reactorDrag = rk; cv.setPointerCapture(e.pointerId); return; }
+  }
+  // ближайшая масс-деталь (по центру) vs ближайший сегмент ноги (по отрезку) — берём что ближе
+  let best = null, bd = 14;
+  if (UNIT_DEFS[unit.hull].kind === 'ring') {   // КОЛЬЦО: модули по их экранным позициям (rig.parts тут NaN)
+    for (const m of (window._ringMods || [])) { const dist = Math.hypot(m.x - d.x, m.y - d.y); if (dist < bd) { bd = dist; best = { id: m.id }; } }
+  } else {
+    for (const p of rig.parts) { const dist = Math.hypot(p.x - d.x, p.y - d.y); if (dist < bd) { bd = dist; best = p; } }
+  }
+  const seg = nearestLegSeg(d);
+  if (UNIT_DEFS[unit.hull].kind === 'ring') {   // клик В КОЛЬЦЕ (ближе к центру, чем модуль/сегмент) → реактор
+    const rdef = UNIT_DEFS[unit.hull], rp = rdef.parts.find((p) => p.kind === 'reactor'), dc = Math.hypot(d.x, d.y);
+    if (rp && dc < rdef.ringR * R + 6 && (!best || dc < bd) && (!seg || dc < seg.dist)) {
+      selId = 'reactor'; selSeg = null; cv.setPointerCapture(e.pointerId); rebuildParts();
+      if (editMode === 'asset') { const rk = reactorAssetKey(); if (rk && PART_SPRITES[rk]) reactorDrag = rk; }   // тяни центр спрайта
+      return;
+    }
+  }
+  if (seg && seg.dist <= bd) { selSeg = { legId: seg.legId, idx: seg.idx }; selId = null; cv.setPointerCapture(e.pointerId); rebuildParts(); return; }
+  if (best) { selId = best.id; selSeg = null; if (editMode === 'rig') drag = { id: best.id }; cv.setPointerCapture(e.pointerId); rebuildParts(); }  // f/s двигаем только в РИГ-режиме
+});
+cv.addEventListener('pointermove', (e) => {
+  if (guideDrag) {
+    const d = canvasToDesign(e);
+    if (guideDrag === 'ceil') guide.ceilY = +Math.min(d.y, guide.floorY - 6).toFixed(1);   // потолок = МАСШТАБ тайла (пол фикс)
+    else { const dy = d.y - guideGrab.y; guide.floorY = +(guideGrab.floorY + dy).toFixed(1); guide.ceilY = +(guideGrab.ceilY + dy).toFixed(1); }  // пол/both = СДВИГ сетки
+    saveGuide(); return;
+  }
+  if (segDrag) {
+    const sh = segHandles(); if (!sh) { segDrag = null; return; }
+    const d = canvasToDesign(e), lx = (d.x - sh.leg.hipX) * sh.fx, ly = d.y - sh.leg.hipY;
+    const sd = partById(selSeg.legId).segments[selSeg.idx];
+    if (segDrag === 'tip') {
+      const vx = lx - sh.sg.lx, vy = ly - sh.sg.ly;
+      sd.len = +(Math.hypot(vx, vy) / R).toFixed(2);
+      sd.ang = Math.round((Math.atan2(vy, vx) - sh.sg.acc0 - sh.sg.swApplied) * 180 / Math.PI);
+      updateSegFields(selSeg.legId, selSeg.idx);
+    } else if (segDrag === 'root') {  // корень → позиция ВСЕЙ ноги (f/s): хип так, чтобы корень сегмента попал под курсор
+      const p = partById(selSeg.legId), bfx = unit.faceX === -1 ? -1 : 1;
+      p.f = +((d.x - sh.fx * sh.sg.lx) / (R * bfx)).toFixed(2);
+      p.s = +((d.y - sh.sg.ly) / R).toFixed(2);
+      syncSlotRow(selSeg.legId);
+    } else {  // pivot → offX/offY спрайта (выравнивание точки поворота)
+      const sp = PART_SPRITES[sh.sg.spriteId]; if (!sp) { segDrag = null; return; }
+      const rot = sh.sg.A - Math.PI / 2 + (sp.rot || 0) * Math.PI / 180, c = Math.cos(rot), s = Math.sin(rot), dx = lx - sh.sg.lx, dy = ly - sh.sg.ly;
+      const offX = +(dx * c + dy * s).toFixed(1), offY = +(-dx * s + dy * c).toFixed(1);
+      setPartSprite(sh.sg.spriteId, sp.img, sp.scale, offX, offY, sp.rot);
+      if (assetCfg[sh.sg.spriteId]) { assetCfg[sh.sg.spriteId].offX = offX; assetCfg[sh.sg.spriteId].offY = offY; }
+      syncSegByKey(sh.sg.spriteId);
+    }
+    return;
+  }
+  if (reactorDrag) {   // центр спрайта реактора = offX/offY (в дизайн-координатах от центра юнита)
+    const d = canvasToDesign(e), sp = PART_SPRITES[reactorDrag]; if (!sp) { reactorDrag = null; return; }
+    const offX = Math.round(d.x), offY = Math.round(d.y);
+    setPartSprite(reactorDrag, sp.img, sp.scale, offX, offY, sp.rot);
+    if (assetCfg[reactorDrag]) { assetCfg[reactorDrag].offX = offX; assetCfg[reactorDrag].offY = offY; }
+    const wrap = document.querySelector(`[data-akey="${reactorDrag}"]`); if (wrap) syncSegAsset(reactorDrag, wrap);
+    return;
+  }
+  if (!drag) return;
+  const d = canvasToDesign(e), def = UNIT_DEFS[unit.hull], p = def.parts.find((q) => q.id === drag.id); if (!p) return;
+  if (def.kind === 'ring') {   // КОЛЬЦО: тянем модуль → угол(ang) + вынос(rad) от центра; ang хранится БЕЗ aim
+    const aim = ringAimEditor();
+    p.rad = +(Math.hypot(d.x, d.y) / R).toFixed(2);
+    p.ang = Math.round((Math.atan2(d.y, d.x) - aim) * 180 / Math.PI);
+    syncRingRow(p.id); return;
+  }
+  const bfx = unit.faceX === -1 ? -1 : 1, bob = ANIM.bob(clock, unit, def);
+  let dfx = unit.dx, dfy = unit.dy; if (dfx === 0 && dfy === 0) dfx = bfx;
+  const perpX = -dfy, perpY = dfx, dx_ = d.x, dy_ = d.y - bob;
+  p.f = +((dx_ * dfx + dy_ * dfy) / R).toFixed(2);
+  p.s = +((dx_ * perpX + dy_ * perpY) / R).toFixed(2);
+  syncSlotRow(p.id);
+});
+cv.addEventListener('pointerup', () => { if (guideDrag) { guideDrag = null; return; } if (reactorDrag) { reactorDrag = null; return; } if (segDrag) { segDrag = null; return; } drag = null; });
+cv.addEventListener('wheel', (e) => {
+  if (editMode !== 'asset') return;  // колесо меняет спрайт только в АССЕТ-режиме (в скелете не заденешь)
+  // приоритет — спрайт выбранного сегмента: колесо = масштаб, Shift+колесо = ПОВОРОТ спрайта (±5°)
+  if (selSeg) { const sh = segHandles(); if (sh && PART_SPRITES[sh.sg.spriteId]) { e.preventDefault(); const sp = PART_SPRITES[sh.sg.spriteId], k = sh.sg.spriteId;
+    if (e.shiftKey) { const r = Math.round((sp.rot || 0) + (e.deltaY < 0 ? 5 : -5)); setPartSprite(k, sp.img, sp.scale, sp.offX, sp.offY, r); if (assetCfg[k]) assetCfg[k].rot = r; }
+    else { const f = e.deltaY < 0 ? 1.06 : 1 / 1.06; setPartSprite(k, sp.img, sp.scale * f, sp.offX, sp.offY, sp.rot); if (assetCfg[k]) assetCfg[k].scale = PART_SPRITES[k].scale; }
+    syncSegByKey(k); return; } }
+  const rig = window._rig; if (!rig) return;
+  const d = canvasToDesign(e); let id = null, bd = 16;
+  for (const p of rig.parts) { if (!PART_SPRITES[p.id]) continue; const dist = Math.hypot(p.x - d.x, p.y - d.y); if (dist < bd) { bd = dist; id = p.id; } }
+  if (!id) return; e.preventDefault();
+  const s = PART_SPRITES[id];
+  if (e.shiftKey) { const r = Math.round((s.rot || 0) + (e.deltaY < 0 ? 5 : -5)); setPartSprite(id, s.img, s.scale, s.offX, s.offY, r); if (assetCfg[id]) assetCfg[id].rot = r; }
+  else { const f = e.deltaY < 0 ? 1.06 : 1 / 1.06; setPartSprite(id, s.img, s.scale * f, s.offX, s.offY, s.rot); if (assetCfg[id]) assetCfg[id].scale = PART_SPRITES[id].scale; }
+  syncAssetRow(id);
+}, { passive: false });
+function resizeCanvas() { const w = $('canvasWrap'); cv.width = w.clientWidth; cv.height = w.clientHeight; }
+window.addEventListener('resize', resizeCanvas);
+
+// ---------- удаление фона ----------
+function processImage(src, method, tol) {
+  const w = src.width || src.naturalWidth, h = src.height || src.naturalHeight;
+  const cn = document.createElement('canvas'); cn.width = w; cn.height = h;
+  const c = cn.getContext('2d'); c.drawImage(src, 0, 0);
+  if (method === 'none' || !tol) return cn;
+  const id = c.getImageData(0, 0, w, h), d = id.data;
+  const corners = [0, (w - 1) * 4, (h - 1) * w * 4, ((h - 1) * w + (w - 1)) * 4];
+  let br = 0, bg = 0, bb = 0; corners.forEach((ci) => { br += d[ci]; bg += d[ci + 1]; bb += d[ci + 2]; }); br /= 4; bg /= 4; bb /= 4;
+  const dist = (i) => Math.hypot(d[i] - br, d[i + 1] - bg, d[i + 2] - bb);
+  if (method === 'chroma') { for (let i = 0; i < d.length; i += 4) if (dist(i) <= tol) d[i + 3] = 0; }
+  else { const seen = new Uint8Array(w * h), st = []; const push = (x, y) => { if (x < 0 || y < 0 || x >= w || y >= h) return; const p = y * w + x; if (seen[p]) return; seen[p] = 1; if (dist(p * 4) <= tol) { d[p * 4 + 3] = 0; st.push(p); } }; for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); } for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); } while (st.length) { const p = st.pop(), x = p % w, y = (p / w) | 0; push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1); } }
+  c.putImageData(id, 0, 0); return cn;
+}
+
+// ---------- детали (карточки) ----------
+function partById(id) { return UNIT_DEFS[unit.hull].parts.find((p) => p.id === id); }
+function applyAsset(id) { const src = assetSrc[id]; if (!src) return; const cfg = assetCfg[id]; setPartSprite(id, processImage(src, cfg.method, cfg.tol), cfg.scale, cfg.offX, cfg.offY, cfg.rot); }
+function loadAsset(id, src) {
+  assetSrc[id] = src;
+  const card = document.querySelector(`.part[data-id="${id}"]`);
+  assetCfg[id] = { method: card.querySelector('[data-k=method]').value, tol: +card.querySelector('[data-k=tol]').value || 0, scale: 0, offX: 0, offY: 0, rot: 0 };
+  applyAsset(id); assetCfg[id].scale = PART_SPRITES[id].scale; syncAssetRow(id);
+}
+function readAssetCfg(id) { const card = document.querySelector(`.part[data-id="${id}"]`), q = (k) => card.querySelector(`[data-k=${k}]`), cur = assetCfg[id] || {}; assetCfg[id] = { method: q('method').value, tol: +q('tol').value || 0, scale: +q('scale').value || cur.scale, offX: +q('offX').value || 0, offY: +q('offY').value || 0, rot: +q('rot').value || 0 }; }
+
+function rebuildParts() {
+  const def = UNIT_DEFS[unit.hull], box = $('parts'); box.innerHTML = '';
+  def.parts.forEach((p) => {
+    const card = document.createElement('div'); card.className = 'part' + (p.id === selId ? ' sel' : ''); card.dataset.id = p.id;
+    const has = !!PART_SPRITES[p.id], isLeg = p.kind === 'leg', isReactor = p.kind === 'reactor' && def.kind === 'ring', isRingMod = !isLeg && def.kind === 'ring';
+    // нога — ассет на сегмент; реактор — ДВА ассета (вкл/выкл) ниже; остальные — стандартный блок
+    const assetRows = (isLeg || isReactor) ? '' : `
+      <div class="row assetRow">ассет<input type="file" accept="image/*" data-k="file" style="width:74px;font-size:10px">
+        <select data-k="method"><option value="none">фон:есть</option><option value="wand">палочка</option><option value="chroma">хром</option></select>
+        <input type="number" step="2" data-k="tol" value="40" title="допуск" style="width:38px">
+        <button class="sm" data-act="clr">убрать</button></div>
+      <div class="row assetRow">×<input type="number" step="0.005" data-k="scale" ${has ? '' : 'disabled'}>offX<input type="number" step="1" data-k="offX" ${has ? '' : 'disabled'}>offY<input type="number" step="1" data-k="offY" ${has ? '' : 'disabled'}>пов°<input type="number" step="5" data-k="rot" title="поворот спрайта (град), не меняет угол кости" style="width:42px" ${has ? '' : 'disabled'}></div>`;
+    card.innerHTML = `
+      <div class="hd"><b>${p.id}</b><span class="k">${PART_KINDS[p.kind] || p.kind}</span>
+        <span style="flex:1"></span>
+        ${isLeg ? `<label><input type="checkbox" data-k="mirror" ${p.mirror ? 'checked' : ''}> зеркало</label>` : `<label><input type="checkbox" data-k="proc" ${p.proc !== false ? 'checked' : ''}> проц</label>`}
+        <button class="sm" data-act="del">×</button></div>
+      <div class="row rigRow">${p.kind === 'reactor'
+        ? `z<input type="number" step="1" data-k="z" value="${p.z}"><span class="hint">центр-кольцо (ассет ниже)</span>`
+        : isRingMod
+        ? `ang<input type="number" step="2" data-k="ang" value="${p.ang || 0}">rad<input type="number" step="0.05" data-k="rad" value="${p.rad || 0}">z<input type="number" step="1" data-k="z" value="${p.z}">`
+        : `f<input type="number" step="0.02" data-k="f" value="${p.f}">s<input type="number" step="0.02" data-k="s" value="${p.s ?? 0}">z<input type="number" step="1" data-k="z" value="${p.z}">`}
+        ${isLeg ? '' : (() => { const opts = ['', 'dig', 'engine', 'scanner', 'cargo', 'shield']; return `need<select data-k="need">${opts.map((o) => `<option value="${o}"${(p.need || '') === o ? ' selected' : ''}>${o || '—'}</option>`).join('')}</select>`; })()}</div>
+      ${assetRows}`;
+    box.appendChild(card);
+    const q = (sel) => card.querySelector(sel);
+    q('.hd b').style.cursor = 'pointer';
+    q('.hd b').addEventListener('click', () => { selId = p.id; selSeg = null; rebuildParts(); });
+    card.querySelectorAll('[data-k=f],[data-k=s],[data-k=z],[data-k=ang],[data-k=rad]').forEach((inp) => inp.addEventListener('input', () => { p[inp.dataset.k] = +inp.value; }));
+    q('[data-act=del]').addEventListener('click', () => removePart(p.id));
+    const needEl = q('[data-k=need]'); if (needEl) needEl.addEventListener('change', (e) => { p.need = e.target.value || null; });
+    const procEl = q('[data-k=proc]'); if (procEl) procEl.addEventListener('change', (e) => { p.proc = e.target.checked; });
+    const mir = q('[data-k=mirror]'); if (mir) mir.addEventListener('change', (e) => { p.mirror = e.target.checked; });
+    if (isLeg) { buildSegments(card, p); return; }
+    if (isReactor) { buildReactorAssets(card, p); return; }
+    q('[data-k=file]').addEventListener('change', (e) => { const f = e.target.files[0]; if (!f) return; assetFile[p.id] = f.name; const img = new Image(); img.onload = () => loadAsset(p.id, img); img.src = URL.createObjectURL(f); });
+    card.querySelectorAll('[data-k=method],[data-k=tol]').forEach((inp) => inp.addEventListener('input', () => { if (!assetSrc[p.id]) return; readAssetCfg(p.id); applyAsset(p.id); }));
+    card.querySelectorAll('[data-k=scale],[data-k=offX],[data-k=offY],[data-k=rot]').forEach((inp) => inp.addEventListener('input', () => { if (!assetSrc[p.id]) return; readAssetCfg(p.id); applyAsset(p.id); }));
+    q('[data-act=clr]').addEventListener('click', () => { clearPartSprite(p.id); delete assetSrc[p.id]; syncAssetRow(p.id); });
+    if (has) syncAssetRow(p.id);
+  });
+  fillNodeSelects();
+}
+
+// --- сегменты ноги (мини-риг: ассет/пивот на сегмент + ang/swing/len/z) ---
+function buildSegments(card, leg) {
+  if (!leg.segments) leg.segments = JSON.parse(JSON.stringify(DEFAULT_LEG_SEGS));
+  const box = document.createElement('div'); box.style.cssText = 'margin-top:6px;border-top:1px solid var(--bronze);padding-top:6px';
+  box.innerHTML = '<div class="hint">сегменты (бедро→стопа): <b>ang</b>=угол кости · <b>sw</b>=свинг (размах качания при ходьбе: 0 жёстко, 1 полный, − противофаза) · <b>len</b>=длина · <b>z</b>=слой. Ассет: пивот offX/offY (колесо=масштаб, <b>Shift+колесо / пов°</b>=поворот СПРАЙТА без смены угла кости)</div>';
+  leg.segments.forEach((sd, si) => {
+    const segKey = leg.id + ':' + sd.id;
+    const isSel = selSeg && selSeg.legId === leg.id && selSeg.idx === si;
+    const row = document.createElement('div'); row.className = 'part' + (isSel ? ' sel' : ''); row.style.padding = '4px'; row.dataset.seg = segKey;
+    const has = !!PART_SPRITES[segKey];
+    row.innerHTML = `<div class="row"><b style="cursor:pointer">${sd.id}</b>${isSel ? ` <span class="hint">◀ ${editMode === 'rig' ? 'жёлт=поз, син=угол' : 'зелёная/колесо'}</span>` : ''}<span style="flex:1"></span><button class="sm" data-sdel>×</button></div>
+      <div class="row rigRow">ang<input type="number" data-sk="ang" value="${sd.ang || 0}" style="width:38px">
+        sw<input type="number" step="0.1" data-sk="swing" value="${sd.swing || 0}" style="width:38px" title="свинг: размах качания сегмента при ходьбе/idle. 0 = жёсткий (не качается), 1 = полный размах, минус = противофаза">
+        len<input type="number" step="0.05" data-sk="len" value="${sd.len != null ? sd.len : 0.5}" style="width:40px">
+        z<input type="number" data-sk="z" value="${sd.z || 0}" style="width:32px"></div>
+      <div class="row assetRow">ассет<input type="file" accept="image/*" data-sk="file" style="width:64px;font-size:10px">
+        <select data-sk="method"><option value="none">фон:есть</option><option value="wand">палочка</option><option value="chroma">хром</option></select>
+        <input type="number" data-sk="tol" value="40" step="2" style="width:34px"></div>
+      <div class="row assetRow">×<input type="number" step="0.005" data-sk="scale" ${has ? '' : 'disabled'}>offX<input type="number" data-sk="offX" ${has ? '' : 'disabled'}>offY<input type="number" data-sk="offY" ${has ? '' : 'disabled'}>пов°<input type="number" step="5" data-sk="rot" title="поворот спрайта (град), не меняет угол кости" style="width:40px" ${has ? '' : 'disabled'}></div>`;
+    box.appendChild(row);
+    row.querySelector('b').addEventListener('click', () => { selSeg = { legId: leg.id, idx: si }; selId = null; rebuildParts(); });
+    row.querySelectorAll('[data-sk=ang],[data-sk=swing],[data-sk=len],[data-sk=z]').forEach((inp) => inp.addEventListener('input', () => { sd[inp.dataset.sk] = +inp.value; }));
+    row.querySelector('[data-sdel]').addEventListener('click', () => { leg.segments = leg.segments.filter((x) => x !== sd); clearPartSprite(segKey); delete assetSrc[segKey]; rebuildParts(); });
+    row.querySelector('[data-sk=file]').addEventListener('change', (e) => { const f = e.target.files[0]; if (!f) return; assetFile[segKey] = f.name; const img = new Image(); img.onload = () => loadSegAsset(segKey, row, img); img.src = URL.createObjectURL(f); });
+    row.querySelectorAll('[data-sk=method],[data-sk=tol],[data-sk=scale],[data-sk=offX],[data-sk=offY],[data-sk=rot]').forEach((inp) => inp.addEventListener('input', () => { if (!assetSrc[segKey]) return; readSegCfg(segKey, row); applyAsset(segKey); }));
+    if (has) syncSegAsset(segKey, row);
+  });
+  const add = document.createElement('button'); add.className = 'sm'; add.textContent = '+ сегмент';
+  add.addEventListener('click', () => { leg.segments.push({ id: 'seg' + (leg.segments.length + 1), ang: 20, swing: 0.3, len: 0.4, w: 0.2, z: leg.segments.length }); rebuildParts(); });
+  box.appendChild(add);
+  // КОПИРОВАТЬ ассеты этой ноги (спрайты+конфиг сегментов) на ВСЕ остальные ноги (по id сегмента)
+  if (UNIT_DEFS[unit.hull].parts.filter((p) => p.kind === 'leg').length > 1) {
+    const cp = document.createElement('button'); cp.className = 'sm'; cp.textContent = 'ассеты → всем ногам'; cp.style.marginLeft = '6px';
+    cp.addEventListener('click', () => copyLegAssetsToAll(leg.id));
+    box.appendChild(cp);
+  }
+  card.appendChild(box);
+}
+// Распространить ассеты сегментов одной ноги на остальные (сегменты сопоставляются по id).
+function copyLegAssetsToAll(srcLegId) {
+  const def = UNIT_DEFS[unit.hull], src = def.parts.find((p) => p.id === srcLegId); if (!src || !src.segments) return;
+  for (const leg of def.parts.filter((p) => p.kind === 'leg' && p.id !== srcLegId)) {
+    for (const sd of src.segments) {
+      const sk = srcLegId + ':' + sd.id; if (!assetSrc[sk] || !PART_SPRITES[sk]) continue;
+      const tgt = (leg.segments || []).find((s) => s.id === sd.id); if (!tgt) continue;
+      const dk = leg.id + ':' + sd.id;
+      assetSrc[dk] = assetSrc[sk]; assetFile[dk] = assetFile[sk]; assetCfg[dk] = Object.assign({}, assetCfg[sk]);
+      applyAsset(dk);   // PART_SPRITES[dk] из общего src + скопированного cfg
+    }
+  }
+  rebuildParts();
+}
+// Загрузка ассета с пивотом по ЦЕНТРУ (offX=offY=0 → спрайт центрируется на точке детали) —
+// для реактора: центр спрайта = центр юнита (как процедурный тор раньше).
+function loadAssetCenteredKey(key, wrap, img) {
+  assetSrc[key] = img; const q = (k) => wrap.querySelector(`[data-sk=${k}]`);
+  assetCfg[key] = { method: q('method').value, tol: +q('tol').value || 0, scale: 0, offX: 0, offY: 0, rot: 0 };
+  applyAsset(key); assetCfg[key].scale = PART_SPRITES[key].scale;   // подхватить дефолт-масштаб
+  applyAsset(key); syncSegAsset(key, wrap);
+}
+// Блок ассета по произвольному КЛЮЧУ (как у сегментов). centered → пивот по центру (реактор).
+function buildAssetBlock(parent, key, label, centered) {
+  const has = !!PART_SPRITES[key];
+  const wrap = document.createElement('div'); wrap.dataset.akey = key; wrap.style.cssText = 'margin-top:5px;border-top:1px dashed var(--bronze);padding-top:4px';
+  wrap.innerHTML = `<div class="row"><b>${label}</b>${centered ? '<span class="hint" style="margin-left:6px">offX/offY = центр спрайта от центра юнита (или тяни зелёный квадрат в режиме «ассет»)</span>' : ''}</div>
+    <div class="row assetRow">ассет<input type="file" accept="image/*" data-sk="file" style="width:64px;font-size:10px">
+      <select data-sk="method"><option value="none">фон:есть</option><option value="wand">палочка</option><option value="chroma">хром</option></select>
+      <input type="number" data-sk="tol" value="40" step="2" style="width:34px"><button class="sm" data-sk="clr">убрать</button></div>
+    <div class="row assetRow">×<input type="number" step="0.005" data-sk="scale" ${has ? '' : 'disabled'}>offX<input type="number" data-sk="offX" ${has ? '' : 'disabled'}>offY<input type="number" data-sk="offY" ${has ? '' : 'disabled'}>пов°<input type="number" step="5" data-sk="rot" style="width:40px" ${has ? '' : 'disabled'}></div>`;
+  parent.appendChild(wrap);
+  wrap.querySelector('[data-sk=file]').addEventListener('change', (e) => { const f = e.target.files[0]; if (!f) return; assetFile[key] = f.name; const img = new Image(); img.onload = () => (centered ? loadAssetCenteredKey : loadSegAsset)(key, wrap, img); img.src = URL.createObjectURL(f); });
+  wrap.querySelectorAll('[data-sk=method],[data-sk=tol],[data-sk=scale],[data-sk=offX],[data-sk=offY],[data-sk=rot]').forEach((inp) => inp.addEventListener('input', () => { if (!assetSrc[key]) return; readSegCfg(key, wrap); applyAsset(key); }));
+  wrap.querySelector('[data-sk=clr]').addEventListener('click', () => { clearPartSprite(key); delete assetSrc[key]; syncSegAsset(key, wrap); });
+  if (has) syncSegAsset(key, wrap);
+}
+// текущий ключ ассета реактора (вкл/выкл по превью)
+function reactorAssetKey() { const rp = UNIT_DEFS[unit.hull].parts.find((p) => p.kind === 'reactor'); return rp ? (unit.reactorOn !== false ? rp.id : rp.id + ':off') : null; }
+// Карточка реактора: тумблер превью вкл/выкл + ДВА ассета (`reactor`=вкл по умолч., `reactor:off`=выкл).
+function buildReactorAssets(card, p) {
+  const row = document.createElement('div'); row.className = 'row';
+  const tog = document.createElement('button'); tog.className = 'sm';
+  const upd = () => { tog.textContent = 'превью: ' + (unit.reactorOn !== false ? 'РЕАКТОР ВКЛ' : 'РЕАКТОР ВЫКЛ'); tog.classList.toggle('on', unit.reactorOn !== false); };
+  tog.addEventListener('click', () => { unit.reactorOn = !(unit.reactorOn !== false); upd(); }); upd();
+  row.appendChild(tog); card.appendChild(row);
+  buildAssetBlock(card, p.id, 'реактор ВКЛ (по умолчанию)', true);
+  buildAssetBlock(card, p.id + ':off', 'реактор ВЫКЛ (для фич)', true);
+}
+function readSegCfg(segKey, row) { const q = (k) => row.querySelector(`[data-sk=${k}]`), cur = assetCfg[segKey] || {}; assetCfg[segKey] = { method: q('method').value, tol: +q('tol').value || 0, scale: +q('scale').value || cur.scale, offX: +q('offX').value || 0, offY: +q('offY').value || 0, rot: +q('rot').value || 0 }; }
+function loadSegAsset(segKey, row, img) {
+  assetSrc[segKey] = img; const q = (k) => row.querySelector(`[data-sk=${k}]`);
+  assetCfg[segKey] = { method: q('method').value, tol: +q('tol').value || 0, scale: 0, offX: 0, offY: 0, rot: 0 };
+  applyAsset(segKey); const sp = PART_SPRITES[segKey];
+  assetCfg[segKey].scale = sp.scale; assetCfg[segKey].offY = sp.h / 2;  // пивот по умолчанию — верх сегмента
+  applyAsset(segKey); syncSegAsset(segKey, row);
+}
+function syncSegAsset(segKey, row) { const sp = PART_SPRITES[segKey]; ['scale', 'offX', 'offY', 'rot'].forEach((k) => row.querySelector(`[data-sk=${k}]`).disabled = !sp); if (sp) { row.querySelector('[data-sk=scale]').value = +sp.scale.toFixed(3); row.querySelector('[data-sk=offX]').value = sp.offX; row.querySelector('[data-sk=offY]').value = +sp.offY.toFixed(1); row.querySelector('[data-sk=rot]').value = sp.rot || 0; } }
+function syncSlotRow(id) { const card = document.querySelector(`.part[data-id="${id}"]`), p = partById(id); if (!card) return; card.querySelector('[data-k=f]').value = p.f; card.querySelector('[data-k=s]').value = p.s ?? 0; }
+function syncRingRow(id) { const card = document.querySelector(`.part[data-id="${id}"]`), p = partById(id); if (!card || !p) return; const af = card.querySelector('[data-k=ang]'), rf = card.querySelector('[data-k=rad]'); if (af) af.value = p.ang; if (rf) rf.value = p.rad; }
+function syncAssetRow(id) {
+  const card = document.querySelector(`.part[data-id="${id}"]`), s = PART_SPRITES[id], has = !!s; if (!card) return;
+  ['scale', 'offX', 'offY', 'rot'].forEach((k) => { card.querySelector(`[data-k=${k}]`).disabled = !has; });
+  if (has) { card.querySelector('[data-k=scale]').value = +s.scale.toFixed(3); card.querySelector('[data-k=offX]').value = s.offX; card.querySelector('[data-k=offY]').value = s.offY; card.querySelector('[data-k=rot]').value = s.rot || 0; }
+}
+function uniqId(kind) { const ids = new Set(UNIT_DEFS[unit.hull].parts.map((p) => p.id)); if (!ids.has(kind)) return kind; let n = 2; while (ids.has(kind + n)) n++; return kind + n; }
+function addPart(kind) {
+  const def = UNIT_DEFS[unit.hull], z = Math.max(0, ...def.parts.map((p) => p.z)) + 5;
+  const p = def.kind === 'ring' ? { id: uniqId(kind), kind, ang: 0, rad: 1.6, z, proc: true }
+                                : { id: uniqId(kind), kind, f: 0.6, s: 0, z, proc: true };
+  def.parts.push(p); selId = p.id; rebuildParts();
+}
+function removePart(id) { const def = UNIT_DEFS[unit.hull]; def.parts = def.parts.filter((p) => p.id !== id); def.cables = def.cables.filter((c) => c.a !== id && c.b !== id); clearPartSprite(id); delete assetSrc[id]; if (selId === id) selId = null; rebuildParts(); rebuildCables(); }
+function addPair() {
+  const def = UNIT_DEFS[unit.hull], segs = () => JSON.parse(JSON.stringify(DEFAULT_LEG_SEGS));
+  def.parts.push({ id: uniqId('legL'), kind: 'leg', f: -0.45, s: 0.5, z: 8, mirror: true, segments: segs() });
+  def.parts.push({ id: uniqId('legR'), kind: 'leg', f: 0.45, s: 0.5, z: 8, mirror: false, segments: segs() });
+  rebuildParts();
+}
+
+// ---------- кабели ----------
+function nodeNames() { return UNIT_DEFS[unit.hull].parts.map((p) => p.id).concat(['legHub']); }
+function fillNodeSelects() { const names = nodeNames(); ['cFrom', 'cTo'].forEach((id) => { $(id).innerHTML = names.map((n) => `<option>${n}</option>`).join(''); }); }
+function rebuildCables() {
+  const def = UNIT_DEFS[unit.hull], tb = $('cables').querySelector('tbody'); tb.innerHTML = '';
+  def.cables.forEach((c, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${c.a}</td><td>→ ${c.b}</td><td><select><option ${c.type === 'power' ? 'selected' : ''}>power</option><option ${c.type === 'data' ? 'selected' : ''}>data</option><option ${c.type === 'hydraulic' ? 'selected' : ''}>hydraulic</option></select></td><td><button class="sm">×</button></td>`;
+    tr.querySelector('select').addEventListener('input', (e) => c.type = e.target.value);
+    tr.querySelector('button').addEventListener('click', () => { def.cables.splice(i, 1); rebuildCables(); });
+    tb.appendChild(tr);
+  });
+}
+
+// ---------- управление ----------
+function activate(sel, attr, val) { document.querySelectorAll(sel).forEach((b) => b.classList.toggle('on', b.dataset[attr] === val)); }
+document.querySelectorAll('[data-pose]').forEach((b) => b.addEventListener('click', () => { const m = { left: [-1, 0, -1], right: [1, 0, 1], up: [0, -1, 0], down: [0, 1, 0] }[b.dataset.pose]; unit.dx = m[0]; unit.dy = m[1]; if (m[2]) unit.faceX = m[2]; activate('[data-pose]', 'pose', b.dataset.pose); }));
+document.querySelectorAll('[data-state]').forEach((b) => b.addEventListener('click', () => { const s = b.dataset.state; unit.noAnim = s === 'static'; unit.state = s === 'move' ? MOVING : (s === 'dig' ? DIGGING : IDLE); unit.drilling = s === 'dig'; activate('[data-state]', 'state', s); }));
+$('crouch').addEventListener('click', () => { unit.crouchT = unit.crouchT > 0 ? 0 : 1; $('crouch').classList.toggle('on', unit.crouchT > 0); });
+document.querySelectorAll('[data-mod]').forEach((b) => b.addEventListener('click', () => {
+  const m = b.dataset.mod, s = unit.stats;
+  if (m === 'drill') s.canDig = !s.canDig;
+  else if (m === 'engine') s.canMove = !s.canMove;
+  else if (m === 'cargo') s.capacity = s.capacity > 0 ? 0 : 1;
+  else if (m === 'scanner') s.scanR = s.scanR > 0 ? 0 : 1;
+  else if (m === 'shield') s.radResist = s.radResist > 0 ? 0 : 1.2;
+  b.classList.toggle('on');
+}));
+$('zoom').addEventListener('input', (e) => { zoom = +e.target.value; $('zoomVal').textContent = zoom + '×'; updateScaleNote(); });
+$('play').addEventListener('click', () => { playing = !playing; $('play').textContent = playing ? '⏸ пауза' : '▶ играть'; $('play').classList.toggle('on', playing); });
+function updateModeHint() { const el = $('detHint'); if (!el) return; el.textContent = editMode === 'rig'
+  ? '◆ СКЕЛЕТ: тащи деталь (f/s). Клик по сегменту → жёлтая ручка (корень) = позиция ноги, синяя (стык) = угол/длина. Спрайты не трогаются.'
+  : '✦ АССЕТ: клик по детали/сегменту → колесо = размер, Shift+колесо = поворот, зелёная ручка = пивот. Кости не трогаются.'; }
+function setMode(m) { editMode = m; segDrag = null; drag = null; $('modeRig').classList.toggle('on', m === 'rig'); $('modeAsset').classList.toggle('on', m === 'asset'); document.body.classList.toggle('mode-asset', m === 'asset'); updateModeHint(); }
+$('modeRig').addEventListener('click', () => setMode('rig'));
+$('modeAsset').addEventListener('click', () => setMode('asset'));
+$('guideBtn').addEventListener('click', () => { guideOn = !guideOn; $('guideBtn').classList.toggle('on', guideOn); saveGuide(); });
+$('ikBtn').addEventListener('click', () => { ikPreview = !ikPreview; $('ikBtn').classList.toggle('on', ikPreview); $('ikScenes').style.display = ikPreview ? 'inline-flex' : 'none'; if (ikPreview) ikBuild(); });
+document.querySelectorAll('.iksc').forEach((b) => b.addEventListener('click', () => { ikScene = b.dataset.sc; document.querySelectorAll('.iksc').forEach((x) => x.classList.toggle('on', x === b)); ikBuild(); }));
+$('ikWalkBtn').addEventListener('click', () => { ikWalk = !ikWalk; $('ikWalkBtn').classList.toggle('on', ikWalk); $('ikWalkBtn').textContent = ikWalk ? '⏸ стоп' : '▶ ходьба'; });
+$('addPair').addEventListener('click', addPair);
+$('bobAmp').addEventListener('input', (e) => UNIT_DEFS[unit.hull].bob.amp = +e.target.value);
+$('bobSpd').addEventListener('input', (e) => UNIT_DEFS[unit.hull].bob.spd = +e.target.value);
+$('legDrop').addEventListener('input', (e) => UNIT_DEFS[unit.hull].legHub.dropY = +e.target.value);
+$('cAdd').addEventListener('click', () => { UNIT_DEFS[unit.hull].cables.push({ a: $('cFrom').value, b: $('cTo').value, type: $('cType').value }); rebuildCables(); });
+let cableSrc = null;
+function applyCable() { if (cableSrc) setPartSprite('cable', processImage(cableSrc, $('cableMethod').value, +$('cableTol').value || 0), 1, 0, 0); }
+$('cableFile').addEventListener('change', (e) => { const f = e.target.files[0]; if (!f) return; const img = new Image(); img.onload = () => { cableSrc = img; assetFile['cable'] = f.name; applyCable(); }; img.src = URL.createObjectURL(f); });
+$('cableMethod').addEventListener('input', applyCable);
+$('cableTol').addEventListener('input', applyCable);
+$('cableClr').addEventListener('click', () => { clearPartSprite('cable'); cableSrc = null; });
+function fillHulls() { $('hull').innerHTML = Object.keys(UNIT_DEFS).map((h) => `<option>${h}</option>`).join(''); }
+function fillAddKind() { $('addKind').innerHTML = Object.keys(PART_KINDS).filter((k) => k !== 'leg').map((k) => `<option value="${k}">${PART_KINDS[k]}</option>`).join(''); }
+$('addPart').addEventListener('click', () => addPart($('addKind').value));
+$('hull').addEventListener('change', (e) => { unit.hull = e.target.value; refreshAll(); });
+function updateScaleNote() { $('scaleNote').textContent = `тайл = ${TILE}px · масса ≈ ${Math.round(R * 2)}px (${zoom}× = ${Math.round(R * 2 * zoom)}px)`; }
+function syncSidePanels() { const d = UNIT_DEFS[unit.hull]; $('bobAmp').value = d.bob.amp; $('bobSpd').value = d.bob.spd; $('legDrop').value = d.legHub.dropY; }
+
+// ---------- экспорт ----------
+function exportDef() {
+  const d = UNIT_DEFS[unit.hull], q = (v) => v === null ? 'null' : (typeof v === 'string' ? `'${v}'` : v), isRing = d.kind === 'ring';
+  const keep = d.parts.filter((p) => PART_SPRITES[p.id] || p.proc !== false);  // пустые (нет проца и ассета) — не экспортим
+  const m = unitMetrics();  // placement по тайл-сетке: UNIT_DRAW_SCALE ≈ scale, стопы над полом ≈ footTiles тайла
+  let s = `  // placement: UNIT_DRAW_SCALE ≈ ${m.scale} · стопы ${m.footTiles} тайла над полом (1 тайл = ${m.tilePx}px в редакторе)\n  ${unit.hull}: {\n${isRing ? `    kind: 'ring', ringR: ${d.ringR},\n` : ''}    bob: { amp: ${d.bob.amp}, spd: ${d.bob.spd} },\n    parts: [\n`;
+  keep.forEach((p) => {
+    const isLeg = p.kind === 'leg';
+    const seg = (isLeg && p.segments) ? `, segments: [${p.segments.map((sd) => `{ id: '${sd.id}', ang: ${sd.ang || 0}, swing: ${sd.swing || 0}, len: ${sd.len != null ? sd.len : 0.5}, w: ${sd.w || 0.26}, z: ${sd.z || 0} }`).join(', ')}]` : '';
+    if (isRing && !isLeg)   // модуль на кольце: ang/rad вместо f/s
+      s += `      { id: '${p.id}', kind: '${p.kind}', ang: ${p.ang || 0}, rad: ${p.rad || 0}, z: ${p.z}, need: ${q(p.need ?? null)}${p.proc === false ? ', proc: false' : ''} },\n`;
+    else
+      s += `      { id: '${p.id}', kind: '${p.kind}', f: ${p.f}, s: ${p.s ?? 0}, z: ${p.z}, need: ${q(p.need ?? null)}${isLeg && p.mirror ? ', mirror: true' : ''}${p.proc === false ? ', proc: false' : ''}${p.overlay ? ', overlay: true' : ''}${seg} },\n`;
+  });
+  s += `    ],\n    legHub: { f: ${d.legHub.f}, s: ${d.legHub.s}, dropY: ${d.legHub.dropY} },\n    cables: [\n`;
+  d.cables.filter((c) => keep.find((p) => p.id === c.a) && (c.b === 'legHub' || keep.find((p) => p.id === c.b))).forEach((c) => { s += `      { a: '${c.a}', b: '${c.b}', type: '${c.type}' },\n`; });
+  s += `    ],\n  },`; return s;
+}
+function exportSpr() {
+  let s = 'const PART_SPRITE_SRC = {\n';
+  const line = (key) => { const sp = PART_SPRITES[key]; if (sp) s += `  '${unit.hull}:${key}': { url: 'assets/parts/${assetFile[key] || key.replace(/:/g, '_') + '.png'}', scale: ${+sp.scale.toFixed(4)}, offX: ${sp.offX}, offY: ${sp.offY}${sp.rot ? `, rot: ${sp.rot}` : ''} },\n`; };
+  UNIT_DEFS[unit.hull].parts.forEach((p) => { line(p.id); if (p.kind === 'reactor') line(p.id + ':off'); if (p.kind === 'leg' && p.segments) p.segments.forEach((sd) => line(p.id + ':' + sd.id)); });
+  if (PART_SPRITES['cable']) s += `  cable: { url: 'assets/parts/${assetFile['cable'] || 'cable.png'}' },\n`;
+  s += '};'; return s;
+}
+$('exp').addEventListener('click', () => $('out').value = exportDef());
+$('expSpr').addEventListener('click', () => $('outSpr').value = exportSpr());
+$('copy').addEventListener('click', () => { $('out').value = exportDef(); $('outSpr').value = exportSpr(); navigator.clipboard.writeText($('out').value + '\n\n' + $('outSpr').value); $('copy').textContent = '✓'; setTimeout(() => $('copy').textContent = 'копировать оба', 1200); });
+
+// ---------- проект: снимок блупринта + ассетов в один JSON (raw-PNG как data:URI) ----------
+// raw сохраняется специально (а не processImage-результат), чтобы потом можно было поменять метод/допуск удаления фона
+function imageToDataURL(src) { const w = src.width || src.naturalWidth, h = src.height || src.naturalHeight; const cn = document.createElement('canvas'); cn.width = w; cn.height = h; cn.getContext('2d').drawImage(src, 0, 0); return cn.toDataURL('image/png'); }
+function downloadText(name, text, mime) { const blob = new Blob([text], { type: mime || 'text/plain' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
+function setProjStatus(msg) { $('projStatus').textContent = msg; clearTimeout(setProjStatus._t); setProjStatus._t = setTimeout(() => $('projStatus').textContent = '', 2400); }
+function saveProject() {
+  const hull = unit.hull, assets = {};
+  for (const key of Object.keys(assetSrc)) {
+    const sp = PART_SPRITES[key], cfg = assetCfg[key] || {};
+    assets[key] = { src: imageToDataURL(assetSrc[key]), file: assetFile[key] || '', method: cfg.method || 'none', tol: cfg.tol || 0,
+      scale: (sp && sp.scale) || cfg.scale || 0, offX: (sp && sp.offX) || cfg.offX || 0, offY: (sp && sp.offY) || cfg.offY || 0, rot: (sp && sp.rot) || cfg.rot || 0 };
+  }
+  if (cableSrc) assets['cable'] = { src: imageToDataURL(cableSrc), file: assetFile['cable'] || '', method: $('cableMethod').value || 'none', tol: +$('cableTol').value || 0 };
+  // placement: калибровка по тайл-сетке (для точного позиционирования юнита в игре).
+  //   scale → UNIT_DRAW_SCALE, footTiles → стопы над полом тайла; guide хранит саму линейку.
+  const placement = { ...unitMetrics(), guide: { ceilY: guide.ceilY, floorY: guide.floorY } };
+  const data = { format: 'twilight-rig/v1', hull, def: UNIT_DEFS[hull], placement, assets };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = `${hull}-rig.json`; document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  setProjStatus(`сохранено: ${Object.keys(assets).length} ассетов`);
+}
+function loadProject(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data; try { data = JSON.parse(reader.result); } catch (e) { return setProjStatus('ошибка: не JSON'); }
+    if (!data || data.format !== 'twilight-rig/v1' || !data.def) return setProjStatus('ошибка: неверный формат');
+    // снести текущее состояние (всё что хранится в памяти редактора)
+    Object.keys(PART_SPRITES).forEach((k) => clearPartSprite(k));
+    for (const k of Object.keys(assetSrc)) delete assetSrc[k];
+    for (const k of Object.keys(assetCfg)) delete assetCfg[k];
+    for (const k of Object.keys(assetFile)) delete assetFile[k];
+    cableSrc = null;
+    unit.hull = data.hull || 'scout';
+    UNIT_DEFS[unit.hull] = data.def;
+    if (data.placement && data.placement.guide) {   // восстановить калибровку тайл-сетки
+      if (typeof data.placement.guide.ceilY === 'number') guide.ceilY = data.placement.guide.ceilY;
+      if (typeof data.placement.guide.floorY === 'number') guide.floorY = data.placement.guide.floorY;
+      saveGuide();
+    }
+    refreshAll();   // карточки/строки сегментов перестроятся под новый блупринт
+    // ассеты — async подкачка после rebuildParts (без неё селекторы не нашли бы карточек)
+    const entries = Object.entries(data.assets || {}); let done = 0;
+    if (!entries.length) { setProjStatus('загружено: 0 ассетов'); return; }
+    for (const [key, a] of entries) {
+      const img = new Image();
+      img.onload = () => {
+        if (key === 'cable') {
+          cableSrc = img; if (a.file) assetFile['cable'] = a.file;
+          $('cableMethod').value = a.method || 'none'; $('cableTol').value = a.tol || 0;
+          applyCable();
+        } else {
+          assetSrc[key] = img;
+          assetCfg[key] = { method: a.method || 'none', tol: a.tol || 0, scale: a.scale || 0, offX: a.offX || 0, offY: a.offY || 0, rot: a.rot || 0 };
+          if (a.file) assetFile[key] = a.file;
+          // method/tol — в поля карточки/строки. ТРИ типа блоков: реактор (вкл/выкл) — по
+          // `data-akey` с `data-sk`; сегмент ноги — по `data-seg` с `data-sk`; обычная деталь — по
+          // `.part[data-id]` с `data-k`. Ключ реактора БЕЗ двоеточия (`reactor`) раньше уходил в
+          // ветку обычной детали и крашился на отсутствующих `data-k`-полях (реактор ВКЛ не грузился).
+          const aWrap = document.querySelector(`[data-akey="${key}"]`);
+          const segRow = aWrap ? null : document.querySelector(`[data-seg="${key}"]`);
+          const partCard = (aWrap || segRow) ? null : document.querySelector(`.part[data-id="${key}"]`);
+          const el = aWrap || segRow || partCard, attr = partCard ? 'data-k' : 'data-sk';
+          if (el) { const m = el.querySelector(`[${attr}=method]`), tl = el.querySelector(`[${attr}=tol]`); if (m) m.value = a.method || 'none'; if (tl) tl.value = a.tol || 0; }
+          applyAsset(key);
+          if (aWrap) syncSegAsset(key, aWrap); else if (segRow) syncSegByKey(key); else syncAssetRow(key);
+        }
+        if (++done === entries.length) setProjStatus(`загружено: ${done} ассетов`);
+      };
+      img.onerror = () => { if (++done === entries.length) setProjStatus(`загружено: ${done} (часть с ошибкой)`); };
+      img.src = a.src;
+    }
+  };
+  reader.onerror = () => setProjStatus('ошибка чтения файла');
+  reader.readAsText(file);
+}
+$('projSave').addEventListener('click', saveProject);
+$('projLoad').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) loadProject(f); e.target.value = ''; });
+// Снимок «в игру» = самодостаточный rig-<hull>.js (блупринт + ОБРАБОТАННЫЕ спрайты как data:URI).
+// Файл работает на file:// (двойной клик index.html), где localStorage НЕ делится с http-редактором.
+function buildIngameFile(hull, def, sprites) {
+  const header = `/* АВТО-ГЕНЕРАЦИЯ — tools/rig_editor.html, кнопка «→ В ИГРУ».\n` +
+    `   Положи этот файл в КОРЕНЬ проекта (рядом с index.html, перезаписав заглушку) и перезагрузи игру.\n` +
+    `   Переопределяет блупринт корпуса «${hull}» (вкл. drawScale из тайл-сетки) и подключает его спрайты (работает на file://). */\n`;
+  return header +
+`(function () {
+  var HULL = ${JSON.stringify(hull)};
+  var DEF = ${JSON.stringify(def)};
+  var SPR = ${JSON.stringify(sprites)};
+  if (typeof UNIT_DEFS !== 'undefined') UNIT_DEFS[HULL] = DEF;
+  var any = false;
+  for (var k in SPR) { (function (key, s) { var img = new Image(); img.onload = function () { if (typeof setPartSprite === 'function') setPartSprite(HULL + ':' + key, img, s.scale, s.offX, s.offY, s.rot); }; img.src = s.src; })(k, SPR[k]); any = true; }
+  if (any) { if (typeof partsProcedural === 'function') partsProcedural(false); if (typeof legikProcedural === 'function') legikProcedural(false); }
+})();
+`;
+}
+function pushToGame() {
+  const hull = unit.hull, sprites = {};
+  for (const key of Object.keys(PART_SPRITES)) { const sp = PART_SPRITES[key]; if (!sp || !sp.img) continue; sprites[key] = { src: imageToDataURL(sp.img), scale: sp.scale, offX: sp.offX, offY: sp.offY, rot: sp.rot || 0 }; }
+  // drawScale = калибровка тайл-сетки (TILE/tilePx) → так пол/потолок в редакторе задают РАЗМЕР юнита в игре.
+  // footAnchor = РАССТОЯНИЕ от центра корпуса до ЛИНИИ ПОЛА в тайлах (floorY/tilePx) → игра ставит юнит
+  // на эту высоту над полом, чтобы (отмасштабированные) ноги доставали поверхность (иначе «парит»).
+  const def = Object.assign({}, UNIT_DEFS[hull], { drawScale: +unitMetrics().scale, footAnchor: +(guide.floorY / guideTilePx()).toFixed(4) });
+  const n = Object.keys(sprites).length;
+  downloadText(`rig-${hull}.js`, buildIngameFile(hull, def, sprites), 'text/javascript');   // главный путь (file://)
+  try { localStorage.setItem('twilight-rig:' + hull, JSON.stringify({ hull, def, sprites })); } catch (e) { /* квота — не критично, есть файл */ }
+  setProjStatus(`скачан rig-${hull}.js (×${def.drawScale}, ${n} спр.) — положи в корень, перезагрузи игру`);
+}
+$('projGame').addEventListener('click', pushToGame);
+$('projGameClr').addEventListener('click', () => { localStorage.removeItem('twilight-rig:' + unit.hull); setProjStatus('стёрто из игры: ' + unit.hull); });
+
+function refreshAll() { rebuildParts(); rebuildCables(); syncSidePanels(); }
+
+// init
+resizeCanvas(); fillHulls(); fillAddKind();
+loadGuide(); $('guideBtn').classList.toggle('on', guideOn);
+$('zoomVal').textContent = zoom + '×'; updateScaleNote(); refreshAll(); setMode('rig');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
