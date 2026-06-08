@@ -37,7 +37,7 @@ class FallingRocks {
     while (world.unstableTriggers.length) {
       const c = world.unstableTriggers.pop();
       const t = world.tileAt(c.x, c.y);
-      if (t.type !== ROCK || !t.unstable) continue;
+      if (t.type !== ROCK || !(t.unstable || t.boulder)) continue;
       if (!this._unsupported(world, c.x, c.y)) continue;
       const key = c.y * MAP_W + c.x;
       if (this.pending.has(key)) continue;
@@ -48,14 +48,15 @@ class FallingRocks {
     // 2) тик «дрожащих»: по истечении задержки — срыв (если опоры всё ещё нет)
     for (const [key, p] of this.pending) {
       const t = world.tileAt(p.x, p.y);
-      if (t.type !== ROCK || !t.unstable || !this._unsupported(world, p.x, p.y)) {
+      if (t.type !== ROCK || !(t.unstable || t.boulder) || !this._unsupported(world, p.x, p.y)) {
         t.shaking = false; this.pending.delete(key); continue;   // опору вернули / уже выкопали — отмена
       }
       p.t += dt;
       if (p.t < UNSTABLE_FALL_DELAY) continue;
+      const boulder = t.boulder, hardness = t.hardness, resource = t.resource;   // запомнить ДО setAir (он чистит тайл)
       t.shaking = false;
       world.setAir(p.x, p.y);          // освобождаем клетку (это же поднимет триггер на клетку выше — цепочка)
-      this.blocks.push({ tx: p.x, py: p.y * TILE, vy: 0, hit: false });
+      this.blocks.push({ tx: p.x, py: p.y * TILE, vy: 0, hit: false, boulder, hardness, resource });
       this.pending.delete(key);
     }
 
@@ -73,13 +74,19 @@ class FallingRocks {
       if (!b.hit && unit) {
         const dxp = wrapDeltaPx(unit.px, (b.tx + 0.5) * TILE);
         if (Math.abs(dxp) < TILE * 0.55 && b.py < unit.py + TILE * 0.4 && b.py + TILE > unit.py - TILE * 0.4) {
-          unit.hp -= UNSTABLE_DAMAGE_MIN + Math.floor(Math.random() * (UNSTABLE_DAMAGE_MAX - UNSTABLE_DAMAGE_MIN + 1));   // случайный урон в диапазоне
+          const dmin = b.boulder ? BOULDER_DAMAGE_MIN : UNSTABLE_DAMAGE_MIN, dmax = b.boulder ? BOULDER_DAMAGE_MAX : UNSTABLE_DAMAGE_MAX;
+          unit.hp -= dmin + Math.floor(Math.random() * (dmax - dmin + 1));   // случайный урон в диапазоне (валун бьёт сильнее)
           b.hit = true;
+          if (b.boulder && unit.shove) {   // ВАЛУН отталкивает юнита на соседний свободный тайл
+            const ux = unit.tileX, uy = unit.tileY, fx = unit.faceX || 1;
+            for (const [cx, cy] of [[ux - fx, uy], [ux + fx, uy], [ux, uy - 1]]) { if (!isSolid(world.tileAt(cx, cy))) { unit.shove(cx, cy); break; } }
+          }
         }
       }
 
-      if (b.py >= restY - 0.5) {        // удар о породу → разбился на камни и пропал (НЕ оставляет породу)
-        this._shatter(b.tx, restY);
+      if (b.py >= restY - 0.5) {
+        if (b.boulder) world.settleRock(b.tx, rs - 1, b.hardness, b.resource, true);   // ВАЛУН занимает (блокирует) клетку
+        else this._shatter(b.tx, restY);                                               // нестабильная → осколки и пропадает
         this.blocks.splice(i, 1);
       }
     }

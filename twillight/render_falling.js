@@ -73,6 +73,45 @@ function drawUnstableCracks(ctx, world, x0, y0, x1, y1, ox, oy) {
     }
 }
 
+// Большой одиночный КАМЕНЬ на весь тайл (плотная порода / тяжёлый валун). Рисуется в ЛОКАЛЬНОМ
+// кадре с центром 0,0; `rnd(i)`→[0,1] детерминирует силуэт/крапины; `sh` — телеграф (тёплый контур).
+function _bigRock(ctx, rnd, R, sh) {
+  const n = 9, pts = [];
+  for (let i = 0; i < n; i++) { const a = i / n * 6.283; const rr = R * (0.82 + rnd(i) * 0.2); pts.push([Math.cos(a) * rr, Math.sin(a) * rr]); }
+  ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath();
+  const g = ctx.createLinearGradient(0, -R, 0, R);   // объём: свет сверху, тень снизу
+  g.addColorStop(0, '#6b5f50'); g.addColorStop(0.5, '#4f463b'); g.addColorStop(1, '#322b24');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.save(); ctx.clip();
+  ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.4;                                   // грани
+  ctx.beginPath(); ctx.moveTo(-R * 0.5, -R * 0.18); ctx.lineTo(R * 0.1, R * 0.16); ctx.lineTo(R * 0.55, -R * 0.04); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-R * 0.08, R * 0.5); ctx.lineTo(R * 0.05, R * 0.06); ctx.stroke();
+  ctx.strokeStyle = 'rgba(150,134,110,0.45)'; ctx.lineWidth = 2;                                // блик
+  ctx.beginPath(); ctx.moveTo(-R * 0.55, -R * 0.4); ctx.lineTo(-R * 0.08, -R * 0.62); ctx.stroke();
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';                                                           // крапины
+  for (let i = 0; i < 4; i++) { const a = rnd(20 + i) * 6.283, rr = rnd(30 + i) * R * 0.6; ctx.fillRect(Math.cos(a) * rr, Math.sin(a) * rr, 3, 3); }
+  ctx.restore();
+  ctx.strokeStyle = sh ? 'rgba(222,150,80,0.7)' : 'rgba(18,13,9,0.6)'; ctx.lineWidth = sh ? 2 : 1.4; ctx.stroke();   // контур (тёплый при дрожи)
+}
+
+// Статичные тяжёлые ВАЛУНЫ (большой камень на тайл) поверх кладки, до тумана. При `shaking` — дрожь+тление.
+function drawBoulders(ctx, world, x0, y0, x1, y1, ox, oy) {
+  const t = performance.now() / 1000;
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      const tile = world.tileAt(x, y);
+      if (tile.type !== ROCK || !tile.boulder) continue;
+      const sh = !!tile.shaking;
+      const jx = sh ? Math.sin(t * 46 + x * 1.7) * 1.4 : 0, jy = sh ? Math.cos(t * 53 + y * 2.1) * 1.4 : 0;
+      const cx = x * TILE - ox + TILE / 2 + jx, cy = y * TILE - oy + TILE / 2 + jy;
+      const rnd = (i) => { const v = world.hash(x * 7 + i * 131 + 1, y * 11 + i * 97 + 5); return v < 0 ? v + 1 : v; };
+      ctx.save(); ctx.translate(cx, cy);
+      if (sh) { const gl = ctx.createRadialGradient(0, 0, 2, 0, 0, TILE * 0.6); const a = 0.18 + 0.16 * (0.5 + 0.5 * Math.sin(t * 16)); gl.addColorStop(0, `rgba(222,150,80,${a})`); gl.addColorStop(1, 'rgba(222,150,80,0)'); ctx.fillStyle = gl; ctx.fillRect(-TILE * 0.6, -TILE * 0.6, TILE * 1.2, TILE * 1.2); }
+      _bigRock(ctx, rnd, TILE * 0.46, sh);
+      ctx.restore();
+    }
+}
+
 // Летящие валуны (каменный блок с трещинами + трейл) и осколки после удара.
 function drawFalling(ctx, mgr, camera) {
   if (!mgr) return;
@@ -87,19 +126,19 @@ function drawFalling(ctx, mgr, camera) {
     const tg = ctx.createLinearGradient(0, -TILE * 0.9, 0, 0);
     tg.addColorStop(0, 'rgba(60,52,44,0)'); tg.addColorStop(1, 'rgba(74,66,56,0.35)');
     ctx.fillStyle = tg; ctx.fillRect(3, -TILE * 0.9, TILE - 6, TILE * 0.9);
-    // тело валуна
-    ctx.fillStyle = '#4a4138'; ctx.fillRect(1, 1, TILE - 2, TILE - 2);
-    ctx.fillStyle = 'rgba(120,104,84,0.30)'; ctx.fillRect(2, 2, TILE - 4, 4);                 // блик сверху
-    ctx.fillStyle = 'rgba(0,0,0,0.40)'; ctx.fillRect(2, TILE - 6, TILE - 4, 4);               // тень снизу
-    // несколько граней-камней
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
-    for (let i = 0; i < 3; i++) {
-      const fx = (0.15 + Math.abs(hash(b.tx + i, i * 3)) * 0.6) * TILE, fy = (0.2 + Math.abs(hash(i * 7, b.tx + i)) * 0.5) * TILE;
-      ctx.fillRect(fx, fy, 6, 6);
+    if (b.boulder) {                               // тяжёлый валун — большой камень на тайл
+      ctx.translate(TILE / 2, TILE / 2);
+      const rnd = (i) => { const v = Math.abs(hash(b.tx * 7 + i, (b.tx % 5) + i)); return v - Math.floor(v); };
+      _bigRock(ctx, rnd, TILE * 0.46, false);
+    } else {                                       // нестабильная — битый блок с трещинами
+      ctx.fillStyle = '#4a4138'; ctx.fillRect(1, 1, TILE - 2, TILE - 2);
+      ctx.fillStyle = 'rgba(120,104,84,0.30)'; ctx.fillRect(2, 2, TILE - 4, 4);                 // блик сверху
+      ctx.fillStyle = 'rgba(0,0,0,0.40)'; ctx.fillRect(2, TILE - 6, TILE - 4, 4);               // тень снизу
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      for (let i = 0; i < 3; i++) { const fx = (0.15 + Math.abs(hash(b.tx + i, i * 3)) * 0.6) * TILE, fy = (0.2 + Math.abs(hash(i * 7, b.tx + i)) * 0.5) * TILE; ctx.fillRect(fx, fy, 6, 6); }
+      ctx.beginPath(); ctx.rect(0, 0, TILE, TILE); ctx.clip();
+      _crackNet(ctx, (a, c) => Math.abs(hash(a, c)), b.tx * 2, Math.floor(b.py / 7), true, t);
     }
-    // трещины (всегда «битый» вид)
-    ctx.beginPath(); ctx.rect(0, 0, TILE, TILE); ctx.clip();
-    _crackNet(ctx, (a, c) => Math.abs(hash(a, c)), b.tx * 2, Math.floor(b.py / 7), true, t);
     ctx.restore();
   }
 

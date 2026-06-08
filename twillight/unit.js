@@ -42,6 +42,13 @@ class Unit {
     this.moveSpeed = speed; this.progress = 0;
     this.state = MOVING;
   }
+  // Толчок (валуном): мгновенно перенести юнита в клетку (nx,ny), сбросив движение/бур.
+  shove(nx, ny) {
+    this.tileX = nx; this.tileY = ny;
+    this.px = nx * TILE + TILE / 2; this.py = ny * TILE + TILE / 2;
+    this.fromX = nx; this.fromY = ny; this.toX = nx; this.toY = ny;
+    this.progress = 0; this.state = IDLE; this._dugBlock = null;
+  }
   update(dt, input, world) {
     const s = this.stats;
     this.drilling = false;

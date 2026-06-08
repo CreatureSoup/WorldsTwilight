@@ -255,12 +255,31 @@ class World {
           tt.unstable = true;
         }
       }
-    // ТЕСТ: гарантированная группа у базы (пара тайлов вглубь сбоку от старта) — быстро проверить падение.
+    // тяжёлые ВАЛУНЫ: одиночные плотные тайлы (реже нестабильной), высокая твёрдость, не на нестабильных.
+    for (let y = CAVE_FLOOR_Y + 2; y < MAP_H - 1; y++)
+      for (let x = 0; x < MAP_W; x++) {
+        const t = this.tiles[y * MAP_W + x];
+        if (!eligible(t, y) || t.unstable || t.boulder) continue;
+        if (!isSolid(this.tiles[(y + 1) * MAP_W + x])) continue;             // опора снизу на старте
+        if (this.hash(x * 23 + 11, y * 41 + 9) >= BOULDER_SEED_CHANCE) continue;
+        t.boulder = true; t.hardness = this.hardnessForY(y) * BOULDER_HARD; t.dens = 1; t.resource = null;
+      }
+    // ТЕСТ: у базы — группа нестабильной + пара валунов (быстро проверить оба типа).
     const startCx = Math.round((CAVE_X0 + CAVE_X1) / 2);
     for (let dx = 6; dx <= 8; dx++) {
       const t = this.tiles[(CAVE_FLOOR_Y + 2) * MAP_W + wrapX(startCx + dx)];
-      if (t && t.type === ROCK && !t.server) t.unstable = true;
+      if (t && t.type === ROCK && !t.server) { t.unstable = true; t.boulder = false; }
     }
+    for (let dx = 10; dx <= 11; dx++) {
+      const t = this.tiles[(CAVE_FLOOR_Y + 2) * MAP_W + wrapX(startCx + dx)];
+      if (t && t.type === ROCK && !t.server) { t.boulder = true; t.unstable = false; t.hardness = this.hardnessForY(CAVE_FLOOR_Y + 2) * BOULDER_HARD; t.dens = 1; t.resource = null; }
+    }
+  }
+  // Валун приземлился — клетка снова становится ПОРОДОЙ (блокирует ход; может упасть опять).
+  settleRock(x, y, hardness, resource, boulder) {
+    const t = this.tileAt(x, y);
+    t.type = ROCK; t.hardness = hardness; t.resource = resource || null; t.dens = 1; t.dig = 0; t.dug = false;
+    t.unstable = false; t.boulder = !!boulder;
   }
   layFoundation(x0, x1, y) {
     if (y < 0 || y >= MAP_H) return;
@@ -277,7 +296,7 @@ class World {
   setAir(x, y) {
     const t = this.tileAt(x, y);
     if (t.type === ROCK) { if (t.server) t.server.dug = true; t.type = AIR; t.hardness = 0; t.dig = 0; t.resource = null; t.dug = true; } // dug=прорытый ход (не природная пустота) — враги избегают своих ходов; сервер → «хлам» (источник данных)
-    const a = this.tileAt(x, y - 1);   // клетка СВЕРХУ потеряла опору? нестабильная — в очередь на срыв (falling.js)
-    if (a.type === ROCK && a.unstable) this.unstableTriggers.push({ x: wrapX(x), y: y - 1 });
+    const a = this.tileAt(x, y - 1);   // клетка СВЕРХУ потеряла опору? нестабильная/валун — в очередь на срыв (falling.js)
+    if (a.type === ROCK && (a.unstable || a.boulder)) this.unstableTriggers.push({ x: wrapX(x), y: y - 1 });
   }
 }
