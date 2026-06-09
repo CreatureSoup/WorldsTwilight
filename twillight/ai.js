@@ -13,8 +13,12 @@ Object.assign(Game.prototype, {
     const homeR = (w) => Math.max(w.rx, w.ry) + 1;  // «дом» = вся каверна гнезда, иначе центр недостижим
     // копатель-разведчик: 1/цикл до числа цивилизованных городов, пока есть ненайденные
     const diggers = this.enemies.filter((e) => e.type === 'digger').length;
-    if (this.cities.some((c) => !c.found) && diggers < this.cities.length) {
-      const w = nest(); this.enemies.push(new Enemy(w.cx, w.cy, 'digger', w.cx, w.cy, homeR(w)));
+    // первый копатель — со 2-го цикла (спокойный пролог + сдвигает время до базы к целевому окну)
+    if (n >= 2 && this.cities.some((c) => !c.found) && diggers < this.cities.length) {
+      const w = nest(); const e = new Enemy(w.cx, w.cy, 'digger', w.cx, w.cy, homeR(w));
+      this._diggerN = (this._diggerN || 0) + 1;
+      e.sweepSign = (this._diggerN % 2) ? 1 : -1;   // чередуем сторону свипа → копатели делят тор, разброс времени до базы падает
+      this.enemies.push(e);
     }
     // собиратели: с цикла 2, 1/цикл до потолка
     if (n >= 2 && this.enemies.filter((e) => e.type === 'collector').length < COLLECTOR_CAP) {
@@ -43,15 +47,19 @@ Object.assign(Game.prototype, {
     if (e.state === 'seek') {
       for (const c of this.cities) if (!c.found && this.near(e, c.cx, c.cy, c.dr)) {
         c.found = true;
-        // к БАЗЕ дорываем магистраль (рейдеры не копают — им нужен ход), к чужим — сразу домой
-        if (c === this.cities[0]) { e.state = 'tocity'; e.target = { x: c.cx, y: c.cy }; }
-        else { e.state = 'return'; e.target = { x: e.homeX, y: e.homeY }; }
+        // докапываемся ВПЛОТНУЮ в пещеру любого города (база И чужие): пробой видим игроку,
+        // к базе остаётся магистраль для рейдеров. Только база даёт телеграф-предупреждение.
+        e.state = 'tocity'; e.target = { x: c.cx, y: c.cy }; e._toBase = (c === this.cities[0]);
+        if (e._toBase) { this.logEvent('КОПАТЕЛЬ ИДЁТ К БАЗЕ'); if (this.hints) this.hints.show('ПРОРЫВ К БАЗЕ'); }
         break;
       }
       // разведка завершена (все города найдены) → домой, иначе копатель блуждал бы вечно
       if (e.state === 'seek' && this.cities.every((c) => c.found)) { e.state = 'return'; e.target = { x: e.homeX, y: e.homeY }; }
     } else if (e.state === 'tocity') {
-      if (this.near(e, e.target.x, e.target.y, RAID_REACH_R)) { e.state = 'return'; e.target = { x: e.homeX, y: e.homeY }; } // магистраль достроена
+      if (this.near(e, e.target.x, e.target.y, RAID_REACH_R)) {   // дорылся вплотную
+        if (e._toBase) { this.logEvent('МАГИСТРАЛЬ К БАЗЕ ПРОБИТА'); e.state = 'return'; e.target = { x: e.homeX, y: e.homeY }; }
+        else { e.state = 'seek'; e.target = null; }   // чужой город — лишь путевая точка: пробил и ПРОДОЛЖАЕТ искать (в т.ч. базу)
+      }
     } else if (e.state === 'return' && this.near(e, e.homeX, e.homeY, e.homeR)) e.dead = true; // вернулся в гнездо
   },
   collectorBrain(e) {
@@ -105,7 +113,7 @@ Object.assign(Game.prototype, {
         // у города: стоит и «заполняется» — кража не мгновенная (видно подход + накопление)
         e.draining = true; e.drainT += dt; e.commit = null;
         if (e.drainT >= RAID_DRAIN_TIME) {
-          if (!this.debug) this.city.damage(RAID_DRAIN);         // высосал контур
+          if (!this.debug) { this.city.drain(RAID_DRAIN); this.logEvent('РЕЙДЕР ВЫСОСАЛ КОНТУР'); } // перманентный срез контура (база не восстановит)
           e.carry = 'charge'; e.draining = false; e.drainT = 0;
         }
       } else { const n = this.nestAt(e.homeX, e.homeY); if (n) n.charge++; e.dead = true; } // донёс заряд домой

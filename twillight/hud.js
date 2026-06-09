@@ -165,7 +165,7 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
 
   // ===== BOTTOM-RIGHT: круговой прогресс извлечения данных (когда сканируем сервер-хлам) — 2× =====
   if (dbg.scan || dbg.scanDoneT > 0) {
-    const ccx = W - 62, ccy = H - 152, r = 38, frac = dbg.scan ? dbg.scan.data : 1;
+    const ccx = W - SCAN_RING.dx, ccy = H - SCAN_RING.dy, r = SCAN_RING.r, frac = dbg.scan ? dbg.scan.data : 1;
     ctx.lineWidth = 8; ctx.lineCap = 'round';
     ctx.strokeStyle = PAL.earth; ctx.beginPath(); ctx.arc(ccx, ccy, r, 0, 6.283); ctx.stroke();
     ctx.strokeStyle = PAL.cobalt; ctx.beginPath(); ctx.arc(ccx, ccy, r, -Math.PI / 2, -Math.PI / 2 + 6.283 * frac); ctx.stroke();

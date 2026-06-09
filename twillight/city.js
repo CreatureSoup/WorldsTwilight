@@ -50,6 +50,25 @@ class City {
     if (this.activeRing() < 0) this.dead = true;
   }
 
+  // Дренаж рейдером («сосальщик»): срезает МАКС активного кольца НАВСЕГДА — база восстанавливает
+  // hp лишь до уменьшенного максимума, поэтому набеги НАКАПЛИВАЮТСЯ и реально рушат город. Кольцо с
+  // обнулённым максимумом потеряно безвозвратно (как гибернация). В отличие от damage() — там урон по
+  // текущему hp, который база лечит, и набег «не чувствуется».
+  drain(amount) {
+    if (this.dead) return;
+    let dmg = amount;
+    while (dmg > 0) {
+      const i = this.activeRing();
+      if (i < 0) { this.dead = true; return; }
+      const r = this.rings[i];
+      const take = Math.min(dmg, r.max);
+      r.max -= take; if (r.hp > r.max) r.hp = r.max;
+      dmg -= take;
+      if (r.max <= 0) { r.max = 0; r.hp = 0; r.lost = true; }
+    }
+    if (this.activeRing() < 0) this.dead = true;
+  }
+
   update(dt, atBase) {
     if (this.dead) return;
     this.charging = false; this.full = false;

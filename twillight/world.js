@@ -13,6 +13,7 @@ class World {
     this.seen = new Uint8Array(MAP_W * MAP_H); // туман войны
     this.caverns = [];                          // дружественные чужие города
     this.wilds = [];                            // дикие города-гнёзда (источники волн)
+    this.backdrops = [];                        // большие пещеры-сцены с фоном-объектом (объёмный скан)
     this.radSources = [];                       // очаги сильной радиации (помехи интерфейсу)
     this.servers = [];                          // старые серверы в породе — источники данных
     this.unstableTriggers = [];                 // очередь «потеряла опору» (setAir → клетка сверху), читает falling.js
@@ -61,14 +62,25 @@ class World {
       }
   }
   hardnessForY(y) {
+    if (y < CAVE_Y0) {                          // НАД городом: 4 страты погребённой цивилизации
+      if (y <= CEIL_BANDS[0]) return 1.6;       // пепел (поверхностная зола)
+      if (y <= CEIL_BANDS[1]) return 1.3;       // ржавчина (окислы)
+      if (y <= CEIL_BANDS[2]) return 1.5;       // завал (спрессованные руины — плотнее)
+      return 1.0;                               // перегной (мягкий слой у города)
+    }
     if (y <= MAP_H * 0.5) return 1.5;
     if (y <= MAP_H * 0.78) return 2.5;
     return 4.0;
   }
   layerName(y) {
     if (y < SURFACE_ROWS) return 'поверхность';
-    for (const c of CEILING_CRUSTS) if (y >= c.y0 && y <= c.y1) return 'кровля';
-    if (y < CAVE_Y0) return 'свод';
+    for (const c of CEILING_CRUSTS) if (y >= c.y0 && y <= c.y1) return 'завал';
+    if (y < CAVE_Y0) {                          // страты НАД городом (погребённая цивилизация)
+      if (y <= CEIL_BANDS[0]) return 'пепел';
+      if (y <= CEIL_BANDS[1]) return 'ржавчина';
+      if (y <= CEIL_BANDS[2]) return 'завал';
+      return 'перегной';
+    }
     if (y <= CAVE_FLOOR_Y) return 'город';
     if (y >= CRUST_Y0 && y <= CRUST_Y1) return 'корка';
     if (y <= MAP_H * 0.5) return 'верхний';
@@ -88,6 +100,32 @@ class World {
   }
   inCavern(x, y) { return this.inEllipseList(x, y, this.caverns); }
   inWild(x, y) { return this.inEllipseList(x, y, this.wilds); }
+  inBackdrop(x, y) { return this.inEllipseList(x, y, this.backdrops); }
+  // большие пещеры-сцены: эллипс-полости НИЖЕ города, разнесены по тору, с фоном-объектом + сидом
+  genBackdrops() {
+    const H = MAP_H, list = [];
+    const bands = [[CAVE_FLOOR_Y + 14, Math.floor(H * 0.55)], [Math.floor(H * 0.55), Math.floor(H * 0.78)], [Math.floor(H * 0.78), H - 8]];
+    const startCx = (CAVE_X0 + CAVE_X1) / 2;
+    // ТЕСТ: гарантированная пещера-сцена рядом с базой (быстро докопаться и проверить объёмный скан). Убрать перед релизом.
+    list.push({ cx: wrapX(Math.round(startCx) + 14), cy: CAVE_FLOOR_Y + 7, rx: 4, ry: 3, floorY: CAVE_FLOOR_Y + 10, kind: 'idol', seed: 1234, scanned: false, scanning: false, sweepT: 0, reveal: 0 });
+    const avoid = this.caverns.concat(this.wilds).concat([{ cx: startCx, cy: CAVE_FLOOR_Y }]).concat(list.map((b) => ({ cx: b.cx, cy: b.cy })));
+    const kinds = ['city', 'machine', 'idol'];
+    for (let i = 0; i < BACKDROP_COUNT; i++) {
+      const band = bands[i % bands.length]; let placed = null;
+      for (let tries = 0; tries < 50 && !placed; tries++) {
+        const x = Math.floor(this.rand() * MAP_W), y = band[0] + Math.floor(this.rand() * (band[1] - band[0] + 1));
+        if (this.inCave(x, y) || this.inCavern(x, y) || this.inWild(x, y) || this.inBackdrop(x, y)) continue;
+        if (avoid.some((a) => this.torDist(x, a.cx) < 20 && Math.abs(y - a.cy) < 16)) continue;
+        placed = { cx: x, cy: y };
+      }
+      if (!placed) continue;
+      const rx = BACKDROP_RX[0] + Math.floor(this.rand() * (BACKDROP_RX[1] - BACKDROP_RX[0] + 1));
+      const ry = BACKDROP_RY[0] + Math.floor(this.rand() * (BACKDROP_RY[1] - BACKDROP_RY[0] + 1));
+      list.push({ cx: placed.cx, cy: placed.cy, rx, ry, floorY: placed.cy + ry, kind: kinds[i % kinds.length], seed: (this.rand() * 1e9) >>> 0, scanned: false, scanning: false, sweepT: 0, reveal: 0 });
+      avoid.push({ cx: placed.cx, cy: placed.cy });   // следующие держатся подальше
+    }
+    return list;
+  }
   // Размещение в эллипс-бэндах глубины с разносом 2D (далеко по X ИЛИ по глубине).
   placeNest(bands, count, avoid) {
     const list = [];
@@ -109,7 +147,7 @@ class World {
   // Дружественные чужие города (несут name/rep — задел под задания/мету).
   genCaverns() {
     const H = MAP_H;
-    const bands = [[H * 0.28, H * 0.42], [H * 0.46, H * 0.60], [H * 0.64, H * 0.80]].map((b) => [Math.round(b[0]), Math.round(b[1])]);
+    const bands = [[H * 0.45, H * 0.57], [H * 0.60, H * 0.72], [H * 0.75, H * 0.87]].map((b) => [Math.round(b[0]), Math.round(b[1])]);   // ниже опущенного города
     const startCx = (CAVE_X0 + CAVE_X1) / 2;
     const list = this.placeNest(bands, OTHER_CITIES, [{ cx: startCx, cy: CAVE_FLOOR_Y }]);
     return list.map((c, i) => ({ ...c, name: CITY_NAMES[i % CITY_NAMES.length], rep: 0 }));
@@ -117,7 +155,7 @@ class World {
   // Дикие города-гнёзда: глубже, разнесены от старта, дружественных и друг друга.
   genWilds() {
     const H = MAP_H;
-    const bands = [[H * 0.40, H * 0.60], [H * 0.66, H * 0.86]].map((b) => [Math.round(b[0]), Math.round(b[1])]);
+    const bands = [[H * 0.48, H * 0.64], [H * 0.70, H * 0.88]].map((b) => [Math.round(b[0]), Math.round(b[1])]);   // глубже города
     const startCx = (CAVE_X0 + CAVE_X1) / 2;
     const avoid = this.caverns.map((c) => ({ cx: c.cx, cy: c.cy })).concat([{ cx: startCx, cy: CAVE_FLOOR_Y }]);
     return this.placeNest(bands, WILD_NESTS, avoid).map((w) => ({ ...w, hp: WILD_HP, maxHp: WILD_HP, loot: 0, charge: 0 }));
@@ -128,7 +166,7 @@ class World {
   // по маркеру в раскрытой туманом породе. Разнесены по тору 2D друг от друга и от городов.
   genServers() {
     const H = MAP_H, list = [];
-    const bands = [[Math.round(H * 0.33), Math.round(H * 0.54)], [Math.round(H * 0.58), Math.round(H * 0.82)]];
+    const bands = [[Math.round(H * 0.45), Math.round(H * 0.62)], [Math.round(H * 0.66), Math.round(H * 0.86)]];   // ниже города
     const startCx = (CAVE_X0 + CAVE_X1) / 2;
     // ТЕСТ: гарантированный сервер у базы — пара тайлов вниз от пола стартовой пещеры (быстро дотянуться
     // и проверить дайджест dig→хлам→скан без глубокой копки). Сдвиг по X от принтера → не в фундаменте.
@@ -139,7 +177,7 @@ class World {
       let tx = -1, ty = 0;
       for (let tries = 0; tries < 120; tries++) {
         const x = Math.floor(this.rand() * MAP_W), y = band[0] + Math.floor(this.rand() * (band[1] - band[0] + 1));
-        if (this.inCave(x, y) || this.inCavern(x, y) || this.inWild(x, y)) continue;
+        if (this.inCave(x, y) || this.inCavern(x, y) || this.inWild(x, y) || this.inBackdrop(x, y)) continue;
         if (y >= CRUST_Y0 && y <= CRUST_Y1) continue;
         const farCity = avoid.every((a) => this.torDist(x, a.cx) >= 5 || Math.abs(y - a.cy) >= 6);
         const farSrv = list.every((s) => this.torDist(x, s.tx) >= 8 || Math.abs(y - s.ty) >= 6);
@@ -195,6 +233,7 @@ class World {
   generate() {
     this.caverns = this.genCaverns();
     this.wilds = this.genWilds();
+    this.backdrops = this.genBackdrops();
     this.radSources = this.genRadSources();
     for (let y = 0; y < MAP_H; y++)
       for (let x = 0; x < MAP_W; x++) {
@@ -204,6 +243,7 @@ class World {
         else if (this.inCave(x, y)) type = AIR;         // стартовый город
         else if (this.inCavern(x, y)) type = AIR;       // дружественные города
         else if (this.inWild(x, y)) type = AIR;         // дикие гнёзда (без фундамента — будущий рейд)
+        else if (this.inBackdrop(x, y)) type = AIR;     // большие пещеры-сцены с фоном-объектом
         else {
           type = ROCK;
           let crustHard = null;

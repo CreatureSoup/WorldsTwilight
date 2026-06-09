@@ -10,7 +10,7 @@ const ENEMY_SPEED = 2;     // тайла/сек (копатель/собират
 const ENEMY_DIG = 1.0;     // скорость бурения
 const FLOW_SCALE = 8;      // масштаб поля-потока (поиск без знания целей)
 const UP_BIAS = 0.6;       // тяга вверх (копатель роет «наружу» — к поверхности/городам)
-const DETECT_CITY_PAD = 4; // чутьё копателя на город — радиус обнаружения сверх размера каверны (тайлы)
+const DETECT_CITY_PAD = 6; // чутьё копателя на город — радиус обнаружения сверх размера каверны (тайлы; база → dr=14)
 const DETECT_RES = 2;      // радиус обнаружения ресурса собирателем (тайлы)
 const COLLECTOR_CAP = 6;   // потолок собирателей
 // Разведчик (боевая волна, фаза 5): быстрый, НЕ копает — бежит по готовым тоннелям
@@ -27,6 +27,7 @@ class Enemy {
     this.tileX = x; this.tileY = y;
     this.px = x * TILE + TILE / 2; this.py = y * TILE + TILE / 2;
     this.type = type;                 // 'digger' | 'collector' | 'raider'
+    this.maxHp = ENEMY_HP; this.hp = ENEMY_HP;   // прочность врага (задел под перехват/бой)
     this.speed = type === 'raider' ? RAIDER_SPEED : ENEMY_SPEED;
     this.homeX = homeX; this.homeY = homeY;
     this.homeR = homeR || 1;          // радиус «дома»: гнездо — открытая каверна, точный центр недостижим (клинг/гравитация)
@@ -34,6 +35,7 @@ class Enemy {
     this.target = null;              // {x,y} для goto, иначе null → блуждание
     this.carry = null;               // ресурс у собирателя
     this.draining = false; this.drainT = 0;  // разведчик у города: фаза «заполнения» перед кражей
+    this.scan = 0; this.scanned = false;      // прогресс сканирования врага игроком (0..1) → данные кодекса (разово)
     this.dead = false;
     this.state2 = IDLE; this.fromX = x; this.fromY = y; this.toX = x; this.toY = y; this.progress = 0;
     this.dx = 0; this.dy = 1; this.drilling = false;
@@ -45,32 +47,62 @@ class Enemy {
     this.recent = [];                // недавние тайлы (анти-петля: не кружить в полости)
   }
   startMove(nx, ny) { this.fromX = this.tileX; this.fromY = this.tileY; this.toX = nx; this.toY = ny; this.progress = 0; this.state2 = MOVING; }
+  damage(n) { this.hp -= n; if (this.hp <= 0) { this.hp = 0; this.dead = true; } }
   lerpAngle(a, b, t) { let d = ((b - a + Math.PI) % (2 * Math.PI)) - Math.PI; if (d < -Math.PI) d += 2 * Math.PI; return a + d * t; }
   anchoredAt(world, x, y) {
     return isSolid(world.tileAt(x - 1, y)) || isSolid(world.tileAt(x + 1, y))
         || isSolid(world.tileAt(x, y - 1)) || isSolid(world.tileAt(x, y + 1));
   }
   passable(world, dx, dy) {
-    const t = world.tileAt(this.tileX + dx, this.tileY + dy).type;
+    const ny = this.tileY + dy;
+    if (this.type === 'digger' && ny < DIGGER_MIN_Y) return false; // копатель не лезет в верхние слои-страты и на поверхность
+    const t = world.tileAt(this.tileX + dx, ny).type;
     if (t === ROCK) return this.type !== 'raider';                // разведчик НЕ копает — только по готовым ходам
     if (t === AIR) return this.type === 'raider' || this.anchoredAt(world, this.tileX + dx, this.tileY + dy); // разведчик лёгкий — летит по воздуху; прочим нужна опора
     return false;                                                 // неразрушимое/край
   }
-  // Блуждание (без цели): поток-шум + тяга вверх; предпочитаем ВОЗДУХ (идём по открытому
-  // пространству до края), затем копаем; не пятимся назад.
+  // Блуждание (без цели). КОПАТЕЛЬ ниже городского диапазона — поднимается в него; внутри —
+  // ГОРИЗОНТАЛЬНЫЙ СВИП (на торе обойдёт все X → найдёт города на любой долготе) с лёгким
+  // вертикальным дрейфом по шуму (охват глубин диапазона). Постоянная тяга вверх пинила копателя в
+  // локальный минимум у потолка, и города на других X не находились. Прочие враги — прежний flow-вандер.
   wanderDir(world) {
+    if (this.type === 'digger') {
+      if (this.tileY > DIGGER_MAX_Y) {
+        this.heading = this.lerpAngle(this.heading, -Math.PI / 2, 0.3);          // ниже диапазона — вверх в него
+      } else {
+        if (!this.sweepSign) this.sweepSign = (this.seed | 0) % 2 ? 1 : -1;       // постоянное направление свипа
+        // свип вбок + ТЯГА ВВЕРХ → лесенка снизу вверх по диапазону: охватывает все глубины (находит
+        // глубокие города по пути) и доходит до базы у потолка. Шум качает вертикаль → чередование
+        // «вбок/вверх» (а не прямая линия). Уперевшись в потолок (DIGGER_MIN_Y) — чисто вбок над базой.
+        // КРУТОЙ подъём к ВЕРХУ диапазона (там база), затем — горизонтальный свип у потолка
+        // (`DIGGER_MIN_Y`) по долготам до базы. Скорость бурения та же — путь лишь более вертикальный
+        // (меньше тайлов до верха), поэтому до базы доходит быстрее и стабильнее (меньше «лесенки» в середине).
+        const atTop = this.tileY <= DIGGER_MIN_Y + 4;
+        const vy = atTop ? (world.pnoise(this.tileX + this.seed, this.tileY, FLOW_SCALE) - 0.5) * 0.5 - 0.15  // у потолка — почти вбок (свип по долготам)
+                         : (world.pnoise(this.tileX + this.seed, this.tileY, FLOW_SCALE) - 0.5) * 0.65 - 1.10; // ниже — вверх (тюнинг: время до базы ≈ целевое окно)
+        this.heading = this.lerpAngle(this.heading, Math.atan2(vy, this.sweepSign), 0.3);
+      }
+      const hx = Math.cos(this.heading), hy = Math.sin(this.heading);
+      // heading — ГЛАВНЫЙ критерий (иначе анти-петля `seen` перебивала тягу и копатель не лез вверх по
+      // своему недавнему столбцу); rank() и так не даёт развернуться назад. `old` — слабый добор: не
+      // перерывать собственные ходы при равном направлении (расползание на новые глубины).
+      return this.rank(world, (dx, dy) => {
+        const tile = world.tileAt(wrapX(this.tileX + dx), this.tileY + dy);
+        const old = (tile.type === AIR && tile.dug) ? 1 : 0;
+        return [-(dx * hx + dy * hy), old];
+      });
+    }
     const f = world.pnoise(this.tileX + this.seed, this.tileY, FLOW_SCALE);
     this.heading = this.lerpAngle(this.heading, this.lerpAngle(f * 6.283, -Math.PI / 2, UP_BIAS), 0.25);
     const hx = Math.cos(this.heading), hy = Math.sin(this.heading);
-    // у корки бурим СКВОЗЬ неё (вверх к городам), а не вдоль: горизонталь штрафуем
     const nearCrust = this.tileY > SURFACE_ROWS && this.tileY <= CRUST_Y1 + 1;
     return this.rank(world, (dx, dy) => {
       const tx = wrapX(this.tileX + dx), ty = this.tileY + dy, tile = world.tileAt(tx, ty);
-      const along = nearCrust && dy === 0 ? 1 : 0;                // вдоль корки — хуже (роем сквозь, не вдоль)
-      const seen = this.recent.includes(tx + ',' + ty) ? 1 : 0;   // не топтаться по пройденному → выход из полости
-      const old = (tile.type === AIR && tile.dug) ? 1 : 0;        // прорытые ходы избегаем → роем новое (расползание)
+      const along = nearCrust && dy === 0 ? 1 : 0;
+      const seen = this.recent.includes(tx + ',' + ty) ? 1 : 0;
+      const old = (tile.type === AIR && tile.dug) ? 1 : 0;
       const air = tile.type === AIR ? 0 : 1;
-      return [along, seen, old, -(dx * hx + dy * hy), air];       // не-вдоль → новое → не-старый-ход → ПО HEADING → воздух
+      return [along, seen, old, -(dx * hx + dy * hy), air];
     });
   }
   // К цели (знаем координаты): по сокращению тороидальной дистанции; воздух в приоритете.

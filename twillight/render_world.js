@@ -7,35 +7,35 @@
 // — длинная мягкая тень-«труба», отброшенная НЕРОВНЫМ силуэтом породы (повторяет
 // рваную линию, а не сетку тайлов). На стенках — следы бура (горнопроходка).
 
-const GAP_HEX  = ['#2a2012', '#231d14', '#181620']; // тёмный фон между осколками
-const SHADES   = [
-  ['#5e4b2e', '#6b5535', '#776039'],
-  ['#4c4031', '#574a3a', '#615345'],
-  ['#393545', '#3f3a48', '#48434f'],
-];
-const BACK_HEX = ['#473a27', '#3e3526', '#2e2b37']; // дно хода: темнее породы, но светлее тьмы
-
-// Геологические зоны раньше переключались РЕЗКО на границах твёрдости (y=MAP_H/2,
-// 0.78·MAP_H) → на сетке проступал горизонтальный шов (особенно на ровном дне хода
-// под прожектором). Теперь цвет базы интерполируется НЕПРЕРЫВНО: переход размазан по
-// полосе `_LBAND` тайлов вокруг границы — шва нет. `layerFloat(y)` ∈ [0..2].
 function _hx(h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
-const GAP_RGB = GAP_HEX.map(_hx), BACK_RGB = BACK_HEX.map(_hx), SHADES_RGB = SHADES.map((r) => r.map(_hx));
-const _LB1 = MAP_H * 0.5, _LB2 = MAP_H * 0.78, _LBAND = 9;
-function layerFloat(y) {
-  const a = Math.max(0, Math.min(1, (y - (_LB1 - _LBAND)) / (2 * _LBAND)));
-  const b = Math.max(0, Math.min(1, (y - (_LB2 - _LBAND)) / (2 * _LBAND)));
-  return a + b;
+// Палитра породы по ГЛУБИНЕ всей колонки (стопы сверху вниз, привязаны к tileY). Нарратив-ось тороида:
+// ВВЕРХ — погребённая людская цивилизация, ТЁПЛЫЕ тона (пепел→ржавчина→завалы→перегной); город —
+// нейтральная земля; ВНИЗ — «внешняя сторона», ХОЛОДНЫЕ тона к фиолетовой бездне. Цвет интерполируется
+// НЕПРЕРЫВНО между стопами (нет резкого шва на сетке). `sh` — 3 тона булыжника (тёмный→средний→светлый).
+const _STRATA = [
+  { y:   4, back: '#564a3c', gap: '#2a2219', sh: ['#4a4034', '#675b48', '#897a62'] }, // пепел (зола поверхности)
+  { y:  24, back: '#613b20', gap: '#2c160b', sh: ['#5c3214', '#8c4c1e', '#c27a30'] }, // ржавчина (окислы)
+  { y:  50, back: '#574122', gap: '#261b0d', sh: ['#4a3a1c', '#6e562c', '#96763c'] }, // завал (спрессованные руины)
+  { y:  78, back: '#403a20', gap: '#1c190c', sh: ['#2e2c14', '#4c4824', '#6c6636'] }, // перегной (тёмно-оливковый)
+  { y: 102, back: '#473a27', gap: '#2a2012', sh: ['#5e4b2e', '#6b5535', '#776039'] }, // город — нейтральная тёплая земля
+  { y: 160, back: '#3f3a3a', gap: '#1d1c20', sh: ['#4c4031', '#574a3a', '#615345'] }, // средний — остывающий камень
+  { y: 215, back: '#34323f', gap: '#17161e', sh: ['#393545', '#3f3a48', '#48434f'] }, // глубокий — холодный сине-серый
+  { y: 262, back: '#2c2742', gap: '#140f22', sh: ['#2e2842', '#3a3358', '#4c4080'] }, // бездна — фиолетовый «космос»
+].map((s) => ({ y: s.y, back: _hx(s.back), gap: _hx(s.gap), sh: s.sh.map(_hx) }));
+
+const _stratMemo = [];
+function _strat(y) {
+  const yi = y < 0 ? 0 : (y >= MAP_H ? MAP_H - 1 : y | 0);
+  const hit = _stratMemo[yi]; if (hit) return hit;
+  const S = _STRATA; let i = 0; while (i < S.length - 2 && yi > S[i + 1].y) i++;
+  const A = S[i], B = S[i + 1], t = Math.max(0, Math.min(1, (yi - A.y) / (B.y - A.y)));
+  const lerp = (a, b) => `rgb(${Math.round(a[0] + (b[0] - a[0]) * t)},${Math.round(a[1] + (b[1] - a[1]) * t)},${Math.round(a[2] + (b[2] - a[2]) * t)})`;
+  const m = { back: lerp(A.back, B.back), gap: lerp(A.gap, B.gap), sh: [lerp(A.sh[0], B.sh[0]), lerp(A.sh[1], B.sh[1]), lerp(A.sh[2], B.sh[2])] };
+  _stratMemo[yi] = m; return m;
 }
-function _palAt(rgb, lf) { const i = Math.max(0, Math.min(rgb.length - 2, Math.floor(lf))), f = lf - i, A = rgb[i], B = rgb[i + 1];
-  return `rgb(${Math.round(A[0] + (B[0] - A[0]) * f)},${Math.round(A[1] + (B[1] - A[1]) * f)},${Math.round(A[2] + (B[2] - A[2]) * f)})`; }
-function backColor(y) { const lf = layerFloat(y); return lf === (lf | 0) ? BACK_HEX[lf] : _palAt(BACK_RGB, lf); }   // быстрый путь вне полос перехода
-function gapColor(y)  { const lf = layerFloat(y); return lf === (lf | 0) ? GAP_HEX[lf] : _palAt(GAP_RGB, lf); }
-function shadeColor(tone, y) {
-  const lf = layerFloat(y); if (lf === (lf | 0)) return SHADES[lf][tone];
-  const i = Math.min(1, lf | 0), f = lf - i, A = SHADES_RGB[i][tone], B = SHADES_RGB[i + 1][tone];
-  return `rgb(${Math.round(A[0] + (B[0] - A[0]) * f)},${Math.round(A[1] + (B[1] - A[1]) * f)},${Math.round(A[2] + (B[2] - A[2]) * f)})`;
-}
+function backColor(y)  { return _strat(y).back; }
+function gapColor(y)   { return _strat(y).gap; }
+function shadeColor(tone, y) { return _strat(y).sh[tone]; }
 
 function tileHash(x, y) {
   let h = (x * 374761393 + y * 668265263) | 0;
@@ -341,6 +341,22 @@ function drawTunnelShadow(ctx, world, camera, ox, oy, x0, y0, x1, y1) {
   ctx.restore();
 }
 
+// Ассет города игрока (грузится через new Image → работает и на file://). Рисуется на фундаменте.
+const _cityImg = new Image(); _cityImg.src = 'assets/aztec_city/aztec_city.png';
+function _cityReady() { return _cityImg.complete && _cityImg.naturalWidth > 0; }
+// Город сидит НА фундаменте (INDESTRUCT-плита под принтером, x: PRINTER.x-1 .. PRINTER.x+PRINTER.w):
+// ширина вписана в фундамент, низ — на полу, где стоит юнит (верх плиты = (CAVE_FLOOR_Y+1)·TILE).
+function drawPlayerCity(ctx, camera, oy) {
+  if (!_cityReady()) return;
+  const fw = (PRINTER.w + 2) * TILE;                                   // ширина фундамента (5 тайлов)
+  const s = fw / _cityImg.naturalWidth, dw = fw, dh = _cityImg.naturalHeight * s;
+  const cx = camera.screenX((PRINTER.x + PRINTER.w / 2) * TILE);        // центр фундамента/принтера
+  const baseY = (CAVE_FLOOR_Y + 1) * TILE - oy;                        // пол базы (низ города на нём)
+  ctx.save(); ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(_cityImg, cx - dw / 2, baseY - dh, dw, dh);
+  ctx.restore();
+}
+
 function drawWorld(ctx, world, unit, camera, debug) {
   const W = camera.viewW, H = camera.viewH;
   const ox = Math.round(camera.x), oy = Math.round(camera.y);
@@ -421,12 +437,7 @@ function drawWorld(ctx, world, unit, camera, debug) {
   ctx.strokeStyle = 'rgba(120,160,200,0.35)';
   ctx.beginPath(); ctx.moveTo(0, surfaceY + 0.5); ctx.lineTo(W, surfaceY + 0.5); ctx.stroke();
 
-  const prx = camera.screenX((PRINTER.x + PRINTER.w / 2) * TILE) - PRINTER.w * TILE / 2;
-  const pry = PRINTER.y * TILE - oy;
-  ctx.fillStyle = '#2e6f8e';
-  ctx.fillRect(prx, pry, PRINTER.w * TILE, PRINTER.h * TILE);
-  ctx.strokeStyle = '#7fd7ff';
-  ctx.strokeRect(prx + 0.5, pry + 0.5, PRINTER.w * TILE - 1, PRINTER.h * TILE - 1);
+  drawPlayerCity(ctx, camera, oy);   // ассет города на фундаменте (заменяет плейсхолдер-принтер; коорд. PRINTER ещё нужны для интро/atBase)
 
   drawCityMarkers(ctx, world, camera, debug);
   drawWildMarkers(ctx, world, camera, debug);

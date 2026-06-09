@@ -54,12 +54,12 @@ function metaDomEnsure() {
   const root = document.createElement('div'); root.id = 'metaScreen'; root.style.backgroundImage = 'var(--scanlines)'; root.style.background = 'var(--pit)';
   root.innerHTML = `
     <header style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;padding:16px 24px;border-bottom:1px solid var(--bronze);background:linear-gradient(180deg,var(--pit),rgba(13,10,14,0.55));z-index:30">
-      <div>
-        <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px;white-space:nowrap">
-          <span style="font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:var(--gold);text-transform:uppercase">META · v5</span>
-          <span id="mtBack" style="font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;color:var(--pewter);text-transform:uppercase;border-bottom:1px dashed var(--carbon);cursor:pointer">← назад · ESC</span>
+      <div style="display:flex;align-items:center;gap:14px">
+        <button id="mtBack" class="mt-back" title="Назад · ESC" aria-label="Назад"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M13 5 L6 12 L13 19 M6 12 H20"/></svg></button>
+        <div>
+          <div style="margin-bottom:6px;white-space:nowrap"><span style="font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:var(--gold);text-transform:uppercase">META · v5</span></div>
+          <h1 style="font-family:var(--font-display);font-size:32px;font-weight:800;text-transform:uppercase;letter-spacing:-0.03em;color:var(--chalk);line-height:0.92;margin:0">Сеть <span style="color:var(--gold)">памяти</span></h1>
         </div>
-        <h1 style="font-family:var(--font-display);font-size:32px;font-weight:800;text-transform:uppercase;letter-spacing:-0.03em;color:var(--chalk);line-height:0.92;margin:0">Сеть <span style="color:var(--gold)">памяти</span></h1>
       </div>
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
         <div style="position:relative;display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--night);border:1px solid var(--gold)">

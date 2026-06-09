@@ -110,7 +110,7 @@ function drawMainMenu(ctx, save, buttons, W, H) {
   // низ: PCB-пальцы + serial-полоса
   edgeFingers(ctx, W / 2 - 120, H - 12, 240, 24, PAL.goldDim);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
-  ctx.fillText('ENTER · ПОДТВЕРДИТЬ', 16, H - 14);
+  ctx.fillText('WASD · ВЫБОР   ПРОБЕЛ/ENTER · ПОДТВЕРДИТЬ', 16, H - 14);
   ctx.textAlign = 'right'; ctx.fillStyle = PAL.toxic; ctx.fillText('SKVERNA · 0.2 r/s', W - 16, H - 14);
   ctx.textAlign = 'left';
 }
@@ -153,6 +153,25 @@ function _panelCorners(ctx, x, y, w, h, col, s) {
 
 // Финальный экран: пересчёт метрик забега в МЕГА-ТОКЕНЫ с АНИМИРОВАННЫМИ счётчиками в РАМКЕ-панели
 // (строки набегают по очереди: значение × коэф = токены), итог в токен-бейдже + банк копятся.
+// Значок МЕГА-ТОКЕНА на canvas — 1:1 как `_mtToken` в meta_dom (гекс + внутр.квадрат + ядро + спицы),
+// чтобы иконка на gameover совпадала с экраном мета-прогресса. viewBox 32×32 (центр 16) → (cx,cy,r).
+function drawMetaToken(ctx, cx, cy, r) {
+  const f = r / 16, X = (v) => cx + (v - 16) * f, Y = (v) => cy + (v - 16) * f;
+  ctx.save();
+  ctx.beginPath();
+  [[16, 3], [27, 9.5], [27, 22.5], [16, 29], [5, 22.5], [5, 9.5]].forEach((p, i) => { const x = X(p[0]), y = Y(p[1]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(212,160,66,0.18)'; ctx.fill();
+  ctx.strokeStyle = PAL.gold; ctx.lineWidth = Math.max(1, 1.6 * f); ctx.stroke();
+  ctx.lineWidth = Math.max(1, 1.4 * f); ctx.strokeRect(X(11), Y(11), 10 * f, 10 * f);
+  ctx.fillStyle = PAL.gold; ctx.beginPath(); ctx.arc(cx, cy, 2 * f, 0, 6.283); ctx.fill();
+  ctx.lineWidth = Math.max(1, 1.2 * f); ctx.beginPath();
+  const seg = (a, b, c, d) => { ctx.moveTo(X(a), Y(b)); ctx.lineTo(X(c), Y(d)); };
+  seg(16, 3, 16, 7); seg(16, 25, 16, 29); seg(5, 9.5, 8.5, 11.5); seg(23.5, 11.5, 27, 9.5); seg(5, 22.5, 8.5, 20.5); seg(23.5, 20.5, 27, 22.5);
+  ctx.stroke();
+  ctx.restore();
+}
+
 // meta = { rows:[{label,accent,value,coef,tokens}], total }; overT — таймер; bank — банк ПОСЛЕ зачисления.
 function drawGameOver(ctx, buttons, W, H, reason, meta, overT, bank) {
   meta = meta || { rows: [], total: 0 }; overT = overT || 0; bank = bank || 0;
@@ -205,9 +224,7 @@ function drawGameOver(ctx, buttons, W, H, reason, meta, overT, bank) {
   const bY = divY + 14, bH = py + ph - bY - 14;
   ctx.fillStyle = 'rgba(44,32,12,0.55)'; ctx.fillRect(px + 10, bY, pw - 20, bH);
   const tcx = px + 36, tcy = bY + bH / 2;
-  ctx.beginPath(); ctx.moveTo(tcx, tcy - 15); ctx.lineTo(tcx + 15, tcy); ctx.lineTo(tcx, tcy + 15); ctx.lineTo(tcx - 15, tcy); ctx.closePath();
-  ctx.strokeStyle = PAL.gold; ctx.lineWidth = 1.6; ctx.stroke();
-  ctx.fillStyle = PAL.goldBright; ctx.beginPath(); ctx.arc(tcx, tcy, 4, 0, 6.283); ctx.fill();
+  drawMetaToken(ctx, tcx, tcy, 16);   // тот же значок МТ, что в мета-прогрессе
   ctx.textAlign = 'left'; ctx.font = `10px ${FONT_MONO}`; ctx.fillStyle = PAL.bone; ctx.fillText('ИТОГО ЗА ЗАБЕГ', tcx + 26, bY + 22);
   const dispBank = (bank - meta.total) + shownTotal;
   ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.toxic; ctx.fillText(`В БАНКЕ: ${dispBank} ${META_ABBR}`, tcx + 26, bY + bH - 12);

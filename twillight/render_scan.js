@@ -56,61 +56,84 @@ function _drawJunk(ctx, x, y, t, done) {
 
 // Лучи сканера + трассировка (Oblivion): от модуля сканера к хламу, пока game.activeScan активен.
 // Рисуется ПОСЛЕ юнита (поверх). game — для unit/activeScan/debugTentacles.
-function drawScanFx(ctx, game, camera) {
-  const s = game.activeScan; if (!s || !game.unit) return;
-  const t = performance.now() / 1000;
-  const tx = camera.screenX((s.tx + 0.5) * TILE), ty = (s.ty + 0.5) * TILE - camera.y;
+// апекс конуса/лучей — РОВНО модуль сканера. В блупринте кольца его kind — 'sensor'
+// (а 'scanner' — лишь флаг-стат need), поэтому ищем 'sensor', иначе src падал в центр юнита.
+function _scanSrc(game, camera) {
   const bo = (typeof tentacleBodyOffset === 'function' && game.debugTentacles) ? tentacleBodyOffset() : { x: 0, y: 0 };
-  // Апекс конуса/лучей — РОВНО модуль сканера. В блупринте кольца его kind — 'sensor'
-  // (а 'scanner' — лишь флаг-стат need), поэтому ищем 'sensor', иначе src падал в центр юнита.
-  const src = (typeof ringModuleScreenPos === 'function')
+  return (typeof ringModuleScreenPos === 'function')
     ? ringModuleScreenPos(game.unit, camera, 'sensor', bo)
     : { x: camera.screenX(game.unit.px) + bo.x, y: game.unit.py - camera.y + bo.y };
+}
 
-  const r = 14;                                  // полугабарит цели
-  // Геометрия конуса: апекс — у излучателя (src), раствор подобран так, чтобы накрыть объект (±r).
-  const dx = tx - src.x, dy = ty - src.y, dist = Math.hypot(dx, dy) || 1;
-  const baseAng = Math.atan2(dy, dx);
-  const half = Math.min(0.6, Math.atan2(r, dist) * 1.25);   // полураствор; clamp на случай близкого src
-  const reach = dist + r, aMin = baseAng - half, aMax = baseAng + half;
-  // Контакт ходит ОТ КРАЯ ДО КРАЯ по углу конуса (sin → разворот у краёв, как механический скан).
-  const ray = (ang, dim, w) => { ctx.strokeStyle = dim; ctx.lineWidth = w;
-    ctx.beginPath(); ctx.moveTo(src.x, src.y); ctx.lineTo(src.x + Math.cos(ang) * reach, src.y + Math.sin(ang) * reach); ctx.stroke(); };
-
+// Конус + трассирующие лучи + пятно контакта ОТ модуля сканера (src) к цели (tx,ty), r — полугабарит.
+// Общий для скана серверов и пещер-сцен (привязка к ассету). Рисуется ПОСЛЕ юнита.
+function drawScanBeam(ctx, src, tx, ty, t, r) {
+  r = r || 14;
+  const dx = tx - src.x, dy = ty - src.y, dist = Math.hypot(dx, dy) || 1, baseAng = Math.atan2(dy, dx);
+  const half = Math.min(0.7, Math.atan2(r, dist) * 1.25), reach = dist + r, aMin = baseAng - half, aMax = baseAng + half;
+  const ray = (ang, dim, w) => { ctx.strokeStyle = dim; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(src.x, src.y); ctx.lineTo(src.x + Math.cos(ang) * reach, src.y + Math.sin(ang) * reach); ctx.stroke(); };
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-
-  // 0) ПОДСВЕТКА ОБЪЕКТА цветом скана (пульс) — хлам «горит» под лучом, пока качаются данные
-  const pul = 0.5 + 0.5 * Math.sin(t * 4.5);
-  const og = ctx.createRadialGradient(tx, ty, 1, tx, ty, 15);
-  og.addColorStop(0, `rgba(95,170,240,${0.30 + 0.18 * pul})`); og.addColorStop(1, 'rgba(95,170,240,0)');
-  ctx.fillStyle = og; ctx.beginPath(); ctx.arc(tx, ty, 15, 0, 6.283); ctx.fill();
-  ctx.fillStyle = `rgba(120,190,250,${0.22 + 0.12 * pul})`;   // силуэт хлама (тот же контур, что в _drawJunk)
-  ctx.beginPath(); ctx.moveTo(tx - 10, ty + 6); ctx.lineTo(tx - 4, ty - 4); ctx.lineTo(tx + 3, ty - 2); ctx.lineTo(tx + 10, ty + 6); ctx.closePath(); ctx.fill();
-
-  // 1) ПОЛУПРОЗРАЧНЫЙ объёмный КОНУС света от излучателя к объекту (мягкий, гаснет к краю)
   ctx.beginPath();
-  ctx.moveTo(src.x, src.y);
-  ctx.lineTo(src.x + Math.cos(aMin) * reach, src.y + Math.sin(aMin) * reach);
-  ctx.arc(src.x, src.y, reach, aMin, aMax);
-  ctx.closePath();
+  ctx.moveTo(src.x, src.y); ctx.lineTo(src.x + Math.cos(aMin) * reach, src.y + Math.sin(aMin) * reach); ctx.arc(src.x, src.y, reach, aMin, aMax); ctx.closePath();
   const cone = ctx.createRadialGradient(src.x, src.y, 2, src.x, src.y, reach);
   cone.addColorStop(0, 'rgba(95,165,238,0.16)'); cone.addColorStop(0.65, 'rgba(80,150,228,0.13)'); cone.addColorStop(1, 'rgba(70,140,220,0)');
   ctx.fillStyle = cone; ctx.fill();
-
-  // 2) тусклые объёмные лучи-стрики ВНУТРИ конуса (статичные — «пыльный свет» в луче)
   for (let k = -1; k <= 1.001; k += 0.5) ray(baseAng + k * half * 0.9, 'rgba(120,180,240,0.09)', 1);
-
-  // 3) ЯРКИЕ ТРАССИРУЮЩИЕ лучи ходят от края до края (главный + второй в противофазе)
   const ang = baseAng + Math.sin(t * 2.0) * half;
   ray(ang, 'rgba(120,185,255,0.30)', 4);
   ray(ang, `rgba(175,218,255,${0.6 + 0.25 * (0.5 + 0.5 * Math.sin(t * 11))})`, 1.6);
   ray(baseAng + Math.sin(t * 2.0 + 2.1) * half * 0.85, 'rgba(150,200,255,0.20)', 1.2);
-
-  // 4) пятно контакта главного луча — бежит по объекту от края до края
   const ex = src.x + Math.cos(ang) * dist, ey = src.y + Math.sin(ang) * dist;
   const sp = ctx.createRadialGradient(ex, ey, 0.5, ex, ey, 7);
   sp.addColorStop(0, 'rgba(212,236,255,0.95)'); sp.addColorStop(1, 'rgba(120,180,255,0)');
   ctx.fillStyle = sp; ctx.beginPath(); ctx.arc(ex, ey, 7, 0, 6.283); ctx.fill();
   ctx.restore();
+}
+
+// Лучи сканера к серверу-хламу, пока game.activeScan активен. Рисуется ПОСЛЕ юнита (поверх).
+function drawScanFx(ctx, game, camera) {
+  const s = game.activeScan; if (!s || !game.unit) return;
+  const t = performance.now() / 1000;
+  const tx = camera.screenX((s.tx + 0.5) * TILE), ty = (s.ty + 0.5) * TILE - camera.y;
+  const src = _scanSrc(game, camera);
+  // подсветка объекта (хлам «горит» под лучом)
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const pul = 0.5 + 0.5 * Math.sin(t * 4.5);
+  const og = ctx.createRadialGradient(tx, ty, 1, tx, ty, 15);
+  og.addColorStop(0, `rgba(95,170,240,${0.30 + 0.18 * pul})`); og.addColorStop(1, 'rgba(95,170,240,0)');
+  ctx.fillStyle = og; ctx.beginPath(); ctx.arc(tx, ty, 15, 0, 6.283); ctx.fill();
+  ctx.fillStyle = `rgba(120,190,250,${0.22 + 0.12 * pul})`;
+  ctx.beginPath(); ctx.moveTo(tx - 10, ty + 6); ctx.lineTo(tx - 4, ty - 4); ctx.lineTo(tx + 3, ty - 2); ctx.lineTo(tx + 10, ty + 6); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  drawScanBeam(ctx, src, tx, ty, t, 14);
+}
+
+// Лучи сканера к сканируемому ВРАГУ (game.scanEnemy), пока он в радиусе. Подсветка цели + общий конус.
+function drawEnemyScanFx(ctx, game, camera) {
+  const e = game.scanEnemy; if (!e || !game.unit) return;
+  const t = performance.now() / 1000;
+  const tx = camera.screenX((e.tileX + 0.5) * TILE), ty = (e.tileY + 0.5) * TILE - camera.y;
+  const src = _scanSrc(game, camera);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const pul = 0.5 + 0.5 * Math.sin(t * 4.5);
+  const og = ctx.createRadialGradient(tx, ty, 1, tx, ty, 14);
+  og.addColorStop(0, `rgba(95,170,240,${0.26 + 0.16 * pul})`); og.addColorStop(1, 'rgba(95,170,240,0)');
+  ctx.fillStyle = og; ctx.beginPath(); ctx.arc(tx, ty, 14, 0, 6.283); ctx.fill();
+  ctx.restore();
+  drawScanBeam(ctx, src, tx, ty, t, 12);
+}
+
+// Луч сканера к ОБЪЕКТУ пещеры-сцены, пока идёт объёмный скан (`b.scanning`). Привязка к ассету:
+// целимся в верх-центр объекта, полугабарит ∝ размеру пещеры. Рисуется ПОСЛЕ юнита.
+function drawBackdropScan(ctx, game, camera) {
+  const w = game.world; if (!w || !w.backdrops || !game.unit) return;
+  let b = null; for (const x of w.backdrops) if (x.scanning) { b = x; break; }
+  if (!b) return;
+  const t = performance.now() / 1000, src = _scanSrc(game, camera);
+  // целимся в РЕАЛЬНЫЙ центр ассета (стэшится render_backdrop._bdDrawRobot); фолбэк — центр полости
+  const tx = (b._astX != null) ? b._astX : camera.screenX((b.cx + 0.5) * TILE);
+  const ty = (b._astY != null) ? b._astY : ((b.cy + 0.5) * TILE - camera.y);
+  const r = (b._astR != null) ? b._astR : Math.min(52, b.rx * TILE * 0.5);
+  drawScanBeam(ctx, src, tx, ty, t, r);
 }

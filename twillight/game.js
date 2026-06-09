@@ -16,8 +16,11 @@ class Game {
     this.upgrades = new Upgrades();
     this.save = loadSave();
     if (typeof metaBindSave === 'function') metaBindSave(this.save);   // metaHas(id) для эффектов узлов в забеге
+    if (typeof codexBindSave === 'function') codexBindSave(this.save);  // персист кодекса (диски/глоссарий) в save.codex
 
     this.mode = 'menu';
+    this.menuSel = 0;        // выбранная кнопка меню (WASD/стрелки + мышь); Space/Enter — нажать
+    this._modePrev = null;   // смена режима → сброс menuSel
     this.world = null;
     this.unit = null;
     this.city = null;
@@ -69,7 +72,11 @@ class Game {
       // во время забега инвентарь не открывается — сборка модулей только перед стартом
     });
     this.canvas.addEventListener('mousemove', (e) => {
-      const p = pos(e); this.menuMouse = p;            // ховер кнопок меню/паузы/гейм-овера
+      const p = pos(e); this.menuMouse = p;            // мышь двигает тот же курсор выбора, что и WASD
+      if (this.mode === 'menu' || this.mode === 'paused' || this.mode === 'gameover') {
+        const bs = this.menuButtons();
+        for (let i = 0; i < bs.length; i++) { const b = bs[i]; if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) { this.menuSel = i; break; } }
+      }
       if (this.mode === 'inventory') this.inventory.pointerMove(p.x, p.y);
       else if (this.mode === 'upgrades') this.upgrades.pointerMove(p.x, p.y);
     });
@@ -99,8 +106,9 @@ class Game {
       // вертикальный список (menuLine) внизу-справа — не перекрывает заголовок/сюжет/директивы
       const lw = 340, lx = W - 48 - lw, bh = 46, mt = (this.save && this.save.meta) || 0;
       bs = [
-        { id: 'start', label: 'Новый забег', desc: 'seed · random', x: lx, y: H - 132, w: lw, h: bh, primary: true },
-        { id: 'progress', label: 'Прогресс', desc: 'сеть памяти · ' + mt + ' МТ', x: lx, y: H - 132 + 54, w: lw, h: bh },
+        { id: 'start', label: 'Новый забег', desc: 'seed · random', x: lx, y: H - 186, w: lw, h: bh, primary: true },
+        { id: 'progress', label: 'Прогресс', desc: 'сеть памяти · ' + mt + ' МТ', x: lx, y: H - 132, w: lw, h: bh },
+        { id: 'database', label: 'База данных', desc: 'кодекс · глоссарий', x: lx, y: H - 78, w: lw, h: bh },
       ];
     } else if (this.mode === 'paused') {
       const y0 = H / 2 - 60;
@@ -113,9 +121,19 @@ class Game {
       const bw = 220, bh = 42;
       bs = [{ id: 'mainmenu', label: 'В меню · ENTER', x: W - 48 - bw, y: H - 56, w: bw, h: bh, primary: true }];
     }
-    const m = this.menuMouse;
-    if (m) for (const b of bs) b.hover = m.x >= b.x && m.x <= b.x + b.w && m.y >= b.y && m.y <= b.y + b.h;
+    // подсветка = выбранная кнопка (общий курсор для мыши и WASD/стрелок)
+    this.menuSel = Math.max(0, Math.min(bs.length - 1, this.menuSel));
+    bs.forEach((b, i) => { b.hover = i === this.menuSel; });
     return bs;
+  }
+
+  // навигация по меню с клавиатуры: WASD/стрелки — выбор, Space/Enter — нажать
+  menuNav() {
+    const bs = this.menuButtons();
+    if (!bs.length) return;
+    if (this.input.pressed('KeyW', 'ArrowUp', 'KeyA', 'ArrowLeft')) this.menuSel = (this.menuSel - 1 + bs.length) % bs.length;
+    else if (this.input.pressed('KeyS', 'ArrowDown', 'KeyD', 'ArrowRight')) this.menuSel = (this.menuSel + 1) % bs.length;
+    if (this.input.pressed('Space', 'Enter', 'NumpadEnter')) { const b = bs[Math.min(this.menuSel, bs.length - 1)]; if (b) this.doMenuAction(b.id); }
   }
 
   menuClick(x, y) {
@@ -126,6 +144,7 @@ class Game {
   doMenuAction(id) {
     if (id === 'start') this.openInventory(true);
     else if (id === 'progress') { this.mode = 'progress'; if (typeof metaDomShow === 'function') metaDomShow(this); }   // экран — DOM-оверлей (meta_dom.js)
+    else if (id === 'database') { this.mode = 'database'; if (typeof codexDomShow === 'function') codexDomShow(this); }  // экран — DOM-оверлей (codex_dom.js)
     else if (id === 'resume') this.mode = 'playing';
     else if (id === 'inventory') this.openInventory(false);
     else if (id === 'restart') { this.endRun(); this.openInventory(true); }
@@ -154,6 +173,10 @@ class Game {
     this.city = new City();
     this.loot = new Loot();
     this.falling = new FallingRocks();   // нестабильная порода → падающие валуны
+    if (typeof Visions === 'function') this.visions = new Visions();   // призрачные видения в темноте
+    if (typeof Hints === 'function') this.hints = new Hints();         // крупные сюжетные подсказки
+    this._depthFired = new Set();                                      // какие отсечки высоты уже показаны
+    this._discDone = false; this._discT = 0;                           // состояние опроса находок (сброс на забег)
     this.fx.clear();
     this.cycle.reset();
     this.enemies = [];
@@ -183,6 +206,7 @@ class Game {
     this.dugTiles = 0;        // проходка за забег: счётчик прокопанных тайлов
     this.eventLog = [];       // лог крупных событий (таймстэмп = цикл сессии) — виджет справа внизу
     this.activeScan = null;   // сервер-хлам, который сейчас сканируется (для прогресс-бара/лучей)
+    this.scanEnemy = null;    // вражеский юнит, который сейчас сканируется (данные кодекса)
     this._scanDoneT = 0;      // таймер надписи «ДАННЫЕ ИЗВЛЕЧЕНЫ» после выкачки
     this.dataCount = 0;       // извлечено серверов данных за забег (вход в мета-пересчёт)
     this.directivesDone = 0;  // выполнено директив за забег (задел: система директив ещё впереди)
@@ -237,10 +261,95 @@ class Game {
     }
     if (active) {
       active.data = Math.min(1, active.data + dt / SCAN_TIME);
-      if (active.data >= 1) { active.done = true; this.dataCount++; this.logEvent('НАЙДЕНЫ НОВЫЕ ДАННЫЕ'); this._scanDoneT = 2.4; active = null; }
+      if (active.data >= 1) {
+        active.done = true; this.dataCount++; this.logEvent('НАЙДЕНЫ НОВЫЕ ДАННЫЕ');
+        // извлечённые данные → фрагмент(ы) текущего диска кодекса + попап на месте кольца скана.
+        // Попап заменяет HUD-надпись «ДАННЫЕ ИЗВЛЕЧЕНЫ» (потому _scanDoneT=0); если диск уже полон
+        // (попапа нет) — оставляем обычную HUD-надпись на 2.4с.
+        let popped = false;
+        if (typeof codexGainData === 'function') { const r = codexGainData(CODEX_DATA_PER_SCAN); if (r && typeof codexPopupShow === 'function') { codexPopupShow(r, this._codexAnchor()); popped = true; } }
+        this._scanDoneT = popped ? 0 : 2.4;
+        active = null;
+      }
     }
     this.activeScan = active;
     if (this._scanDoneT > 0) this._scanDoneT -= dt;
+  }
+
+  // Скан вражеского юнита (копателя и др.): враг в радиусе сканера накапливает прогресс →
+  // по завершении даёт фрагмент данных в кодекс (разово на юнит) + лог + глоссарий. Цель движется —
+  // вне радиуса прогресс паузится (как у серверов). Конус/луч рисует render_scan.drawEnemyScanFx.
+  updateEnemyScan(dt) {
+    if (!this.world || !this.unit || !this.enemies) return;
+    let active = null, best = Infinity;
+    for (const e of this.enemies) {
+      if (e.scanned) continue;
+      const dx = wrapDeltaPx(this.unit.px, (e.tileX + 0.5) * TILE), dy = this.unit.py - (e.tileY + 0.5) * TILE;
+      const d = Math.hypot(dx, dy);
+      if (d <= SCAN_RADIUS * TILE && d < best) { best = d; active = e; }
+    }
+    if (active) {
+      active.scan = Math.min(1, active.scan + dt / SCAN_TIME);
+      if (active.scan >= 1) {
+        active.scanned = true; this.dataCount++; this.logEvent('СКАНИРОВАН ВРАЖЕСКИЙ ЮНИТ');
+        this.discover('unit');   // глоссарий: вражеские юниты
+        if (typeof codexGainData === 'function') { const r = codexGainData(CODEX_DATA_PER_SCAN); if (r && typeof codexPopupShow === 'function') codexPopupShow(r, this._codexAnchor()); }
+        active = null;
+      }
+    }
+    this.scanEnemy = active;
+  }
+
+  // CSS-якорь попапа кодекса = центр HUD-кольца скана (SCAN_RING в design → CSS через coordScale),
+  // чтобы диск появился РОВНО на месте кольца и того же размера.
+  _codexAnchor() {
+    const cs = this.coordScale || 1;
+    return { right: SCAN_RING.dx / cs, bottom: SCAN_RING.dy / cs, size: (SCAN_RING.r * 2 + 14) / cs };
+  }
+
+  // ОДНОРАЗОВО: открыть запись глоссария категории + лог + крупная подсказка. Возвращает false,
+  // если глоссарий категории УЖЕ исчерпан (нечего открывать) — чтобы caller перестал опрашивать.
+  discover(cat) {
+    if (typeof codexDiscoverCat !== 'function') return false;
+    const e = codexDiscoverCat(cat); if (!e) return false;
+    this.logEvent('ОБНАРУЖЕНО · ' + e.name.toUpperCase());
+    const HT = { server: 'СИГНАЛ', wild: 'РОЙ', sleep: 'СПЯЩИЙ ГОРОД', unit: 'ЧУЖОЙ', cave: 'КУЛЬТ. СЛОЙ', remains: 'ОСТОВ' };
+    if (this.hints) this.hints.show(HT[cat] || 'НАХОДКА');
+    return true;
+  }
+  // Детект первых встреч + подсказки по высоте. ОПТИМИЗИРОВАНО: опрос ~5/сек (не каждый кадр),
+  // пропуск исчерпанных категорий (`_discEx`) и замеченных объектов (`o._noticed`); когда всё открыто
+  // и все отсечки пройдены — флаг `_discDone` отключает опрос совсем (нулевая фоновая цена).
+  checkDiscoveries(dt) {
+    if (this._discDone) return;
+    if ((this._discT = (this._discT || 0) + dt) < 0.2) return; this._discT = 0;
+    const w = this.world, u = this.unit; if (!w || !u) return;
+    const exh = (typeof codexCatExhausted === 'function') ? codexCatExhausted : () => false;
+    const scan = (cat, list, kx, ky) => { if (!list || exh(cat)) return; for (const o of list) if (!o._noticed && w.isSeen(o[kx], o[ky])) { o._noticed = true; this.discover(cat); } };
+    scan('server', w.servers, 'tx', 'ty');
+    scan('wild', w.wilds, 'cx', 'cy');
+    scan('sleep', w.caverns, 'cx', 'cy');
+    scan('unit', this.enemies, 'tileX', 'tileY');
+    for (let i = 0; i < HINT_DEPTHS.length; i++) if (!this._depthFired.has(i) && u.tileY <= HINT_DEPTHS[i].y) { this._depthFired.add(i); if (this.hints) this.hints.show(HINT_DEPTHS[i].text); }
+    if (exh('server') && exh('wild') && exh('sleep') && exh('unit') && this._depthFired.size >= HINT_DEPTHS.length) this._discDone = true;
+  }
+  // вход в пещеру-сцену → объёмный сканер (свип) → извлечение данных в кодекс (разово)
+  updateBackdrops(dt) {
+    const w = this.world, u = this.unit; if (!w || !w.backdrops || !u) return;
+    for (const b of w.backdrops) {
+      if (b.scanned) { b.reveal = 1; continue; }
+      if (b.scanning) {
+        b.sweepT = Math.min(1, b.sweepT + dt / BACKDROP_SWEEP); b.reveal = b.sweepT;
+        if (b.sweepT >= 1) { b.scanning = false; b.scanned = true; b.reveal = 1; this._backdropDone(b); }
+      } else if (w.inEllipseList(u.tileX, u.tileY, [b])) {
+        b.scanning = true; b.sweepT = 0; this.logEvent('ОБЪЁМНЫЙ СКАН ПЕЩЕРЫ');
+      }
+    }
+  }
+  _backdropDone(b) {
+    this.discover('cave');   // глоссарий: пещера · культ.слой
+    if (typeof codexGainData === 'function') { const r = codexGainData(BACKDROP_DATA); if (r && typeof codexPopupShow === 'function') codexPopupShow(r, this._codexAnchor()); }
+    this.logEvent('ДАННЫЕ ИЗ ПЕЩЕРЫ ИЗВЛЕЧЕНЫ');
   }
 
   // AI диких гнёзд (спавн волн + поведение врагов + airPath) вынесен в ai.js —
@@ -275,6 +384,13 @@ class Game {
       drawFog(ctx, this.world, this.unit, this.camera, this.designW, this.designH);
       drawHeadlight(ctx, this.world, this.unit, this.camera, this.designW, this.designH);   // прожектор-конус у бура (тьма вокруг), с тенями от породы
     }
+    // фон пещер-сцен — поверх тумана, клип по воздуху пещеры (под юнитом/видениями)
+    if (!this.debug && typeof drawBackdrops === 'function') drawBackdrops(ctx, this.world, this.unit, this.camera, this.designW, this.designH);
+    // видения в темноте — поверх тумана (в неосвещённой части), ПОД юнитом/валунами (они на переднем плане);
+    // щупальцам нужна экранная позиция юнита (тянутся к нему)
+    if (this.mode === 'playing' && !this.debug && this.visions && typeof drawVisions === 'function') {
+      drawVisions(ctx, this.visions, this.designW, this.designH, performance.now() / 1000, this.camera.screenX(this.unit.px), this.unit.py - this.camera.y);
+    }
     if (typeof drawFalling === 'function' && this.falling) drawFalling(ctx, this.falling, this.camera);   // летящие валуны — ПОВЕРХ тумана (опасность всегда видна)
     if (typeof partsHull === 'function' && this.unit) partsHull(this.unit.hull);   // спрайты по типу корпуса (ноги+кольцо+детали)
     const tOff = this.debugTentacles ? tentacleBodyOffset() : null;   // корпус едет на щупальцах
@@ -292,10 +408,13 @@ class Game {
       }
     }
     if (typeof drawScanFx === 'function' && !this.debug) drawScanFx(ctx, this, this.camera);   // лучи сканера к серверу-хламу (поверх юнита)
+    if (typeof drawEnemyScanFx === 'function' && !this.debug) drawEnemyScanFx(ctx, this, this.camera);   // лучи сканера к сканируемому врагу
+    if (typeof drawBackdropScan === 'function' && !this.debug) drawBackdropScan(ctx, this, this.camera);   // конус сканера к объекту пещеры при объёмном скане
     drawFx(ctx, this.fx, this.camera);
     drawCrtOverlay(ctx, this.designW, this.designH);   // виньетка + скан-лайны поверх мира (HUD крупнее)
-    drawHUD(ctx, this.world, this.unit, this.inventory, { fps: this.fps, delivered: this.deliveredTotal, cycle: this.cycle, scan: this.activeScan, scanDoneT: this._scanDoneT, log: this.eventLog }, this.designW, this.designH);
+    drawHUD(ctx, this.world, this.unit, this.inventory, { fps: this.fps, delivered: this.deliveredTotal, cycle: this.cycle, scan: this.activeScan || (this.scanEnemy ? { data: this.scanEnemy.scan } : null), scanDoneT: this._scanDoneT, log: this.eventLog }, this.designW, this.designH);
     drawCity(ctx, this.city, this.designW);
+    if (this.mode === 'playing' && !this.debug && typeof drawBigHint === 'function') drawBigHint(ctx, this.hints, this.designW, this.designH);   // крупная сюжетная подсказка
     if (this.debug) {
       ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = `13px ${FONT_MONO}`; ctx.fillStyle = '#ffd24a';
       ctx.fillText('DEBUG: камера свободна (WASD), туман выкл, юнит в безопасности — B выкл · R +10 ресурсов', this.designW / 2, this.designH - 48);
@@ -336,6 +455,8 @@ class Game {
     // нативный рендер с масштабом design→пиксели (резко на любом DPI/разрешении)
     ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
 
+    if (this.mode !== this._modePrev) { this.menuSel = 0; this._modePrev = this.mode; }   // вход в меню → курсор на первую кнопку
+
     if (this.mode === 'playing' && this.debug) {
       // дебаг-обзор: свободная камера (WASD/стрелки), туман выкл, юнит заморожен и в
       // безопасности; мир ЖИВЁТ (цикл/враги) — чтобы видеть, что происходит на карте.
@@ -362,7 +483,12 @@ class Game {
       if (this.unit.dug) { this.loot.spawn(wrapX(this.unit.dug.x), this.unit.dug.y, this.unit.dug.type); this.unit.dug = null; }
       if (this.unit.broke) { this.dugTiles++; this.unit.broke = false; }   // проходка: считаем прокопанные тайлы
       this.updateServers(dt);   // авто-скан выкопанных серверов → данные + лог
+      this.updateEnemyScan(dt);  // скан вражеских юнитов в радиусе сканера → данные кодекса
       this.falling.update(dt, this.world, this.unit);   // нестабильная порода: срыв валунов + урон
+      if (this.visions) this.visions.update(dt, this.unit, this.designW, this.designH);   // видения в темноте
+      if (this.hints) this.hints.update(dt);
+      this.checkDiscoveries(dt);   // первые встречи объектов → глоссарий+лог+подсказка; подъём → подсказка
+      this.updateBackdrops(dt);  // вход в пещеру-сцену → объёмный скан → извлечение данных
 
       // фон помех (сглажен): полюса + очаги радиации у базы — интерфейс глючит
       this.radLevel += (this.world.radAt(this.unit.tileX, this.unit.tileY) - this.radLevel) * Math.min(1, dt * 2.5);
@@ -421,24 +547,25 @@ class Game {
         this.overT = 0;
       }
       this.overT += dt;         // таймер для анимации счётчиков
-      if (this.input.pressed('Enter', 'NumpadEnter')) { this.endRun(); this.mode = 'menu'; }
+      if (this.input.pressed('Enter', 'NumpadEnter', 'Space')) { this.endRun(); this.mode = 'menu'; }
       else {
         this.drawScene();
         drawGameOver(ctx, this.menuButtons(), this.designW, this.designH, this.overReason, this.metaResult, this.overT, this.save.meta);
       }
-    } else if (this.mode === 'progress') {
-      // экран рисует DOM-оверлей (meta_dom.js), ввод/выход — там же; canvas под ним просто тёмный
+    } else if (this.mode === 'progress' || this.mode === 'database') {
+      // экран рисует DOM-оверлей (meta_dom.js / codex_dom.js), ввод/выход — там же; canvas под ним просто тёмный
       ctx.fillStyle = PAL.void; ctx.fillRect(0, 0, this.designW, this.designH);
     } else if (this.mode === 'inventory') {
       if (this.input.pressed('Escape')) this.mode = this.unit ? 'playing' : 'menu';
-      if (this.input.pressed('Enter', 'NumpadEnter')) this.onInventoryStart(); // быстрый старт «В шахту»
+      if (this.input.pressed('Enter', 'NumpadEnter', 'Space')) this.onInventoryStart(); // «В шахту» — пробел/ввод равнозначны
       this.inventory.draw(ctx, this.designW, this.designH);
     } else if (this.mode === 'paused') {
       if (this.input.pressed('Escape')) this.mode = 'playing';
+      else this.menuNav();
       this.drawScene();
       drawPauseMenu(ctx, this.menuButtons(), this.designW, this.designH);
     } else {
-      if (this.input.pressed('Enter', 'NumpadEnter', 'Space')) this.openInventory(true);
+      this.menuNav();   // WASD/стрелки — выбор кнопки, Space/Enter — нажать
       drawMainMenu(ctx, this.save, this.menuButtons(), this.designW, this.designH);
     }
 

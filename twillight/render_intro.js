@@ -10,13 +10,7 @@ function drawIntro(ctx, intro, world, unit, camera, W, H) {
   const settleT = Math.min(1, Math.max(0, (t - INTRO_PRINT - INTRO_REACTOR) / INTRO_SETTLE));
 
   const pcx = camera.screenX((PRINTER.x + PRINTER.w / 2) * TILE), pcyTop = PRINTER.y * TILE - camera.y;
-  const prx = pcx - PRINTER.w * TILE / 2, pry = pcyTop;
-
-  // принтер активен во время печати
-  if (printT < 1) {
-    ctx.fillStyle = `rgba(90,208,255,${0.10 + 0.10 * (0.5 + 0.5 * Math.sin(performance.now() / 90))})`;
-    ctx.fillRect(prx, pry, PRINTER.w * TILE, PRINTER.h * TILE);
-  }
+  // (плейсхолдер-прямоугольник принтера убран — базу рисует ассет города `drawPlayerCity`)
 
   // печать юнита: заливка снизу вверх + сканлайн на кромке. Кольцо рисуем как в игре
   // (ноги-щупальца ПОД + модули/реактор), иначе FK-риг (scout). Реактор ВЫКЛ до установки
