@@ -55,9 +55,14 @@ const META_RADIUS = { core: 62, hub: 42, mid: 33, out: 29, cap: 50 };
 
 function _metaBuildGraph() {
   const nodes = [], edges = [];
-  nodes.push({ id: 'core', kind: 'core', x: MX, y: MY, name: 'ЯДРО ИИ', sub: 'система пробуждена', icon: 'core', cost: 0, accent: '#f2c878',
-    desc: 'Пробуждённое ядро ИИ. Корень всей сети памяти — от него расходятся пять систем. Уже запитано.' });
+  // СТАРТОВЫЙ велком-узел: ПОКУПАЕТСЯ (доступен сразу, без зависимостей); эффект —
+  // открывает раздел АПГРЕЙДОВ ГОРОДА в забеге (гейт `metaNeed:'core'` в upgrades.js).
+  nodes.push({ id: 'core', kind: 'core', x: MX, y: MY, name: 'ЯДРО ИИ', sub: 'анлок апгрейдов города', icon: 'core', cost: 4, accent: '#f2c878',
+    desc: 'Пробуждение ядра. Открывает доступ к системам города в забеге (раздел ГОРОД в апгрейдах базы). Корень сети памяти — от него расходятся пять ветвей.' });
+  // ── СТАНДАРТНЫЕ сектора (город/ядро/мир/структуры) — прежний ромб hub→2mid→3out ──
+  // (синяя ЮНИТ = i 0 строится кастомно ниже; остальные ветки переделаем по очереди.)
   META_SECTORS.forEach((s, i) => {
+    if (i === 0) return;
     const A = -90 + i * 72, c = META_CONTENT[s.id];
     const P = { hub: _polar(360, A), m0: _polar(640, A - 16), m1: _polar(640, A + 16), o0: _polar(940, A - 28), o1: _polar(940, A), o2: _polar(940, A + 28) };
     const kindOf = (k) => k === 'hub' ? 'hub' : (k[0] === 'm' ? 'mid' : 'out');
@@ -70,13 +75,33 @@ function _metaBuildGraph() {
     edges.push([s.id + '_m0', s.id + '_o0', 'wire'], [s.id + '_m0', s.id + '_o1', 'wire']);
     edges.push([s.id + '_m1', s.id + '_o1', 'wire'], [s.id + '_m1', s.id + '_o2', 'wire']);
   });
-  META_SECTORS.forEach((s, i) => { const n = META_SECTORS[(i + 1) % META_SECTORS.length]; edges.push([s.id + '_hub', n.id + '_hub', 'ring']); });   // кольцо хабов
-  META_SECTORS.forEach((s, i) => { const n = META_SECTORS[(i + 1) % META_SECTORS.length]; edges.push([s.id + '_o2', n.id + '_o0', 'ring']); });    // кольцо внешних
-  const cap = _polar(1180, -90);
-  nodes.push({ id: 'cap', kind: 'cap', x: cap[0], y: cap[1], name: 'ПРОТОКОЛ ВОСХОЖДЕНИЯ', sub: 'перенос модуля между забегами', icon: 'ascend', cost: 36, accent: '#f2c878',
-    sys: 'МЕТА-ПРОТОКОЛ', capDeps: ['mast_o0', 'mast_o1', 'mast_o2'],
-    desc: 'Венец сети: перенести один установленный модуль из погибшего забега в следующий — единственный мост через смерть. Требует все три внешних узла МАСТЕРСКОЙ.' });
-  edges.push(['mast_o0', 'cap', 'wire'], ['mast_o1', 'cap', 'wire'], ['mast_o2', 'cap', 'wire']);
+
+  // ── СИНЯЯ ветка ЮНИТ (sector 0): доп-слот → 3 линии. Буры и сенсоры — ПАРАЛЛЕЛЬНО от
+  // своих под-хабов (буровой/сенсорный цех), а не цепочкой. Эффекты модулей — отдельно («начинка»).
+  const U = META_SECTORS[0];
+  const un = (id, kind, r, deg, name, sub, icon, desc) => { const p = _polar(r, deg); nodes.push({ id, kind, sector: 0, accent: U.accent, sys: U.sys, slabel: U.label, x: p[0], y: p[1], name, sub, icon, desc, cost: META_TC[kind] }); };
+  un('mast_hub', 'hub', 360, -90, 'Доп-слот', 'порт под артефакты', 'slot', 'Универсальный вспомогательный слот юнита: маунтит найденные артефакты-реликты (в т.ч. профильные трюмы). Открывает артефакт-экономику.');
+  un('mast_drill', 'mid', 560, -116, 'Буровой цех', 'линия буров', 'drill', 'Открывает альтернативные буры и прокачку силы бура. От цеха — четыре бура ПАРАЛЛЕЛЬНО (ставишь любой в слот бура).');
+  un('mast_rep', 'mid', 600, -90, 'Ремонтный трюм', 'починка HP', 'wrench', 'Вариант трюма: чинит HP вне базы ценой части ёмкости. Поднимает кап ПРОЧНОСТИ до ур.4.');
+  un('mast_sens', 'mid', 560, -66, 'Сенсорный цех', 'линия сенсоров', 'map', 'Открывает инфо-сенсоры (параллельно от цеха) и УЛУЧШЕНИЯ ПРОЖЕКТОРА в апгрейдах базы.');
+  un('mast_di', 'out', 900, -130, 'Импульсный бур', 'заряд удержанием', 'bomb', 'Заряжается удержанием, выносит несколько тайлов залпом.');
+  un('mast_dk', 'out', 900, -119, 'Кинетический бур', 'копит толчок', 'blades', 'Бурение копит «взрывной» толчок, выбивающий соседние тайлы.');
+  un('mast_ds', 'out', 900, -108, 'Бур-винт', 'укреплённый ход', 'stab', 'Безопасная укреплённая проходка — за тобой не остаётся тоннелей врагам. С кулдауном.');
+  un('mast_du', 'out', 900, -97, 'Нестабильный бур', 'перегрев/риск', 'obsidian', 'Мощнейший, но копит перегрев — урон при перегреве.');
+  un('mast_sa', 'out', 900, -80, 'Обнаружение угроз', 'разметка опасностей', 'quiet', 'Метит врагов на всём экране и нестабильную породу (трещины/камни) в радиусе сенсора.');
+  un('mast_sr', 'out', 900, -66, 'Детектор загрязнения', 'свойство сканера', 'detector', 'Апгрейд сенсора: твой сканер начинает засекать СТОРОНУ источника загрязнения, пока ты в зоне фона. Отдельный модуль не нужен — просто работает. Показания живые/неточные, точнее вблизи.');
+  un('mast_sh', 'out', 900, -52, 'Экран помех', 'гасит помехи', 'resonance', 'Отдельный модуль защиты от помех интерфейса. Открывает ветку улучшения экрана в апгрейдах базы.');
+  edges.push(['core', 'mast_hub', 'wire']);
+  edges.push(['mast_hub', 'mast_drill', 'wire'], ['mast_hub', 'mast_rep', 'wire'], ['mast_hub', 'mast_sens', 'wire']);
+  edges.push(['mast_drill', 'mast_di', 'wire'], ['mast_drill', 'mast_dk', 'wire'], ['mast_drill', 'mast_ds', 'wire'], ['mast_drill', 'mast_du', 'wire']);
+  edges.push(['mast_sens', 'mast_sa', 'wire'], ['mast_sens', 'mast_sr', 'wire'], ['mast_sens', 'mast_sh', 'wire']);
+
+  // кольцо хабов (все 5); кольцо внешних — только среди стандартных секторов (у юнита своя форма)
+  for (let i = 0; i < META_SECTORS.length; i++) edges.push([META_SECTORS[i].id + '_hub', META_SECTORS[(i + 1) % META_SECTORS.length].id + '_hub', 'ring']);
+  for (let i = 1; i < META_SECTORS.length - 1; i++) edges.push([META_SECTORS[i].id + '_o2', META_SECTORS[i + 1].id + '_o0', 'ring']);
+
+  // Капстоун ПРОТОКОЛ ВОСХОЖДЕНИЯ (перенос модуля между забегами) временно УБРАН из юнита —
+  // вернём в ветку ЯДРО/ПРОБУЖДЕНИЕ при её проработке (там он по смыслу: правила забега/смерти).
   return { nodes, edges };
 }
 const _MG = _metaBuildGraph();
@@ -84,10 +109,10 @@ const META_NODES = _MG.nodes, META_EDGES = _MG.edges;
 const META_BY_ID = Object.fromEntries(META_NODES.map((n) => [n.id, n]));
 const META_NEI = {}; META_NODES.forEach((n) => META_NEI[n.id] = []);
 META_EDGES.forEach(([a, b]) => { META_NEI[a].push(b); META_NEI[b].push(a); });
-const META_TOTAL = META_NODES.length - 1;   // без ЯДРА
+const META_TOTAL = META_NODES.length;   // ядро теперь тоже ПОКУПАЕТСЯ (велком-узел)
 
 // ── состояние (из save) ──
-function metaUnlocked(save, id) { return id === 'core' || !!(save.metaUnlocks && save.metaUnlocks[id]); }
+function metaUnlocked(save, id) { return !!(save.metaUnlocks && save.metaUnlocks[id]); }
 function _metaDist(save) {       // BFS-дистанция от запитанного фронта → видимость
   const d = {}; META_NODES.forEach((n) => d[n.id] = Infinity);
   const owned = META_NODES.filter((n) => metaUnlocked(save, n.id)).map((n) => n.id);
@@ -98,6 +123,7 @@ function _metaDist(save) {       // BFS-дистанция от запитанн
 }
 function metaAvail(save, n) {
   if (metaUnlocked(save, n.id)) return false;
+  if (n.kind === 'core') return true;   // велком-узел: доступен к покупке всегда (без зависимостей)
   if (n.kind === 'cap') return n.capDeps.every((id) => metaUnlocked(save, id));
   return META_NEI[n.id].some((id) => metaUnlocked(save, id));
 }
@@ -117,12 +143,12 @@ function metaBuy(save, n) {
   if (typeof writeSave === 'function') writeSave(save);
   return true;
 }
-function metaReset(save) {       // сброс ветви: возврат потраченного
-  let spent = 0; for (const n of META_NODES) if (n.id !== 'core' && metaUnlocked(save, n.id)) spent += n.cost;
+function metaReset(save) {       // сброс сети: возврат потраченного (ядро тоже покупное → тоже возвращается)
+  let spent = 0; for (const n of META_NODES) if (metaUnlocked(save, n.id)) spent += n.cost;
   save.meta = (save.meta || 0) + spent; save.metaUnlocks = {};
   if (typeof writeSave === 'function') writeSave(save);
 }
-function metaPoweredCount(save) { let n = 0; for (const x of META_NODES) if (x.id !== 'core' && metaUnlocked(save, x.id)) n++; return n; }
+function metaPoweredCount(save) { let n = 0; for (const x of META_NODES) if (metaUnlocked(save, x.id)) n++; return n; }
 function metaDepNames(n) {       // предки (wire-родители ближе к ядру) — для блока «ТРЕБУЕТ»
   if (n.kind === 'cap') return n.capDeps.map((id) => META_BY_ID[id].name);
   if (n.kind === 'core') return [];
@@ -133,3 +159,5 @@ function metaDepNames(n) {       // предки (wire-родители ближ
 let _metaSaveRef = null;
 function metaBindSave(save) { _metaSaveRef = save; }
 function metaHas(id) { return _metaSaveRef ? metaUnlocked(_metaSaveRef, id) : false; }
+// Узел открывает НОВЫЙ модуль сборки? (есть запись в MODULE_DEFS с unlock===id) — для тега «+МОДУЛЬ» в мете.
+function metaUnlocksModule(id) { return typeof MODULE_DEFS !== 'undefined' && Object.keys(MODULE_DEFS).some((k) => MODULE_DEFS[k].unlock === id); }

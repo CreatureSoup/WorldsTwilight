@@ -151,13 +151,17 @@ function _mtWorldHTML(save) {
     for (const [a, b, kind] of META_EDGES) {
       const na = META_BY_ID[a], nb = META_BY_ID[b], sa = st(na), sb = st(nb);
       if (sa === 'hidden' && sb === 'hidden') continue;
-      const on = own(a) && own(b); if (on !== litPass) continue;
-      const ghost = (sa === 'hidden' || sb === 'hidden'), paths = _bundle(na, nb, kind);
-      const baseCol = on ? 'var(--gold)' : (ghost ? '#1f1a12' : (kind === 'ring' ? '#2a2018' : '#3a302a')), w = on ? 2 : 1.6, ci = (paths.length - 1) >> 1, [ex, ey] = _elbow(na.x, na.y, nb.x, nb.y);
-      svg += `<g opacity="${on ? 1 : (ghost ? 0.42 : 0.8)}">`;
-      paths.forEach((d) => { svg += `<path d="${d}" fill="none" stroke="#0b0807" stroke-width="${w + 3}" stroke-linejoin="round" stroke-linecap="round"/>`; });
-      paths.forEach((d) => { svg += `<path d="${d}" fill="none" stroke="${baseCol}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"/>`; });
+      const ownA = own(a), ownB = own(b), on = ownA && ownB; if (on !== litPass) continue;
+      const ghost = (sa === 'hidden' || sb === 'hidden');
+      const potential = !on && (ownA || ownB) && !ghost;   // ребро-«потенциал»: один конец запитан, второй доступен — ток ещё не пошёл
+      const paths = _bundle(na, nb, kind);
+      const baseCol = on ? 'var(--gold)' : potential ? 'var(--gold-dim)' : (ghost ? '#1f1a12' : (kind === 'ring' ? '#2a2018' : '#3a302a'));
+      const w = on ? 2 : potential ? 1.7 : 1.6, ci = (paths.length - 1) >> 1, [ex, ey] = _elbow(na.x, na.y, nb.x, nb.y);
+      svg += `<g opacity="${on ? 1 : potential ? 0.9 : (ghost ? 0.42 : 0.8)}">`;
+      if (!potential) paths.forEach((d) => { svg += `<path d="${d}" fill="none" stroke="#0b0807" stroke-width="${w + 3}" stroke-linejoin="round" stroke-linecap="round"/>`; });
+      paths.forEach((d) => { svg += `<path d="${d}" fill="none" stroke="${baseCol}" stroke-width="${w}"${potential ? ' class="pcb-flow-slow"' : ''} stroke-linejoin="round" stroke-linecap="round"/>`; });
       if (on) svg += `<path d="${paths[ci]}" fill="none" stroke="var(--gold)" stroke-width="6" opacity="0.12" filter="url(#mt-gl)"/><path d="${paths[ci]}" fill="none" stroke="var(--gold-bright)" stroke-width="1.4" class="pcb-flow"/><rect x="${ex - 2.5}" y="${ey - 2.5}" width="5" height="5" transform="rotate(45 ${ex} ${ey})" fill="#0b0807" stroke="var(--gold)" stroke-width="1"/>`;
+      else if (potential) svg += `<rect x="${ex - 2}" y="${ey - 2}" width="4" height="4" transform="rotate(45 ${ex} ${ey})" fill="#0b0807" stroke="var(--gold-dim)" stroke-width="1"/>`;
       svg += `</g>`;
     }
   }
@@ -170,20 +174,25 @@ function _mtWorldHTML(save) {
     const o = s === 'owned', av = s === 'avail', vis = s === 'visible', hid = s === 'hidden';
     const can = av && (save.meta || 0) >= n.cost, sel = _mtSel === n.id;
     const corner = n.kind === 'core' ? '26%' : n.kind === 'cap' ? '15%' : '22%';
+    // ЗАПИТАН = ЗАЛИТ (плотное акцент-ядро + glow + яркие пины/иконка); ДОСТУПЕН = ПОЛАЯ РОЗЕТКА
+    // (тёмный центр, обводка цвета ветки, но инсет/пины гаснут до карбона, иконка приглушена)
     const borderC = o || av ? acc : vis ? 'var(--carbon)' : 'var(--bronze)';
     const opacity = hid ? 0.16 : vis ? 0.7 : 1;
-    const pinC = o || av ? acc : 'var(--carbon)';
+    const pinC = o ? acc : 'var(--carbon)';
     let inner = '';
-    if (!hid) inner += `<div style="position:absolute;inset:${n.kind === 'core' ? 7 : 5}px;border:1px solid ${o || av ? acc : 'var(--carbon)'};border-radius:${corner};opacity:0.45"></div>`;
+    if (!hid) inner += `<div style="position:absolute;inset:${n.kind === 'core' ? 7 : 5}px;border:1px solid ${o ? acc : 'var(--carbon)'};border-radius:${corner};opacity:0.45"></div>`;
     if (!hid) for (const d of [0, 90, 180, 270]) inner += `<span style="position:absolute;width:5px;height:5px;background:${pinC};left:50%;top:50%;transform:rotate(${d}deg) translate(${R - 1}px,0) translate(-50%,-50%);transform-origin:0 0"></span>`;
-    inner += `<div style="transform:rotate(-45deg);color:${o ? acc : av ? acc : vis ? 'var(--pewter)' : 'var(--ash)'};display:flex">${vis ? _mtLock : (MICON[n.icon] || '')}</div>`;
-    const innerBox = `<div style="width:100%;height:100%;position:relative;transform:rotate(45deg);border-radius:${corner};border:2px solid ${borderC};border-style:${vis ? 'dashed' : 'solid'};background:${o ? `radial-gradient(circle at 50% 38%, ${acc}33, rgba(13,10,8,0.95))` : 'rgba(13,10,8,0.92)'};box-shadow:${sel ? `0 0 30px -2px ${acc}` : o ? `0 0 18px -6px ${acc}, inset 0 0 18px -10px ${acc}` : 'none'};display:flex;align-items:center;justify-content:center">${inner}</div>`;
+    inner += `<div style="transform:rotate(-45deg);color:${o ? acc : av ? acc : vis ? 'var(--pewter)' : 'var(--ash)'};opacity:${av ? 0.5 : 1};display:flex">${vis ? _mtLock : (MICON[n.icon] || '')}</div>`;
+    const fill = o ? `radial-gradient(circle at 50% 36%, ${acc}5e, rgba(13,10,8,0.92))` : 'rgba(13,10,8,0.92)';
+    const glow = sel ? `0 0 30px -2px ${acc}` : o ? `0 0 22px -5px ${acc}, inset 0 0 20px -9px ${acc}` : 'none';
+    const innerBox = `<div style="width:100%;height:100%;position:relative;transform:rotate(45deg);border-radius:${corner};border:2px solid ${borderC};border-style:${vis ? 'dashed' : 'solid'};background:${fill};box-shadow:${glow};display:flex;align-items:center;justify-content:center">${inner}</div>`;
     let label = '';
     if (!hid && n.kind !== 'core') {
       label = `<div style="position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:6px;width:${Math.max(124, R * 3)}px;text-align:center;pointer-events:none">
         <div style="font-family:var(--font-display);font-size:${n.kind === 'cap' ? 20 : 16}px;font-weight:700;text-transform:uppercase;letter-spacing:-0.01em;color:${o ? 'var(--chalk)' : av ? 'var(--bone)' : 'var(--pewter)'};line-height:1.05">${vis ? '? ? ?' : n.name}</div>
         ${o ? `<div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.16em;color:${acc};margin-top:3px">● ЗАПИТАН</div>` : ''}
         ${av ? `<div style="display:inline-flex;align-items:center;gap:4px;margin-top:3px;font-family:var(--font-mono);font-size:11px;color:${can ? 'var(--gold)' : 'var(--blood-bright)'}">${_mtToken(11)}${n.cost}</div>` : ''}
+        ${(o || av) && typeof metaUnlocksModule === 'function' && metaUnlocksModule(n.id) ? `<div style="display:block;margin:4px auto 0;width:fit-content;padding:1px 6px;border:1px solid var(--toxic);font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;color:var(--toxic)">+МОДУЛЬ</div>` : ''}
         ${vis ? `<div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.16em;color:var(--ash);margin-top:3px">🔒 ЗАКРЫТ</div>` : ''}</div>`;
     } else if (!hid) {
       label = `<div style="position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:8px;text-align:center;pointer-events:none">
@@ -201,6 +210,7 @@ function mtRenderCard() {
   if (!n) { card.innerHTML = `<div style="padding:40px 26px;text-align:center;color:var(--ash);font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;line-height:1.8"><div style="opacity:0.4;margin-bottom:14px;display:flex;justify-content:center">${_mtToken(40)}</div>выбери узел<br>сети памяти</div>`; return; }
   const acc = n.accent, s = metaState(save, n), owned = metaUnlocked(save, n.id), can = metaCanBuy(save, n);
   const stTag = { owned: ['ЗАПИТАН', acc], avail: ['ДОСТУПЕН', 'var(--gold)'], visible: ['ЗАКРЫТ', 'var(--pewter)'], hidden: ['СКРЫТ', 'var(--ash)'] }[s];
+  const hasMod = typeof metaUnlocksModule === 'function' && metaUnlocksModule(n.id);   // узел открывает новый модуль сборки
   const prereq = metaDepNames(n);
   const lbl = (c) => `font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:${c};text-transform:uppercase`;
   let body = `<div><div style="${lbl('var(--ash)')}">ОПИСАНИЕ</div><p style="margin:8px 0 0;font-family:var(--font-body);font-size:13.5px;color:var(--bone);line-height:1.6">${s === 'visible' ? 'Узел зафиксирован сканером, но ещё не расшифрован. Запитай соседний узел, чтобы открыть описание и эффект.' : n.desc}</p></div>`;
@@ -218,7 +228,10 @@ function mtRenderCard() {
         <div style="min-width:0"><div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><span style="width:8px;height:8px;background:${acc};display:inline-block"></span><span style="${lbl(acc)}">${n.sys || 'ЯДРО'}</span></div>
         <div style="font-family:var(--font-display);font-size:20px;font-weight:700;text-transform:uppercase;letter-spacing:-0.02em;color:var(--chalk);line-height:1.02">${n.name}</div></div>
       </div>
-      <div style="margin-top:14px;display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid ${stTag[1]};color:${stTag[1]};font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase"><span style="width:6px;height:6px;border-radius:50%;background:${stTag[1]}"></span>${stTag[0]}</div>
+      <div style="margin-top:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid ${stTag[1]};color:${stTag[1]};font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase"><span style="width:6px;height:6px;border-radius:50%;background:${stTag[1]}"></span>${stTag[0]}</div>
+        ${hasMod ? `<div style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--toxic);color:var(--toxic);font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase"><b style="font-weight:700">+</b>МОДУЛЬ</div>` : ''}
+      </div>
     </div>
     <div style="padding:18px 22px;display:flex;flex-direction:column;flex:1;overflow-y:auto">${body}</div>
     <div style="padding:16px 22px;border-top:1px solid ${acc}40">${footer}</div>`;
@@ -245,7 +258,17 @@ function mtRender() {
   mtRenderCard();
 }
 
-function _mtKey(e) { if (e.key === 'Escape') metaDomBack(); }
+function _mtKey(e) {
+  if (e.code === 'Escape') { metaDomBack(); return; }
+  // ВРЕМЕННО (для тестов): K — полное обнуление меты: все узлы + банк МТ в ноль + кодекс
+  // (диски данных + глоссарий). НЕ как «СБРОС» mtReset (тот ВОЗВРАЩАЕТ потраченные МТ). Убрать перед релизом.
+  if (e.code === 'KeyK' && _mtGame) {
+    _mtGame.save.meta = 0; _mtGame.save.metaUnlocks = {};
+    if (typeof codexResetSave === 'function') codexResetSave();   // глоссарий + диски данных тоже в ноль
+    if (typeof writeSave === 'function') writeSave(_mtGame.save);
+    _mtSel = null; mtRender();
+  }
+}
 function metaDomBack() { if (_mtGame) _mtGame.mode = 'menu'; metaDomHide(); }
 function metaDomShow(game) { _mtGame = game; _mtSel = null; const m = metaDomEnsure(); m.root.classList.add('show'); mtFit(); mtRender(); addEventListener('keydown', _mtKey); }
 function metaDomHide() { if (_mt) _mt.root.classList.remove('show'); removeEventListener('keydown', _mtKey); }

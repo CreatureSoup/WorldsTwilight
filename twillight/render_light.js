@@ -60,8 +60,8 @@ function _coneSolid(world, wx, wy) {
   if (airU(1, 0)  && (1 - lx) < _ragDepth(ty + ly, 3)) return false;   // справа
   return true;                                                    // настоящая порода
 }
-function _coneVisibility(world, camera, ax, ay, fx, fy, L) {
-  const axisA = Math.atan2(fy, fx), half = 0.46;            // полу-угол конуса (≈ tan)
+function _coneVisibility(world, camera, ax, ay, fx, fy, L, half) {
+  const axisA = Math.atan2(fy, fx); half = half || 0.30;   // полу-угол конуса (передаётся по уровню прожектора)
   const ox = camera.x, oy = camera.y, step = TILE * 0.28;
   const pts = [[ax, ay]];
   const N = 72;                                             // плотный веер: тоньше «лесенка»
@@ -92,8 +92,12 @@ function drawHeadlight(ctx, world, unit, camera, W, H) {
   // и подсветить надо сам тайл, где стоит юнит, чтобы проход читался.
   const ux = Math.round(camera.screenX(unit.px)), uy = Math.round(unit.py - camera.y);
   const HALO = TILE * 1.3;
-  const L = TILE * 5.4;                                      // короче — видимость не такая далёкая
-  const pts = _coneVisibility(world, camera, ax, ay, fx, fy, L);
+  // ПРОЖЕКТОР: уровень 0..3 (стат projLvl) растит ШИРИНУ, ЯРКОСТЬ и немного длину — значимые шаги
+  const pl = (unit.stats && unit.stats.projLvl) || 0;       // равномерно по 3 уровням (без прожектора темно — норма)
+  const half = 0.25 + pl * 0.11;                            // ширина: ур.0 0.25 (очень узкий) → ур.3 0.58
+  const L = TILE * (3.5 + pl * 0.9);                        // длина/рассеивание: ур.0 3.5 → ур.3 6.2 тайла
+  const cutA = 0.60 + pl * 0.13, glowA = 0.05 + pl * 0.05;  // яркость: ур.0 0.60 (тусклый) → ур.3 ~0.99 (яркий)
+  const pts = _coneVisibility(world, camera, ax, ay, fx, fy, L, half);
   const lit = (g) => { g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]); g.closePath(); };
 
   if (!_hlC) { _hlC = document.createElement('canvas'); _hlX = _hlC.getContext('2d'); }
@@ -113,7 +117,7 @@ function drawHeadlight(ctx, world, unit, camera, W, H) {
   // ядро — резкий клип
   h.save(); lit(h); h.clip();
   h.globalCompositeOperation = 'destination-out';
-  h.fillStyle = coreGrad(h, 'rgba(0,0,0,1)', 'rgba(0,0,0,0)'); h.fillRect(0, 0, _hlC.width, _hlC.height);
+  h.fillStyle = coreGrad(h, `rgba(0,0,0,${cutA})`, 'rgba(0,0,0,0)'); h.fillRect(0, 0, _hlC.width, _hlC.height);   // ядро вырезаем по уровню → ярче с апгрейдом
   h.restore();
   // полутень — размытый контур (только кромка): убираем ещё немного тьмы мягким штрихом
   h.save();
@@ -136,7 +140,7 @@ function drawHeadlight(ctx, world, unit, camera, W, H) {
   h.globalCompositeOperation = 'source-over';
   h.save(); lit(h); h.clip();
   const gw = h.createRadialGradient(ax, ay, TILE * 0.2, ax, ay, L);
-  gw.addColorStop(0, 'rgba(255,214,150,0.18)'); gw.addColorStop(0.5, 'rgba(255,196,124,0.07)'); gw.addColorStop(1, 'rgba(255,180,90,0)');
+  gw.addColorStop(0, `rgba(255,214,150,${glowA})`); gw.addColorStop(0.5, `rgba(255,196,124,${glowA * 0.4})`); gw.addColorStop(1, 'rgba(255,180,90,0)');
   h.fillStyle = gw; h.fillRect(0, 0, _hlC.width, _hlC.height);
   h.restore();
   // тёплый ambient-отблеск вокруг юнита (без клипа) — в тон гало подсветки прохода

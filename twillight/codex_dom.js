@@ -99,6 +99,13 @@ function cxPersist() {
   _cxSave.codex = { frags: st.codices.map((c) => c.sectors.map((s) => s.frag)), restored: st.codices.map((c) => c.restored), found: [...(_cxFoundSet())] };
   if (typeof writeSave === 'function') writeSave(_cxSave);
 }
+// Полный сброс кодекса (диски данных + глоссарий) — для тест-вайпа меты (клавиша K).
+// Чистит save и кэши состояния → при следующем _cxState/_cxFoundSet всё перестроится пустым.
+function codexResetSave() {
+  if (_cxSave) { _cxSave.codex = null; if (typeof writeSave === 'function') writeSave(_cxSave); }
+  _cxFound = null; _cxS = null;
+  if (_cx && _cx.root.classList.contains('show')) cxRender();   // если открыт — перерисовать пустым
+}
 
 /* ---------- мелкие «кирпичи» (= Tag/Label/lnk/btnLine/btnSolid) ---------- */
 const _cxTag = (c, t) => `<span style="font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:${c};text-transform:uppercase;border:1px solid ${c}55;padding:3px 8px">${t}</span>`;

@@ -17,6 +17,7 @@
 #metaScreen .vp { cursor:grab; }
 #metaScreen .vp.drag { cursor:grabbing; }
 #metaScreen .pcb-flow { stroke-dasharray:3 8; animation:mt-pcbflow .8s linear infinite; }
+#metaScreen .pcb-flow-slow { stroke-dasharray:4 9; animation:mt-pcbflow 1.8s linear infinite; }
 @keyframes mt-pcbflow { to { stroke-dashoffset:-22; } }
 #metaScreen button { font-family:var(--font-mono); }
 /* лёгкий hover-лифт узла (остальное — инлайн, как в дизайне) */

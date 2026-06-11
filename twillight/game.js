@@ -13,6 +13,7 @@ class Game {
     this.camera = new Camera(canvas.width, canvas.height);
     this.inventory = new Inventory();
     this.inventory.onStart = () => this.onInventoryStart();
+    this.inventory.onBack = () => { this.mode = this.unit ? 'playing' : 'menu'; };   // как ESC
     this.upgrades = new Upgrades();
     this.save = loadSave();
     if (typeof metaBindSave === 'function') metaBindSave(this.save);   // metaHas(id) для эффектов узлов в забеге
@@ -32,6 +33,7 @@ class Game {
     this.enemies = [];         // враги диких гнёзд (волны по циклам)
     this.lastCycleN = 0;
     this.debug = false;        // B — дебаг-обзор карты (свободная камера, без тумана)
+    this.alertView = true;     // ОБНАРУЖЕНИЕ УГРОЗ (узел меты mast_sa): голо-маркеры врагов/нестабильностей; тумблер V / клик по HUD
     this.debugTentacles = true;  // ноги-щупальца (IK, legik.js) — ПО УМОЛЧАНИЮ; T переключает на FK для сравнения
     this.last = performance.now();
     this.fps = 60;
@@ -51,7 +53,7 @@ class Game {
     // Рендерим в НАТИВНОМ разрешении (резко, без апскейла), а зум/раскладку держим
     // в фиксированном «design»-пространстве: ровно VIEW_TILES_Y тайлов по вертикали
     // на любом экране. this.scale переводит design-юниты в нативные пиксели.
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);   // потолок DPR: на retina (dpr=2) бэкстор канваса вдвое меньше → меньше нагрузки GPU
     const cssW = Math.max(1, window.innerWidth), cssH = Math.max(1, window.innerHeight);
     this.canvas.width = Math.round(cssW * dpr);
     this.canvas.height = Math.round(cssH * dpr);
@@ -69,6 +71,7 @@ class Game {
       if (this.mode === 'inventory') { e.preventDefault(); this.inventory.pointerDown(x, y); }
       else if (this.mode === 'upgrades') { e.preventDefault(); this.upgrades.pointerDown(x, y); }
       else if (this.mode === 'menu' || this.mode === 'paused' || this.mode === 'gameover') this.menuClick(x, y);
+      else if (this.mode === 'playing' && !this.debug) this.alertClick(x, y);   // клик по HUD-тумблеру «ОБНАРУЖЕНИЕ УГРОЗ»
       // во время забега инвентарь не открывается — сборка модулей только перед стартом
     });
     this.canvas.addEventListener('mousemove', (e) => {
@@ -175,6 +178,7 @@ class Game {
     this.falling = new FallingRocks();   // нестабильная порода → падающие валуны
     if (typeof Visions === 'function') this.visions = new Visions();   // призрачные видения в темноте
     if (typeof Hints === 'function') this.hints = new Hints();         // крупные сюжетные подсказки
+    if (typeof RadarCompass === 'function') this.radar = new RadarCompass();   // детектор загрязнения (свойство сканера, узел mast_sr)
     this._depthFired = new Set();                                      // какие отсечки высоты уже показаны
     this._discDone = false; this._discT = 0;                           // состояние опроса находок (сброс на забег)
     this.fx.clear();
@@ -373,6 +377,17 @@ class Game {
         && u.tileY >= PRINTER.y && u.tileY <= CAVE_FLOOR_Y;
   }
 
+  _alertActive() { return typeof metaHas === 'function' && metaHas(ALERT.node); }   // ОБНАРУЖЕНИЕ УГРОЗ открыто узлом mast_sa
+  _contamActive() { return typeof metaHas === 'function' && metaHas('mast_sr') && this.unit && (this.unit.stats.scanR || 0) > 0; }   // ДЕТЕКТОР ЗАГРЯЗНЕНИЯ — свойство сканера, открыто узлом mast_sr
+  _alertThreats() { return this.enemies ? this.enemies.reduce((n, e) => n + (e.dead ? 0 : 1), 0) : 0; }
+  // Клик в забеге: тумблер «ОБНАРУЖЕНИЕ УГРОЗ» в HUD (если узел открыт).
+  alertClick(x, y) {
+    if (!this._alertActive() || typeof alertHudRect !== 'function') return false;
+    const r = alertHudRect();
+    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) { this.alertView = !this.alertView; return true; }
+    return false;
+  }
+
   drawScene() {
     const ctx = this.ctx;
     ctx.fillStyle = PAL.pit; ctx.fillRect(0, 0, this.designW, this.designH);
@@ -411,8 +426,15 @@ class Game {
     if (typeof drawEnemyScanFx === 'function' && !this.debug) drawEnemyScanFx(ctx, this, this.camera);   // лучи сканера к сканируемому врагу
     if (typeof drawBackdropScan === 'function' && !this.debug) drawBackdropScan(ctx, this, this.camera);   // конус сканера к объекту пещеры при объёмном скане
     drawFx(ctx, this.fx, this.camera);
+    // ОБНАРУЖЕНИЕ УГРОЗ: голо-маркеры врагов/нестабильностей поверх мира/тумана, ПОД CRT/HUD (только в игре, при владении узлом и включённом тумблере)
+    if (this.mode === 'playing' && !this.debug && this.alertView && this._alertActive() && typeof drawAlertOverlay === 'function')
+      drawAlertOverlay(ctx, this, this.camera, this.designW, this.designH, performance.now() / 1000);
     drawCrtOverlay(ctx, this.designW, this.designH);   // виньетка + скан-лайны поверх мира (HUD крупнее)
     drawHUD(ctx, this.world, this.unit, this.inventory, { fps: this.fps, delivered: this.deliveredTotal, cycle: this.cycle, scan: this.activeScan || (this.scanEnemy ? { data: this.scanEnemy.scan } : null), scanDoneT: this._scanDoneT, log: this.eventLog }, this.designW, this.designH);
+    if (this.mode === 'playing' && !this.debug && this._alertActive() && typeof drawAlertToggle === 'function')
+      drawAlertToggle(ctx, this.alertView, this._alertThreats(), performance.now() / 1000);   // HUD-тумблер (виден при владении узлом)
+    if (this.mode === 'playing' && !this.debug && this.radar && this._contamActive() && typeof drawRadarCompass === 'function')
+      drawRadarCompass(ctx, this.radar, 10, this._alertActive() ? 148 : 118);   // детектор загрязнения (под тумблером угроз / под грузом)
     drawCity(ctx, this.city, this.designW);
     if (this.mode === 'playing' && !this.debug && typeof drawBigHint === 'function') drawBigHint(ctx, this.hints, this.designW, this.designH);   // крупная сюжетная подсказка
     if (this.debug) {
@@ -443,10 +465,17 @@ class Game {
       ctx.textAlign = 'left';
     }
     // помехи интерфейса от радиационного фона у полюсов (поверх всего; только в игре)
-    if (this.mode === 'playing' && !this.debug) drawInterference(ctx, this.canvas, this.radLevel, performance.now() / 1000);
+    if (this.mode === 'playing' && !this.debug) {
+      const noise = Math.max(0, this.radLevel - ((this.unit.stats && this.unit.stats.noiseResist) || 0));   // апгрейд ЭКРАН ПОМЕХ гасит глитчи
+      drawInterference(ctx, this.canvas, noise, performance.now() / 1000);
+    }
   }
 
   loop(now) {
+    requestAnimationFrame(this.loop);   // планируем следующий кадр СРАЗУ — ранний return ниже не должен оборвать цикл
+    // КАП FPS: на 120/144Гц рендерим не чаще FPS_CAP — вдвое меньше нагрев GPU. Игра кадрово-независима
+    // (скорости берут dt), пропущенный rAF-тик просто не рисует. this.last двигается только на отрисованных кадрах.
+    if (now - this.last < 1000 / FPS_CAP - 1) return;
     let dt = (now - this.last) / 1000; this.last = now;
     if (dt > 0.05) dt = 0.05;
     this.fps = this.fps * 0.9 + (1 / Math.max(dt, 1e-6)) * 0.1;
@@ -476,6 +505,7 @@ class Game {
       this.drawScene();
     } else if (this.mode === 'playing') {
       if (this.input.pressed('KeyB')) this.debug = true;
+      if (this.input.pressed(ALERT.key) && this._alertActive()) this.alertView = !this.alertView;   // ОБНАРУЖЕНИЕ УГРОЗ: вкл/выкл
       if (this.input.pressed('KeyT')) this.debugTentacles = !this.debugTentacles;   // прототип щупалец
       this.unit.update(dt, this.input, this.world);
       if (this.debugTentacles) updateTentacles(dt, this.unit, this.world);
@@ -492,6 +522,8 @@ class Game {
 
       // фон помех (сглажен): полюса + очаги радиации у базы — интерфейс глючит
       this.radLevel += (this.world.radAt(this.unit.tileX, this.unit.tileY) - this.radLevel) * Math.min(1, dt * 2.5);
+      if (this.radar && this._contamActive()) this.radar.update(dt, this.world, this.unit);   // детектор загрязнения (свойство сканера)
+
       this.loot.update(dt, this.world, this.unit, this.inventory, this.upgrades.pickupBonus());
       this.fx.update(dt);
       this.camera.follow(this.unit, dt);
@@ -503,6 +535,8 @@ class Game {
       } else this.deliverCd = 0;
       // гаджет «Ремонт-дрон»: реген HP вне базы
       if (!atBase && this.upgrades.gadgets.repair) this.unit.hp = Math.min(this.unit.stats.maxHp, this.unit.hp + REPAIR_RATE * dt);
+      // РЕМОНТНЫЙ ТРЮМ: непрерывный реген (healRate — HP за 10с)
+      if (this.unit.stats.healRate) this.unit.hp = Math.min(this.unit.stats.maxHp, this.unit.hp + this.unit.stats.healRate / 10 * dt);
       this.city.update(dt, atBase);
       this.cycle.update(dt);   // макро-таймер эскалации
       this.updateEnemies(dt);  // волны диких гнёзд
@@ -570,7 +604,6 @@ class Game {
     }
 
     this.input.endFrame();
-    requestAnimationFrame(this.loop);
   }
 }
 

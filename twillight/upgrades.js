@@ -12,29 +12,50 @@
 // ============================================================
 
 // step — прибавка стата за уровень; base(s) — базовое значение (для отображения).
+// cap — потолок уровней БАЗОВОГО набора (выше — анлоки меты, слоты рисуются «ЗАКРЫТО»).
+// metaNeed — id узла СЕТИ ПАМЯТИ, без которого трек вообще не появляется в забеге
+// ('core' = стартовый велком-узел открывает раздел ГОРОДА; 'u_drill'/'u_engine' — будущие
+// узлы синей ветки ЮНИТ, id назначим при её проработке — до тех пор треки скрыты).
 const UPG_TRACKS = [
-  { id: 'drill',   cat: 'unit', label: 'СИЛА БУРА',  sub: 'Скорость прохода породы', accent: '#f08a2a', icon: 'drill',
+  { id: 'drill',   cat: 'unit', label: 'СИЛА БУРА',  sub: 'Скорость прохода породы', accent: '#f08a2a', icon: 'drill', cap: 3, metaCap: { node: 'mast_drill', cap: UPG_MAX },
     need: (s) => s.canDig, step: 0.2, base: (s) => s.digMult, fmt: (v) => '×' + v.toFixed(1) },
-  { id: 'engine',  cat: 'unit', label: 'ПРИВОД',     sub: 'Скорость хода',          accent: '#3a7ec8', icon: 'engine',
+  { id: 'engine',  cat: 'unit', label: 'ПРИВОД',     sub: 'Скорость хода',          accent: '#3a7ec8', icon: 'engine', metaNeed: 'u_engine',
     need: (s) => s.canMove, step: 0.4, base: (s) => s.moveSpeed, fmt: (v) => v.toFixed(1) + ' т/с' },
-  { id: 'scanner', cat: 'unit', label: 'СЕНСОР',     sub: 'Радиус сканера',         accent: '#d4a042', icon: 'scanner',
+  { id: 'scanner', cat: 'unit', label: 'СЕНСОР',     sub: 'Радиус сканера',         accent: '#d4a042', icon: 'scanner', cap: 2,
     need: (s) => s.scanR > 0, step: 0.5, base: (s) => s.scanR, fmt: (v) => 'R ' + v.toFixed(1) },
-  { id: 'cargo',   cat: 'unit', label: 'ЁМКОСТЬ',    sub: 'Слотов под ресурс',      accent: '#c8e25a', icon: 'cargo',
-    need: (s) => s.capacity > 0, step: 2, base: (s) => s.capacity, fmt: (v) => v + '' },
-  { id: 'hull',    cat: 'unit', label: 'ПРОЧНОСТЬ',  sub: 'Максимум HP корпуса',    accent: '#ff3a22', icon: null,
+  { id: 'cargo',   cat: 'unit', label: 'ЁМКОСТЬ',    sub: 'Слотов под ресурс',      accent: '#c8e25a', icon: 'cargo', cap: 2,
+    need: (s) => s.capacity > 0 && !(s.healRate > 0), step: 2, base: (s) => s.capacity, fmt: (v) => v + '' },
+  // РЕМОНТНЫЙ ТРЮМ — трек варианта-трюма (когда он установлен, `s.healRate>0`): каждый уровень
+  // +1 HP/10с И +1 ёмкость. База от модуля (1 HP / 3 ёмк), 4 уровня → 5 HP / 7 ёмк. apply — два стата.
+  { id: 'repair',  cat: 'unit', label: 'РЕМОНТНЫЙ ТРЮМ', sub: 'Починка HP + ёмкость', accent: '#ff3a22', icon: 'cargo', cap: 4,
+    need: (s) => s.healRate > 0, step: 1, base: (s) => s.healRate, fmt: (v) => v.toFixed(0) + ' HP/10с',
+    apply: (s, lvl) => { s.healRate = (s.healRate || 0) + lvl; s.capacity = (s.capacity || 0) + lvl; } },
+  { id: 'hull',    cat: 'unit', label: 'ПРОЧНОСТЬ',  sub: 'Максимум HP корпуса',    accent: '#ff3a22', icon: null, cap: 2, metaCap: { node: 'mast_rep', cap: 4 },
     need: () => true, step: 20, base: (s) => s.maxHp, fmt: (v) => v + ' HP' },
-  { id: 'battery', cat: 'city', label: 'ЁМКОСТЬ БАТАРЕЙ', sub: 'Время до гибернации', accent: '#f08a2a', icon: null,
+  // ПРОЖЕКТОР — дальность луча; открывается узлом «Сенсорный цех» (`mast_sens`). Эффект — render_light.
+  { id: 'proj',    cat: 'unit', label: 'ПРОЖЕКТОР',  sub: 'Ширина и яркость луча',   accent: '#f2c878', icon: null, metaNeed: 'mast_sens', cap: 3,
+    need: () => true, step: 1, base: () => 0, fmt: (v) => ['узкий', 'шире', 'широкий', 'макс. охват'][Math.round(v)] || ('ур ' + v) },
+  // ЭКРАН ПОМЕХ — гасит помехи интерфейса; открывается узлом «Экран помех» (`mast_sh`). Эффект — game.drawScene.
+  { id: 'noise',   cat: 'unit', label: 'ЭКРАН ПОМЕХ', sub: 'Гасит помехи интерфейса', accent: '#3a7ec8', icon: null, metaNeed: 'mast_sh',
+    need: () => true, step: 0.15, base: () => 0, fmt: (v) => Math.round(v * 100) + '%' },
+  { id: 'battery', cat: 'city', label: 'ЁМКОСТЬ БАТАРЕЙ', sub: 'Время до гибернации', accent: '#f08a2a', icon: null, metaNeed: 'core',
     need: () => true, step: 15, base: () => CITY_TIMER_MAX, fmt: (v) => Math.round(v) + ' с' },
   // Контуры — 3 отдельных трека по кольцам (ring index: 0=ядро, последнее=внешний).
-  { id: 'ring_outer', cat: 'city', label: 'ВНЕШНИЙ КОНТУР', sub: 'Прочность внешнего кольца', accent: '#ff3a22', icon: null,
+  { id: 'ring_outer', cat: 'city', label: 'ВНЕШНИЙ КОНТУР', sub: 'Прочность внешнего кольца', accent: '#ff3a22', icon: null, metaNeed: 'core',
     need: () => true, step: 40, base: () => CITY_RING_HP, fmt: (v) => Math.round(v) + ' HP', ring: CITY_RINGS - 1 },
-  { id: 'ring_inner', cat: 'city', label: 'ВНУТР. КОНТУР', sub: 'Прочность внутреннего кольца', accent: '#ff3a22', icon: null,
+  { id: 'ring_inner', cat: 'city', label: 'ВНУТР. КОНТУР', sub: 'Прочность внутреннего кольца', accent: '#ff3a22', icon: null, metaNeed: 'core',
     need: () => true, step: 40, base: () => CITY_RING_HP, fmt: (v) => Math.round(v) + ' HP', ring: 1 },
-  { id: 'ring_core', cat: 'city', label: 'ЯДРО', sub: 'Прочность ядра города', accent: '#ff3a22', icon: null,
+  { id: 'ring_core', cat: 'city', label: 'ЯДРО', sub: 'Прочность ядра города', accent: '#ff3a22', icon: null, metaNeed: 'core',
     need: () => true, step: 40, base: () => CITY_RING_HP, fmt: (v) => Math.round(v) + ' HP', ring: 0 },
 ];
+// потолок уровней трека: базовый `cap` (или UPG_MAX), поднимается узлом СЕТИ ПАМЯТИ (`metaCap`)
+const trCap = (tr) => {
+  let c = tr.cap || UPG_MAX;
+  if (tr.metaCap && typeof metaHas === 'function' && metaHas(tr.metaCap.node)) c = tr.metaCap.cap;
+  return c;
+};
 // Соответствие трека → поле stats юнита (для applyToStats).
-const UPG_STAT_MAP = { drill: 'digMult', engine: 'moveSpeed', scanner: 'scanR', cargo: 'capacity', hull: 'maxHp' };
+const UPG_STAT_MAP = { drill: 'digMult', engine: 'moveSpeed', scanner: 'scanR', cargo: 'capacity', hull: 'maxHp', proj: 'projLvl', noise: 'noiseResist' };
 
 const UPG_GADGETS = [
   { id: 'magnet', label: 'АВТО-СБОРЩИК', sub: 'Радиус подбора ресурса +1', accent: '#d4a042', cost: { iron: 18, organic: 8 } },
@@ -60,7 +81,9 @@ class Upgrades {
     this.bank = { iron: 0, organic: 0, crystal: 0 };
     this.levels = {}; this.gadgets = {};
     this.base = { ...baseStats }; this.cityName = cityName || 'База';
-    this.tracks = UPG_TRACKS.filter((tr) => tr.need(this.base));
+    // набор треков: по модулям сборки (need) И по анлокам СЕТИ ПАМЯТИ (metaNeed);
+    // мета применяется на СТАРТЕ сессии — купленный среди забега узел заработает со следующего
+    this.tracks = UPG_TRACKS.filter((tr) => tr.need(this.base) && (!tr.metaNeed || (typeof metaHas === 'function' && metaHas(tr.metaNeed))));
     for (const tr of this.tracks) this.levels[tr.id] = 0;
     this.scrollY = 0; this.sel = 0; this.warnT = -1e9;
   }
@@ -73,7 +96,7 @@ class Upgrades {
 
   buyTrack(id) {
     const tr = this.tracks.find((t) => t.id === id); if (!tr) return;
-    const lvl = this.levels[id] || 0; if (lvl >= UPG_MAX) return;
+    const lvl = this.levels[id] || 0; if (lvl >= trCap(tr)) return;
     const cost = this.tierCost(lvl); if (!this.canAfford(cost)) return;
     this.spend(cost); this.levels[id] = lvl + 1;
     this.buyFlash = { id, level: lvl + 1, t0: performance.now() };   // подтверждение: свечение купленной карточки
@@ -91,8 +114,10 @@ class Upgrades {
     const s = { ...this.base };
     for (const tr of UPG_TRACKS) {
       if (tr.cat !== 'unit') continue;
-      const lvl = this.levels[tr.id] || 0, f = UPG_STAT_MAP[tr.id];
-      if (lvl && f) s[f] += lvl * tr.step;
+      const lvl = this.levels[tr.id] || 0; if (!lvl) continue;
+      if (tr.apply) { tr.apply(s, lvl); continue; }        // трек с несколькими статами (напр. ремонтный трюм)
+      const f = UPG_STAT_MAP[tr.id];
+      if (f) s[f] = (s[f] || 0) + lvl * tr.step;            // (s[f]||0): новые статы не в базе
     }
     return s;
   }
@@ -108,16 +133,16 @@ class Upgrades {
   // ---- навигация WASD: выбор «крайнего» (следующего к покупке) слота трека ----
   moveSel(d) { if (!this.tracks.length) return; this.sel = Math.max(0, Math.min(this.tracks.length - 1, (this.sel || 0) + d)); this.endHold(); }
   selTrack() { return this.tracks[this.sel || 0]; }
-  selNextCost() { const tr = this.selTrack(); if (!tr) return null; const lvl = this.levels[tr.id] || 0; return lvl >= UPG_MAX ? null : this.tierCost(lvl); }
+  selNextCost() { const tr = this.selTrack(); if (!tr) return null; const lvl = this.levels[tr.id] || 0; return lvl >= trCap(tr) ? null : this.tierCost(lvl); }
   selAffordable() { const c = this.selNextCost(); return c ? this.canAfford(c) : false; }
   // покупаемость трека: есть следующий уровень и хватает банка
-  trackBuyable(id) { const tr = this.tracks.find((t) => t.id === id); if (!tr) return false; const lvl = this.levels[id] || 0; return lvl < UPG_MAX && this.canAfford(this.tierCost(lvl)); }
+  trackBuyable(id) { const tr = this.tracks.find((t) => t.id === id); if (!tr) return false; const lvl = this.levels[id] || 0; return lvl < trCap(tr) && this.canAfford(this.tierCost(lvl)); }
 
   // ---- удержание для покупки: ПРОБЕЛ или зажатая ЛКМ заполняют карточку за UPG_HOLD_TIME ----
   beginHold(id, src) {
     if (!id) return;
     const tr = this.tracks.find((t) => t.id === id); if (!tr) return;
-    if ((this.levels[id] || 0) >= UPG_MAX) return;               // уже максимум
+    if ((this.levels[id] || 0) >= trCap(tr)) return;             // уже максимум (потолок трека)
     if (!this.trackBuyable(id)) { this.warnT = performance.now(); return; }  // не хватает — вспышка
     this.holdId = id; this.holdSrc = src; this.holdT = 0;
   }
@@ -207,7 +232,13 @@ class Upgrades {
 
     this._selScreenY = null;
     drawSection('// ЮНИТ', PAL.cobalt, this.tracks.filter((t) => t.cat === 'unit'));
-    drawSection('// ГОРОД · ' + this.cityName.toUpperCase(), PAL.amber, this.tracks.filter((t) => t.cat === 'city'));
+    const cityTracks = this.tracks.filter((t) => t.cat === 'city');
+    if (cityTracks.length) drawSection('// ГОРОД · ' + this.cityName.toUpperCase(), PAL.amber, cityTracks);
+    else if (cy + 14 > innerY && cy < innerY + innerH) {   // раздел закрыт: куплен ли стартовый узел СЕТИ ПАМЯТИ
+      ctx.fillStyle = PAL.ash; ctx.font = `9px ${FONT_MONO}`; ctx.textAlign = 'left';
+      ctx.fillText('// ГОРОД — ЗАКРЫТО · ТРЕБУЕТ УЗЕЛ «ЯДРО ИИ» В СЕТИ ПАМЯТИ', L.list.x, cy + 13);
+      cy += 24;
+    }
     ctx.restore();
 
     const contentH = cy + this.scrollY - innerY;
@@ -259,13 +290,28 @@ class Upgrades {
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = PAL.chalk; ctx.font = `bold 11px ${FONT_MONO}`; ctx.fillText(tr.label, tx, y + 18);
     ctx.fillStyle = PAL.pewter; ctx.font = `8px ${FONT_MONO}`; ctx.fillText(tr.sub, tx, y + 32);
-    ctx.fillStyle = lvl >= UPG_MAX ? accent : PAL.bone; ctx.font = `9px ${FONT_MONO}`;
-    ctx.fillText('СЕЙЧАС: ' + tr.fmt(this.trackVal(tr, lvl)) + (lvl >= UPG_MAX ? ' · MAX' : ''), tx, y + 47);
+    const cap = trCap(tr);
+    ctx.fillStyle = lvl >= cap ? accent : PAL.bone; ctx.font = `9px ${FONT_MONO}`;
+    ctx.fillText('СЕЙЧАС: ' + tr.fmt(this.trackVal(tr, lvl)) + (lvl >= cap ? ' · MAX' : ''), tx, y + 47);
 
-    // карточки уровней
+    // карточки уровней: сетка всегда на UPG_MAX ячеек; слоты ВЫШЕ потолка трека — «ЗАКРЫТО»
+    // (заглушены, откроются узлами СЕТИ ПАМЯТИ; сетка стабильна — ряды не пляшут по ширине)
     const ca = x + labelW, gap = 6, cw = (x + w - ca - gap * (UPG_MAX - 1)) / UPG_MAX, ch = h;
     for (let k = 1; k <= UPG_MAX; k++) {
       const cx = ca + (k - 1) * (cw + gap);
+      if (k > cap) {   // за потолком трека: инертная тёмная ячейка
+        const liftable = tr.metaCap && k <= tr.metaCap.cap;   // выше — поднимается узлом СЕТИ ПАМЯТИ; иначе жёсткий потолок
+        ctx.fillStyle = 'rgba(8,6,10,0.5)'; ctx.fillRect(cx, y, cw, ch);
+        ctx.strokeStyle = PAL.carbon; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+        ctx.strokeRect(cx + 0.5, y + 0.5, cw - 1, ch - 1); ctx.setLineDash([]);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        if (liftable) {
+          ctx.fillStyle = PAL.ash; ctx.font = `7px ${FONT_MONO}`; ctx.fillText('ЗАКРЫТО', cx + cw / 2, y + ch / 2 - 5);
+          ctx.fillStyle = PAL.carbon; ctx.fillText('СЕТЬ ПАМЯТИ', cx + cw / 2, y + ch / 2 + 8);
+        } else { ctx.fillStyle = PAL.carbon; ctx.font = `13px ${FONT_MONO}`; ctx.fillText('—', cx + cw / 2, y + ch / 2); }
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+        continue;
+      }
       const owned = k <= lvl, next = k === lvl + 1, locked = k > lvl + 1;
       const cost = this.tierCost(k - 1), afford = next && this.canAfford(cost);
       const edge = next && selected;   // «крайний» слот выбранного трека (курсор WASD)

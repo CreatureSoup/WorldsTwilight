@@ -36,6 +36,7 @@ class Inventory {
     this.scrollY = 0;           // вертикальный скролл списка модулей
     this.maxScroll = 0;
     this.onStart = null;
+    this.onBack = null;   // «← назад» из сборки (game ставит: в меню до забега / в игру на лету)
     this.preGame = true;
 
     this.defaultBuild();
@@ -46,7 +47,8 @@ class Inventory {
   defaultBuild() {
     this.modules = {};
     for (const slot of HULL_DEFS[this.hull].slots)
-      for (const key in MODULE_DEFS) if (MODULE_DEFS[key].category === slot) { this.modules[slot] = key; break; }
+      for (const key in MODULE_DEFS) if (MODULE_DEFS[key].category === slot
+        && (!MODULE_DEFS[key].unlock || (typeof metaHas === 'function' && metaHas(MODULE_DEFS[key].unlock)))) { this.modules[slot] = key; break; }   // дефолт — первый НЕзагейченный вариант
   }
   reset() { this.defaultBuild(); this.resetCargo(); this.unit = null; this.drag = null; this.scrollY = 0; }
   resetCargo() { for (const k in this.cargo) this.cargo[k] = 0; }
@@ -54,7 +56,7 @@ class Inventory {
   // Производные статы по установленным модулям. HP — из корпуса.
   getStats() {
     const hull = HULL_DEFS[this.hull];
-    const s = { maxHp: hull.hp, moveSpeed: 0, digMult: 0, scanR: 0, capacity: 0,
+    const s = { maxHp: hull.hp, moveSpeed: 0, digMult: 0, scanR: 0, capacity: 0, healRate: 0,
                 canDig: false, canMove: false };
     for (const cat in this.modules) {
       const t = this.modules[cat]; if (!t) continue;
@@ -63,6 +65,7 @@ class Inventory {
       if (m.speed)    { s.moveSpeed = Math.max(s.moveSpeed, m.speed); s.canMove = true; }
       if (m.scanR)    s.scanR = Math.max(s.scanR, m.scanR);
       if (m.capacity) s.capacity += m.capacity;
+      if (m.healRate) s.healRate += m.healRate;   // ремонтный трюм
     }
     // Готов к старту, когда все слоты корпуса заняты.
     s.valid = HULL_DEFS[this.hull].slots.every((cat) => !!this.modules[cat]);
@@ -92,14 +95,16 @@ class Inventory {
     const headerH = 90;
     const bx = Math.round(W * 0.04), by = headerH, bw = Math.round(W * 0.54);
     const bh = Math.round(H - headerH - 200);
-    const blueprint = { x: bx, y: by, w: bw, h: bh, cx: bx + bw / 2, cy: by + bh / 2 };
+    // центр рига чуть НИЖЕ середины панели: модули/бур торчат вверх сильнее, чем ноги вниз
+    const blueprint = { x: bx, y: by, w: bw, h: bh, cx: bx + bw / 2, cy: by + bh / 2 + Math.round(bh * 0.06) };
     const stats = { x: bx, y: by + bh + 8, w: bw, h: 84 };
+    const back = { x: bx, y: 20, w: 40, h: 36 };   // «← назад» — лаконичная стрелка, как в мете/кодексе
     const lx = bx + bw + 18, ly = by;
     const lw = Math.max(280, W - lx - Math.round(W * 0.04));
     const lh = bh + 8 + 84;
     const list = { x: lx, y: ly, w: lw, h: lh };
     const start = { x: bx, y: H - 64, w: bw, h: 50 };
-    this.layout = { blueprint, stats, list, start, W, H };
+    this.layout = { blueprint, stats, list, start, back, W, H };
     return this.layout;
   }
   inRect(x, y, r) { return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; }
@@ -130,7 +135,7 @@ class Inventory {
     }
     for (const lg of rig.legs) for (const sg of lg.segs) maxR = Math.max(maxR, Math.hypot(sg.lx, sg.ly), Math.hypot(sg.jx, sg.jy));
     const b = L.blueprint, half = Math.min(b.w, b.h - 30) / 2;
-    return Math.max(1, half * 1.55 / maxR);
+    return Math.max(1, half * 1.22 / maxR);   // 1.22: крупно, но модули/бур не режутся кромкой панели (1.55 обрезал верх)
   }
   // t — общее время для idle-анимации (чтобы кольца гнёзд следовали за деталями).
   _rigTime() { return performance.now() / 1000; }
@@ -142,9 +147,12 @@ class Inventory {
     if (!this._plRig || this._plSig !== sig) {
       this._plRig = makeLegRig(legConfigsFromUnit(this._dummyUnit(false), 1), 1);
       this._plSig = sig;
-      // Пол на ~60% ВЫЛЕТА ноги: ноги вытянуты к полу, но не поджаты и не у предела.
+      // Пол на ~72% ВЫЛЕТА ноги: вытянуты, не у предела (плант-порог 0.99, отрыв ≥0.84). НЕ ближе:
+      // при сложенных ногах (пол ~0.6) средние СУСТАВЫ висят у линии породы — волна позы загоняет
+      // колено в камень, _ikAvoidRock каждый кадр выталкивает его на ≥16px → мелкая дрожь одной ноги.
       let reach = 0; for (const L of this._plRig.legs) reach = Math.max(reach, L.reach || 0);
-      this._plWy = TILE - reach * 0.6;
+      this._plWy = TILE - reach * 0.72;
+      this._plRig._footSink = 0;   // стопы НА поверхность: окклюзии тут нет, утопленная стопа топила сустав в породу (дрожь)
     }
     const world = { tileAt: (tx, ty) => ({ type: ty >= 1 ? ROCK : AIR }) };   // фейковый пол снизу (48px)
     this._plRig.supportAngle = 0;
@@ -156,16 +164,27 @@ class Inventory {
     updateLegRig(this._plRig, 1 / 120, 0, this._plWy, world, { x: 0, y: 0 });
     return this._plRig;
   }
+  // Экранные позиции гнёзд по деталям юнита. КОЛЬЦО раскладывает модули по ang/rad
+  // (как drawRingUnit) — у кольца resolveUnitRig().parts даёт NaN, отсюда отдельная ветка;
+  // иначе slotAt всегда возвращал null → дроп карточки на юнит не срабатывал.
   computeSlots() {
     const L = this.layout; if (!L) return [];
-    const b = L.blueprint, S = this.blueprintScale(L);
-    const rig = resolveUnitRig(0, 0, this._dummyUnit(true), this._rigTime());
+    const b = L.blueprint, S = this.blueprintScale(L), def = UNIT_DEFS[this.hull];
     const out = [];
+    const push = (cat, x, y) => out.push({ category: cat, label: SLOT_META[cat].label, lx: SLOT_META[cat].lx, ly: SLOT_META[cat].ly, x, y });
+    if (def && def.kind === 'ring') {
+      const R = (TILE - 8) / 2, bo = (this._plRig && this._plRig.bodyOff) || { x: 0, y: 0 };   // тот же сдвиг корпуса на щупальцах, что в превью
+      for (const cat in SLOT_META) {
+        const p = def.parts.find((pp) => pp.kind === SLOT_META[cat].kind); if (!p) continue;
+        const a = (p.ang || 0) * Math.PI / 180;   // aim=0, flip=1 в превью
+        push(cat, b.cx + (bo.x + Math.cos(a) * (p.rad || 0) * R) * S, b.cy + (bo.y + Math.sin(a) * (p.rad || 0) * R) * S);
+      }
+      return out;
+    }
+    const rig = resolveUnitRig(0, 0, this._dummyUnit(true), this._rigTime());
     for (const cat in SLOT_META) {
-      const part = rig.parts.find((p) => p.kind === SLOT_META[cat].kind);
-      if (!part) continue;
-      out.push({ category: cat, label: SLOT_META[cat].label, lx: SLOT_META[cat].lx, ly: SLOT_META[cat].ly,
-                 x: b.cx + part.x * S, y: b.cy + part.y * S });
+      const part = rig.parts.find((p) => p.kind === SLOT_META[cat].kind); if (!part) continue;
+      push(cat, b.cx + part.x * S, b.cy + part.y * S);
     }
     return out;
   }
@@ -187,7 +206,9 @@ class Inventory {
     for (const cat of HULL_DEFS[this.hull].slots) {
       headers.push({ label: labels[cat] || cat.toUpperCase(), x: x0, y: cy, w: L.list.w - 28 });
       cy += hdrH;
-      const mods = Object.keys(MODULE_DEFS).filter((k) => MODULE_DEFS[k].category === cat);
+      // варианты слота; гейтнутые (`unlock`) показываются только при открытом узле СЕТИ ПАМЯТИ
+      const mods = Object.keys(MODULE_DEFS).filter((k) => MODULE_DEFS[k].category === cat
+        && (!MODULE_DEFS[k].unlock || (typeof metaHas === 'function' && metaHas(MODULE_DEFS[k].unlock))));
       mods.forEach((type, i) => {
         cards.push({ type, category: cat, def: MODULE_DEFS[type], x: x0 + i * (cw + cgap), y: cy, w: cw, h: ch });
       });
@@ -210,6 +231,7 @@ class Inventory {
   pointerDown(x, y) {
     const L = this.layout; if (!L) return;
     this.mouse = { x, y };
+    if (this.inRect(x, y, L.back)) { if (this.onBack) this.onBack(); return; }
     if (this.inRect(x, y, L.start)) { if (this.getStats().valid && this.onStart) this.onStart(); return; }
     const card = this.cardAt(x, y);
     if (card) this.drag = { type: card.type, category: card.category };
@@ -245,12 +267,36 @@ class Inventory {
     ctx.fillStyle = PAL.pewter; ctx.font = `11px ${FONT_MONO}`;
     ctx.fillText('ТАЩИ КАРТОЧКУ МОДУЛЯ НА СВЕТЯЩИЙСЯ СЛОТ · ENTER · В ШАХТУ', W / 2, 74);
 
+    this._drawBack(ctx, L.back);
     this._drawBlueprint(ctx, L);
     this._drawStats(ctx, L);
     this._drawList(ctx, L);
     this._drawStart(ctx, L);
 
     if (this.drag) this._drawDragGhost(ctx);
+  }
+
+  // «← назад» — лаконичная стрелка в рамке со скошенным углом (как `.mt-back`/`.cx-back` в DOM-разделах)
+  _drawBack(ctx, r) {
+    const hov = !this.drag && this.inRect(this.mouse.x, this.mouse.y, r);
+    const cut = 9;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(r.x + 0.5, r.y + 0.5);
+    ctx.lineTo(r.x + r.w - 0.5, r.y + 0.5);
+    ctx.lineTo(r.x + r.w - 0.5, r.y + r.h - 0.5);
+    ctx.lineTo(r.x + cut + 0.5, r.y + r.h - 0.5);
+    ctx.lineTo(r.x + 0.5, r.y + r.h - cut - 0.5);
+    ctx.closePath();
+    if (hov) { ctx.fillStyle = 'rgba(212,160,66,0.10)'; ctx.fill(); }
+    ctx.strokeStyle = hov ? PAL.gold : PAL.ash; ctx.lineWidth = 1; ctx.stroke();
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    ctx.strokeStyle = hov ? PAL.goldBright : PAL.bone; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx + 6, cy); ctx.lineTo(cx - 5, cy);
+    ctx.moveTo(cx - 1, cy - 5); ctx.lineTo(cx - 6, cy); ctx.lineTo(cx - 1, cy + 5);
+    ctx.stroke();
+    ctx.restore();
   }
 
   _drawBlueprint(ctx, L) {
@@ -289,24 +335,51 @@ class Inventory {
     }
     ctx.restore();
 
-    // гнёзда — лёгкие кольца-цели поверх деталей: установленный — тонкое кольцо,
-    // пустой — пунктир amber, при перетаскивании подходящей карточки — подсветка.
+    // гнёзда поверх деталей. При перетаскивании карточки совпадающий по категории слот —
+    // ЯРКАЯ анимированная цель (радар-пинг: точка + расходящиеся кольца), остальные уводятся
+    // на второй план. Вне драга — тонкие кольца статуса (занят/пуст).
+    const tp = performance.now() / 1000;
     for (const s of slots) {
       const filled = !!this.modules[s.category];
       const matchable = this.drag && this.drag.category === s.category;
-      const hovering = matchable && this.hoverSlot && this.hoverSlot.category === s.category;
+      if (matchable) { this._drawSlotPing(ctx, s, this.hoverSlot && this.hoverSlot.category === s.category, tp); continue; }
       const r = 24;
       let col, lw, dash, alpha;
-      if (hovering)        { col = PAL.goldBright; lw = 2.5; dash = []; alpha = 1; }
-      else if (matchable)  { col = PAL.gold;       lw = 2;   dash = [5, 4]; alpha = 1; }
-      else if (filled)     { col = PAL.cobalt;     lw = 1;   dash = []; alpha = 0.5; }
-      else                 { col = PAL.amber;      lw = 1.5; dash = [4, 4]; alpha = 1; }
+      if (this.drag)       { col = PAL.bronze; lw = 1;   dash = [3, 5]; alpha = 0.3; }   // чужая категория — приглушить, чтобы цель выделялась
+      else if (filled)     { col = PAL.cobalt; lw = 1;   dash = [];     alpha = 0.5; }
+      else                 { col = PAL.amber;  lw = 1.5; dash = [4, 4]; alpha = 1; }
       ctx.globalAlpha = alpha; ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.setLineDash(dash);
       ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, 6.283); ctx.stroke();
       ctx.setLineDash([]); ctx.globalAlpha = 1;
     }
     ctx.restore();
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  }
+
+  // Радар-пинг цели для дропа: прицел-кольцо + центральная точка + 2 расходящихся кольца
+  // БЕЗ заливки с фейд-аутом (в противофазе). hovering — курсор над целью: ярче/быстрее/крупнее.
+  _drawSlotPing(ctx, s, hovering, t) {
+    const col = hovering ? PAL.goldBright : PAL.gold;
+    const period = hovering ? 0.8 : 1.15, rMin = 11, rMax = hovering ? 50 : 42;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (let k = 0; k < 2; k++) {                                  // расходящиеся кольца с фейд-аутом
+      const ph = ((t / period) + k * 0.5) % 1;
+      ctx.globalAlpha = (1 - ph) * (hovering ? 0.9 : 0.6);
+      ctx.strokeStyle = col; ctx.lineWidth = 2.4 * (1 - ph) + 0.5;
+      ctx.beginPath(); ctx.arc(s.x, s.y, rMin + (rMax - rMin) * ph, 0, 6.283); ctx.stroke();
+    }
+    ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = hovering ? 2.6 : 1.8;   // прицел-кольцо
+    ctx.beginPath(); ctx.arc(s.x, s.y, rMin, 0, 6.283); ctx.stroke();
+    ctx.lineWidth = 1.6;                                           // прицельные риски по 4 сторонам
+    for (const d of [0, 90, 180, 270]) {
+      const a = d * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a);
+      ctx.beginPath(); ctx.moveTo(s.x + c * (rMin + 4), s.y + sn * (rMin + 4)); ctx.lineTo(s.x + c * (rMin + 9), s.y + sn * (rMin + 9)); ctx.stroke();
+    }
+    const pulse = 0.55 + 0.45 * Math.sin(t * 12.566 / period);     // центральная точка пульсирует
+    ctx.globalAlpha = 0.6 + 0.4 * pulse; ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(s.x, s.y, 3.6, 0, 6.283); ctx.fill();
+    ctx.restore();
   }
 
   // Выноска: тонкая линия от кольца гнезда к фоновой подписи в сторону (lx,ly).
