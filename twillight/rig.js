@@ -26,6 +26,7 @@ function unitHasPart(unit, need) {
   if (need === 'engine')  return !!s.canMove;       // есть двигатель
   if (need === 'scanner') return (s.scanR || 0) > 0;
   if (need === 'cargo')   return (s.capacity || 0) > 0;
+  if (need === 'aux')     return (s.noiseResist || 0) > 0 || (s.printer || 0) > 0;   // доп-слот: деталь видна, когда модуль (экран помех ИЛИ принтер) установлен
   return true;
 }
 

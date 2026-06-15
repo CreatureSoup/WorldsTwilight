@@ -176,7 +176,7 @@ function drawMetaToken(ctx, cx, cy, r) {
 function drawGameOver(ctx, buttons, W, H, reason, meta, overT, bank) {
   meta = meta || { rows: [], total: 0 }; overT = overT || 0; bank = bank || 0;
   const ease = (p) => (p <= 0 ? 0 : p >= 1 ? 1 : 1 - (1 - p) * (1 - p));
-  const unit = reason === 'unit';
+  const unit = reason === 'unit', hack = reason === 'hack';
   drawStaticBg(ctx, W, H);
   ctx.fillStyle = 'rgba(10,4,5,0.82)'; ctx.fillRect(0, 0, W, H);
   hazardTape(ctx, 0, 0, W, 7, PAL.blood);
@@ -185,11 +185,11 @@ function drawGameOver(ctx, buttons, W, H, reason, meta, overT, bank) {
   // ── шапка ──
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.bloodBright;
-  ctx.fillText(unit ? '⚠ КОРПУС УТРАЧЕН · 0xE204' : '⚠ СВЯЗЬ ПРЕРВАНА · 0xE204', W / 2, 48);
+  ctx.fillText(unit ? '⚠ КОРПУС УТРАЧЕН · 0xE204' : hack ? '⚠ ФАЙРВОЛЛ ПРОБИТ · 0xE204' : '⚠ СВЯЗЬ ПРЕРВАНА · 0xE204', W / 2, 48);
   ctx.font = `800 44px ${FONT_DISPLAY}`; ctx.fillStyle = PAL.chalk;
-  ctx.fillText(unit ? 'ЮНИТ РАЗРУШЕН' : 'СВЯЗЬ ПОТЕРЯНА', W / 2, 90);
+  ctx.fillText(unit ? 'ЮНИТ РАЗРУШЕН' : hack ? 'ГОРОД ВЗЛОМАН' : 'СВЯЗЬ ПОТЕРЯНА', W / 2, 90);
   ctx.fillStyle = PAL.bone; ctx.font = `12px ${FONT_BODY}`;
-  ctx.fillText(unit ? 'Скверна разъела корпус.' : 'Город ушёл в гибернацию — канал связи оборван.', W / 2, 112);
+  ctx.fillText(unit ? 'Скверна разъела корпус.' : hack ? 'Дикие пробили файрволл — город захвачен.' : 'Город ушёл в гибернацию — канал связи оборван.', W / 2, 112);
 
   // ── панель пересчёта ──
   const px = 44, pw = W - 88, py = 142, ph = 304;
@@ -200,7 +200,7 @@ function drawGameOver(ctx, buttons, W, H, reason, meta, overT, bank) {
   ctx.textAlign = 'left'; ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.gold;
   ctx.fillText('// ПЕРЕСЧЁТ ЗАБЕГА · ' + META_NAME, px + 14, py + 17);
   ctx.textAlign = 'right'; ctx.fillStyle = PAL.bloodBright;
-  ctx.fillText(unit ? 'СТАТУС · КОРПУС' : 'СТАТУС · СВЯЗЬ', px + pw - 14, py + 17);
+  ctx.fillText(unit ? 'СТАТУС · КОРПУС' : hack ? 'СТАТУС · ФАЙРВОЛЛ' : 'СТАТУС · СВЯЗЬ', px + pw - 14, py + 17);
 
   // ── строки ──
   const rx0 = px + 18, rx1 = px + pw - 18, rowY = py + 58, lineH = 30;

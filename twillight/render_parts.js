@@ -14,6 +14,15 @@ function partsProcOn() { return _partsProc; }   // активны ли спра�
 let _partsHull = '';
 function partsHull(h) { _partsHull = h || ''; }
 function spriteFor(id) { if (_partsProc || !id) return null; return (_partsHull && PART_SPRITES[_partsHull + ':' + id]) || PART_SPRITES[id] || null; }
+// Деталь корпуса (kind) → слот-категория модуля. Для подмены спрайта детали на спрайт КОНКРЕТНОГО
+// установленного варианта модуля (ключ `mod:<moduleId>`), если он задан; иначе — обычный спрайт детали.
+const PART2CAT = { drill: 'drill', engine: 'engine', hold: 'cargo', sensor: 'scanner', aux: 'aux' };
+let _auxMod = null;   // какой модуль в доп-слоте сейчас рисуется (для проц-силуэта: экран помех vs принтер)
+function partSpriteId(unit, partId) {
+  const cat = PART2CAT[partId], modId = cat && unit && unit.modules && unit.modules[cat];
+  if (partId === 'aux') _auxMod = modId || null;
+  return (modId && spriteFor('mod:' + modId)) ? ('mod:' + modId) : partId;
+}
 const CABLE_COL = { power: PAL.amber, data: PAL.cobalt, hydraulic: PAL.toxic };
 
 // Положить спрайт на деталь. scale — масштаб картинки (px/px); по умолчанию вписать
@@ -91,7 +100,34 @@ function drawPart(ctx, kind, x, y, S, angle, flip, t, opts) {
   else if (kind === 'engine') drawEnginePart(ctx, S);
   else if (kind === 'weapon') drawWeaponPart(ctx, S);
   else if (kind === 'custom') drawCustomPart(ctx, S);
+  else if (kind === 'aux') drawAuxPart(ctx, S);
   ctx.restore();
+}
+
+// Доп-слот — проц-заглушка (пока нет спрайта из редактора). ПРИНТЕР — сопло-эмиттер; иначе экран помех (щит).
+function drawAuxPart(ctx, S) {
+  if (_auxMod === 'print') { drawPrinterPart(ctx, S); return; }
+  const r = S * 0.72;
+  ctx.fillStyle = '#16232f'; ctx.strokeStyle = '#3a7ec8'; ctx.lineWidth = Math.max(1, S * 0.07);
+  ctx.beginPath();
+  ctx.moveTo(0, -r); ctx.lineTo(r * 0.82, -r * 0.32); ctx.lineTo(r * 0.82, r * 0.42); ctx.lineTo(0, r); ctx.lineTo(-r * 0.82, r * 0.42); ctx.lineTo(-r * 0.82, -r * 0.32); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = '#6fa9c8'; ctx.lineWidth = Math.max(1, S * 0.05);
+  for (let i = 1; i <= 2; i++) { ctx.globalAlpha = 0.7 / i; ctx.beginPath(); ctx.arc(0, -r * 0.05, r * 0.28 * i, -1.05, 1.05); ctx.stroke(); }
+  ctx.globalAlpha = 1;
+}
+// Модуль печати — сопло-эмиттер (проц-заглушка до ассета): сужающийся корпус + сопло + тёплое свечение.
+function drawPrinterPart(ctx, S) {
+  const r = S * 0.72;
+  ctx.fillStyle = '#2a2018'; ctx.strokeStyle = '#ff8f3a'; ctx.lineWidth = Math.max(1, S * 0.07);
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.7, -r * 0.7); ctx.lineTo(r * 0.7, -r * 0.7); ctx.lineTo(r * 0.4, r * 0.5); ctx.lineTo(-r * 0.4, r * 0.5); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#3a2a1a'; ctx.fillRect(-r * 0.22, r * 0.42, r * 0.44, r * 0.34);   // сопло
+  ctx.fillStyle = '#ffb060'; ctx.beginPath(); ctx.arc(0, r * 0.8, r * 0.16, 0, 6.283); ctx.fill();   // свечение кончика
+  ctx.strokeStyle = '#ff8f3a'; ctx.lineWidth = Math.max(1, S * 0.04); ctx.globalAlpha = 0.6;
+  for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(-r * 0.5, i * r * 0.22 - r * 0.08); ctx.lineTo(r * 0.5, i * r * 0.22 - r * 0.08); ctx.stroke(); }
+  ctx.globalAlpha = 1;
 }
 
 // Нога — сегментный мини-риг (из rig.resolveLeg): кадр ноги (хип + зеркало),

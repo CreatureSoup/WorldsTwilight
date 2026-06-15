@@ -52,6 +52,8 @@ class Unit {
   update(dt, input, world) {
     const s = this.stats;
     this.drilling = false;
+    if (this.frozenPrint) return;   // ПЕЧАТЬ: юнит залочен на месте (ввод/гравитация/бур выкл) — см. print.js
+
     if (this.dx === 1 || this.dx === -1) this.faceX = this.dx;  // запомнить горизонталь до возможной смены на «вверх/вниз»
 
     // «Замок» свежепрокопанного тайла: разовое нажатие (пробил → отпустил) НЕ въезжает в дыру —
@@ -73,7 +75,15 @@ class Unit {
         this.px = this.tileX * TILE + TILE / 2;
         this.py = this.tileY * TILE + TILE / 2;
         const falling = this.moveSpeed === FALL_SPEED && !this.isAnchored(world) && world.tileAt(this.tileX, this.tileY + 1).type === AIR;
+        // ПЛАВНЫЙ ход: если держишь то же горизонт. направление и впереди ОТКРЫТЫЙ тайл с опорой — сразу
+        // цепляем следующий, ПЕРЕНОСЯ остаток progress (без кадра-заморозки IDLE на стыке = «осечки по тайлам»).
+        const nx = this.tileX + this.dx;
+        const walkOn = !falling && this.dy === 0 && (this.dx === 1 || this.dx === -1) && this.moveSpeed !== FALL_SPEED
+          && (this.dx === 1 ? input.right() : input.left())
+          && world.tileAt(nx, this.tileY).type === AIR && this.anchoredAt(world, nx, this.tileY)
+          && !(this._dugBlock && this._dugBlock.x === wrapX(nx) && this._dugBlock.y === this.tileY);
         if (falling) { this.fromX = this.tileX; this.fromY = this.tileY; this.toX = this.tileX; this.toY = this.tileY + 1; this.progress -= 1; }
+        else if (walkOn) { this.fromX = this.tileX; this.fromY = this.tileY; this.toX = nx; this.toY = this.tileY; this.progress -= 1; }
         else { this.state = IDLE; this.progress = 0; break; }
       }
       if (this.state === MOVING) {

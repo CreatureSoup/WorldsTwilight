@@ -29,6 +29,8 @@
 @keyframes cx-segpulse { 0%,100%{ opacity:0.55; } 50%{ opacity:1; } }
 :is(#codexScreen,#codexPopup) .newdot { animation:cx-newpulse 1.2s ease-in-out infinite; }
 @keyframes cx-newpulse { 0%,100%{ opacity:0.4; transform:scale(0.85); } 50%{ opacity:1; transform:scale(1.1); } }
+/* окно не в фокусе/скрыто (класс ставит game._syncIdle) — гасим вращения колец и пульсации: компоновщик GPU грел впустую */
+html.bg-idle :is(#codexScreen,#codexPopup) * { animation-play-state:paused !important; }
 
 /* лаконичная кнопка «назад» (стрелка) */
 #codexScreen .cx-back { width:40px; height:40px; flex-shrink:0; display:flex; align-items:center; justify-content:center;

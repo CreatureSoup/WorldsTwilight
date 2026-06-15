@@ -56,7 +56,7 @@ class FallingRocks {
       const boulder = t.boulder, hardness = t.hardness, resource = t.resource;   // запомнить ДО setAir (он чистит тайл)
       t.shaking = false;
       world.setAir(p.x, p.y);          // освобождаем клетку (это же поднимет триггер на клетку выше — цепочка)
-      this.blocks.push({ tx: p.x, py: p.y * TILE, vy: 0, hit: false, boulder, hardness, resource });
+      this.blocks.push({ tx: p.x, py: p.y * TILE, py0: p.y * TILE, vy: 0, hit: false, boulder, hardness, resource });
       this.pending.delete(key);
     }
 
@@ -70,10 +70,11 @@ class FallingRocks {
       const restY = (rs - 1) * TILE;
       b.py = Math.min(b.py + b.vy * dt, restY);
 
-      // урон юниту (один раз за валун): та же колонка + вертикальное перекрытие
-      if (!b.hit && unit) {
+      // урон юниту (один раз за валун): та же колонка + вертикальное перекрытие. Бить может ТОЛЬКО
+      // реально упавший блок (прошёл ≥ ROCKFALL_MIN_FALL) — на кадре отрыва камень визуально ещё на месте.
+      if (!b.hit && unit && b.py - b.py0 >= TILE * ROCKFALL_MIN_FALL) {
         const dxp = wrapDeltaPx(unit.px, (b.tx + 0.5) * TILE);
-        if (Math.abs(dxp) < TILE * 0.55 && b.py < unit.py + TILE * 0.4 && b.py + TILE > unit.py - TILE * 0.4) {
+        if (Math.abs(dxp) < TILE * ROCKFALL_HIT_W && b.py < unit.py + TILE * ROCKFALL_HIT_H && b.py + TILE > unit.py - TILE * ROCKFALL_HIT_H) {
           const dmin = b.boulder ? BOULDER_DAMAGE_MIN : UNSTABLE_DAMAGE_MIN, dmax = b.boulder ? BOULDER_DAMAGE_MAX : UNSTABLE_DAMAGE_MAX;
           unit.hp -= dmin + Math.floor(Math.random() * (dmax - dmin + 1));   // случайный урон в диапазоне (валун бьёт сильнее)
           b.hit = true;

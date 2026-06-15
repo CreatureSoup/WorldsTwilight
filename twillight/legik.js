@@ -25,12 +25,14 @@ function _ikLerpAng(a, b, f) { let d = ((b - a + Math.PI) % (2 * Math.PI)) - Mat
 // утоплена внутрь сеточной на ~эрозию `_ragDepth`≈0.16 тайла, см. render_world): ставим стопу
 // ВНУТРЬ камня на чуть, чтобы доставала до ВИДИМОЙ поверхности; глубже скрывает окклюзия
 // (щупальца клипуются по видимому воздуху, drawTentacles). Иначе нога «висела» в воздухе.
-function _ikSurface(world, ax, ay, dir, reach) {
+function _ikSurface(world, ax, ay, dir, reach, sink) {
   for (const k of [0, 1, -1, 2, -2, 3, -3]) {
     const a = dir + k * 0.34, dx = Math.cos(a), dy = Math.sin(a);
     for (let d = TILE * 0.34; d <= reach; d += TILE * 0.24) {
       if (_ikSolid(world, ax + dx * d, ay + dy * d)) {
-        const cd = d + TILE * 0.12;   // ВНУТРЬ камня (к видимой кромке); излишек прячет окклюзия
+        // ВНУТРЬ камня (к видимой кромке); излишек прячет окклюзия. В превью инвентаря окклюзии нет
+        // → rig._footSink=0 (иначе сустав над утопленной стопой ныряет в породу и _ikAvoidRock дрожит).
+        const cd = d + (sink != null ? sink : TILE * 0.12);
         return { x: ax + dx * cd, y: ay + dy * cd };
       }
     }
@@ -161,8 +163,11 @@ function updateLegRig(rig, dt, cx, cy, world, walkVel) {
           const tanX = Math.cos(sa), tanY = Math.sin(sa);                         // вдоль опоры (горизонт на полу)
           const baseX = cx + obx + tanX * L.stance * TILE, baseY = cy + oby + tanY * L.stance * TILE;
           const downDir = Math.PI / 2 + sa, upDir = -Math.PI / 2 + sa;
+          // скан с запасом 1.3 (как ходячий 1.5): скан идёт от уровня ТЕЛА, а бедро может сидеть НИЖЕ
+          // центра — без запаса нога с коротким reach не «видела» пол, хотя от бедра достаёт (вечный
+          // ready = дрожь «не найду опору»). Гейт планта по реальной дистанции от бедра — ниже, без изменений.
           for (const sd of (L.up ? [upDir, downDir] : [downDir])) {
-            const s = _ikSurface(world, baseX, baseY, sd, L.reach);
+            const s = _ikSurface(world, baseX, baseY, sd, L.reach * 1.3, rig._footSink);
             if (s && Math.hypot(s.x - ax, s.y - ay) <= L.reach * 0.99) { surf = s; break; }
           }
         } else {
@@ -170,7 +175,7 @@ function updateLegRig(rig, dt, cx, cy, world, walkVel) {
           // первый годный (f=0 → строго вниз — всегда достаёт пол → нога ВСЕГДА встаёт, не висит).
           for (const f of [1, 0.7, 0.45, 0.22, 0]) {
             const ox = ax + Math.cos(velAng) * proj * stag * f, oy = ay + Math.sin(velAng) * proj * stag * f;
-            const s = _ikSurface(world, ox, oy, scanDir, L.reach * 1.5);
+            const s = _ikSurface(world, ox, oy, scanDir, L.reach * 1.5, rig._footSink);
             if (s && Math.hypot(s.x - hipPx, s.y - hipPy) <= L.reach * 0.97) { surf = s; break; }
           }
         }

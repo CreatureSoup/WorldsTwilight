@@ -18,16 +18,35 @@ const COLLECTOR_CAP = 6;   // потолок собирателей
 // уносит заряд домой. Полностью опустошённый контур не возобновляется (как гибернация).
 const RAIDER_SPEED = 5;    // быстрее копателя/собирателя (тайла/сек)
 const RAIDER_CAP = 3;      // потолок разведчиков
-const RAID_DRAIN = 50;     // сколько энергии (HP контура) высасывает за набег
-const RAID_DRAIN_TIME = 2.6; // сек: разведчик стоит у города и «заполняется» перед кражей (не мгновенно)
+const RAID_DRAIN = 50;     // сколько энергии высасывает за набег (≈10/сек × RAID_DRAIN_TIME): сначала таймер, переполнение — HP кольца
+const RAID_DRAIN_TIME = 5; // сек: разведчик стоит у города и «заполняется» перед кражей — долго и заметно (окно на перехват)
 const RAID_REACH_R = 5;    // тайлов — «достиг базы» (упирается в неразрушимый фундамент снизу)
+// ОХОТНИК (hunter) — летающий боец: гонится за юнитом по тоннелям, таранит с разгона.
+const HUNTER_SPEED = 4;          // тайла/сек на сближении (быстрее копателя — догоняет юнит)
+const HUNTER_CHARGE_SPEED = 16;  // тайла/сек рывок-таран (по px, прямой разгон к зафиксированной позиции юнита)
+const HUNTER_CHARGE_R = 7;       // тайлов: дистанция инициации тарана
+const HUNTER_HIT_R = 0.9;        // тайлов: контакт с юнитом = удар
+const HUNTER_DMG_MIN = 30, HUNTER_DMG_MAX = 40;   // урон юниту за таран (рандом в диапазоне)
+const HUNTER_WIND = 0.35;        // сек телеграфа перед рывком
+const HUNTER_CHARGE_MAX = 0.6;   // сек макс. длительность рывка (промах/упор в породу → recover)
+const HUNTER_RECOVER = 1.3;      // сек отскок+кулдаун перед новым разгоном
+const HUNTER_CAP = 2;            // потолок охотников
+// СНАЙПЕР (sniper) — летающий стрелок: охраняет взломщиков, держит дистанцию от юнита, бьёт издали проджектайлами.
+const SNIPER_SPEED = 4;          // тайла/сек (летает)
+const SNIPER_RANGE = 14;         // тайлов: дальность стрельбы по юниту
+const SNIPER_MINDIST = 5;        // тайлов: мин. дистанция до юнита (ближе — отступает/кайтит)
+const SNIPER_GUARD_R = 8;        // тайлов: держится в этом радиусе от охраняемого взломщика
+const SNIPER_COOLDOWN = 1.6;     // сек между выстрелами
+const SNIPER_CAP = 2;            // потолок снайперов
+// Летающие типы: по воздуху-тоннелям, без гравитации/клинга, НЕ копают (как рейдер). hacker/sniper — заделы (ниже).
+const ENEMY_FLYERS = { raider: 1, hunter: 1, hacker: 1, sniper: 1 };
 
 class Enemy {
   constructor(x, y, type, homeX, homeY, homeR) {
     this.tileX = x; this.tileY = y;
     this.px = x * TILE + TILE / 2; this.py = y * TILE + TILE / 2;
-    this.type = type;                 // 'digger' | 'collector' | 'raider'
-    this.maxHp = ENEMY_HP; this.hp = ENEMY_HP;   // прочность врага (задел под перехват/бой)
+    this.type = type;                 // 'digger' | 'collector' | 'raider' | 'hunter' | 'hacker' | 'sniper'
+    this.maxHp = ENEMY_HP_BY_TYPE[type] || ENEMY_HP; this.hp = this.maxHp;   // прочность по роли (задел под перехват/бой)
     this.speed = type === 'raider' ? RAIDER_SPEED : ENEMY_SPEED;
     this.homeX = homeX; this.homeY = homeY;
     this.homeR = homeR || 1;          // радиус «дома»: гнездо — открытая каверна, точный центр недостижим (клинг/гравитация)
@@ -37,6 +56,8 @@ class Enemy {
     this.draining = false; this.drainT = 0;  // разведчик у города: фаза «заполнения» перед кражей
     this.scan = 0; this.scanned = false;      // прогресс сканирования врага игроком (0..1) → данные кодекса (разово)
     this.dead = false;
+    this.dying = false; this.deathT = 0; this._fx = false;   // уничтожение: фаза анимации (обломки/искры) до чистки
+    this.stunT = 0; this.slowT = 0;   // ЭМИ-стан (заморозка) / глушилка-замедление (структуры игрока)
     this.state2 = IDLE; this.fromX = x; this.fromY = y; this.toX = x; this.toY = y; this.progress = 0;
     this.dx = 0; this.dy = 1; this.drilling = false;
     this.dug = null;                 // выкопанная жила {x,y,type}: game роняет лутом (копатель не «съедает» ресурс)
@@ -45,9 +66,10 @@ class Enemy {
     this.lastDir = { x: 0, y: 0 };
     this.commit = null;
     this.recent = [];                // недавние тайлы (анти-петля: не кружить в полости)
+    this.cstate = null; this.cT = 0; this.cvx = 0; this.cvy = 0; this.cHit = false; this.cBlocked = false; // охотник: фаза тарана (approach|wind|charge|recover)
   }
   startMove(nx, ny) { this.fromX = this.tileX; this.fromY = this.tileY; this.toX = nx; this.toY = ny; this.progress = 0; this.state2 = MOVING; }
-  damage(n) { this.hp -= n; if (this.hp <= 0) { this.hp = 0; this.dead = true; } }
+  damage(n) { if (this.dying) return; this.hp -= n; if (this.hp <= 0) { this.hp = 0; this.dying = true; this.deathT = ENEMY_DEATH_TIME; } }
   lerpAngle(a, b, t) { let d = ((b - a + Math.PI) % (2 * Math.PI)) - Math.PI; if (d < -Math.PI) d += 2 * Math.PI; return a + d * t; }
   anchoredAt(world, x, y) {
     return isSolid(world.tileAt(x - 1, y)) || isSolid(world.tileAt(x + 1, y))
@@ -57,8 +79,8 @@ class Enemy {
     const ny = this.tileY + dy;
     if (this.type === 'digger' && ny < DIGGER_MIN_Y) return false; // копатель не лезет в верхние слои-страты и на поверхность
     const t = world.tileAt(this.tileX + dx, ny).type;
-    if (t === ROCK) return this.type !== 'raider';                // разведчик НЕ копает — только по готовым ходам
-    if (t === AIR) return this.type === 'raider' || this.anchoredAt(world, this.tileX + dx, this.tileY + dy); // разведчик лёгкий — летит по воздуху; прочим нужна опора
+    if (t === ROCK) return !ENEMY_FLYERS[this.type];              // летающие (рейдер/охотник/…) НЕ копают — только по готовым ходам
+    if (t === AIR) return !!ENEMY_FLYERS[this.type] || this.anchoredAt(world, this.tileX + dx, this.tileY + dy); // летающие лёгкие — по воздуху; прочим нужна опора
     return false;                                                 // неразрушимое/край
   }
   // Блуждание (без цели). КОПАТЕЛЬ ниже городского диапазона — поднимается в него; внутри —
@@ -106,14 +128,16 @@ class Enemy {
     });
   }
   // К цели (знаем координаты): по сокращению тороидальной дистанции; воздух в приоритете.
-  gotoDir(world, tx, ty) {
+  gotoDir(world, tx, ty, airFirst) {
     const cur = this.dist(tx, ty);
     return this.rank(world, (dx, dy) => {
       const nx = this.tileX + dx, ny = this.tileY + dy;
       const nd = this.distFrom(nx, ny, tx, ty);
       const seen = this.recent.includes(wrapX(nx) + ',' + ny) ? 1 : 0; // тупик у препятствия → обходим непосещённым
       const air = world.tileAt(nx, ny).type === AIR ? 0 : 1;
-      return [nd - cur, seen, air];                              // ближе → непосещённое → воздух
+      // airFirst (возврат копателя): СНАЧАЛА открытый ход (свой тоннель домой), потом ближе — чтобы идти
+      // пешком по уже прорытому, а не долбить новую прямую в крусты и застревать.
+      return airFirst ? [air, nd - cur, seen] : [nd - cur, seen, air];   // обычно: ближе → непосещённое → воздух
     });
   }
   rank(world, keyFn) {
@@ -128,8 +152,18 @@ class Enemy {
 
   update(dt, world) {
     this.drilling = false;
+    const slowMul = this.slowT > 0 ? JAM_SLOW : 1;   // глушилка замедляет всё движение/копку
+    if (this.slowT > 0) this.slowT = Math.max(0, this.slowT - dt);
+    // ОХОТНИК в боевой фазе: рывок/отскок — свободное движение по px (без тайл-локомоции); телеграф — стоит.
+    if (this.cstate === 'charge' || this.cstate === 'recover') {
+      this.px = wrapPx(this.px + this.cvx * slowMul * dt); this.py += this.cvy * slowMul * dt;
+      this.tileX = wrapX(Math.round((this.px - TILE / 2) / TILE)); this.tileY = Math.round((this.py - TILE / 2) / TILE);
+      if (isSolid(world.tileAt(this.tileX, this.tileY))) this.cBlocked = true;   // упор в породу → мозг переведёт в recover
+      return;
+    }
+    if (this.cstate === 'wind') return;
     if (this.state2 === MOVING) {
-      this.progress += this.speed * dt;
+      this.progress += this.speed * slowMul * dt;
       if (this.progress >= 1) {
         this.tileX = wrapX(this.toX); this.tileY = this.toY;
         this.px = this.tileX * TILE + TILE / 2; this.py = this.tileY * TILE + TILE / 2; this.state2 = IDLE;
@@ -142,18 +176,18 @@ class Enemy {
       }
       return;
     }
-    if (this.draining) return;   // разведчик стоит у города и высасывает контур — не двигается
-    // гравитация: без опоры и снизу воздух — падаем (разведчик лёгкий — летит, не падает)
-    if (this.type !== 'raider' && !this.anchoredAt(world, this.tileX, this.tileY) && world.tileAt(this.tileX, this.tileY + 1).type === AIR) {
+    if (this.draining) return;   // стоит у цели (рейдер высасывает / хакер взламывает) — не двигается
+    // гравитация: без опоры и снизу воздух — падаем (летающие — лёгкие, не падают)
+    if (!ENEMY_FLYERS[this.type] && !this.anchoredAt(world, this.tileX, this.tileY) && world.tileAt(this.tileX, this.tileY + 1).type === AIR) {
       this.dx = 0; this.dy = 1; this.startMove(this.tileX, this.tileY + 1); this.commit = null; return;
     }
-    if (!this.commit) this.commit = this.target ? this.gotoDir(world, this.target.x, this.target.y) : this.wanderDir(world);
+    if (!this.commit) this.commit = this.target ? this.gotoDir(world, this.target.x, this.target.y, this._returning) : this.wanderDir(world);
     if (!this.commit) return;
     const dx = this.commit.x, dy = this.commit.y; this.dx = dx; this.dy = dy;
     const nx = this.tileX + dx, ny = this.tileY + dy, t = world.tileAt(nx, ny);
     if (t.type === AIR) { this.startMove(nx, ny); return; }
     if (t.type === ROCK) {
-      this.drilling = true; t.dig += ENEMY_DIG * dt;
+      this.drilling = true; t.dig += ENEMY_DIG * slowMul * dt;
       if (t.dig >= digThreshold(t)) {
         if (t.resource) this.dug = { x: wrapX(nx), y: ny, type: t.resource }; // жилу не теряем — game уронит лутом
         world.setAir(nx, ny); this.startMove(nx, ny);

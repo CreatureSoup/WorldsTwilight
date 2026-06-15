@@ -102,7 +102,8 @@ function drawRingUnit(ctx, world, unit, camera, opts) {
     let dist = (p.rad || 0) * R;
     if (p.kind === 'drill') dist += ANIM.drillWob(t, unit);   // «долбёжка»: бур ходит вдоль оси крепления к породе
     const px = Math.cos(a) * dist, py = Math.sin(a) * dist;
-    drawPart(ctx, p.kind, px, py, R * 1.25, a, false, t, p);   // angle=наружу → деталь смотрит от центра
+    const sid = (typeof partSpriteId === 'function') ? partSpriteId(unit, p.id) : p.id;   // спрайт КОНКРЕТНОГО варианта модуля, если задан
+    drawPart(ctx, p.kind, px, py, R * 1.25, a, false, t, sid === p.id ? p : Object.assign({}, p, { id: sid }));   // angle=наружу → деталь смотрит от центра
   }
 
   ctx.restore();

@@ -50,6 +50,7 @@ const UNIT_DEFS = {
       { id: 'sensor', kind: 'sensor', ang: -62,  rad: 1.5, z: 20, need: 'scanner', proc: true },
       { id: 'engine', kind: 'engine', ang: 62,   rad: 1.5, z: 20, need: 'engine',  proc: true },
       { id: 'hold',   kind: 'hold',   ang: 180,  rad: 1.6, z: 20, need: 'cargo',   proc: true },
+      { id: 'aux',    kind: 'aux',    ang: 118,  rad: 1.5, z: 20, need: 'aux',     proc: true },   // доп-слот (опц.): экран помех / реликты
     ],
     legHub: { f: 0, s: 0, dropY: 0.6 },
     cables: [],
@@ -82,6 +83,7 @@ const UNIT_DEFS = {
       { id: 'sensor',  kind: 'sensor',  f: -0.06, s: -1.30, z: 34, need: 'scanner', proc: false },
       { id: 'drill',   kind: 'drill',   f:  1.85, s: -0.65, z: 20, need: 'dig' },
       { id: 'engine',  kind: 'engine',  f: -0.05, s:  0.39, z: 41, proc: true },
+      { id: 'aux',     kind: 'aux',     f: -1.0,  s: -1.3,  z: 22, need: 'aux', proc: true },   // доп-слот (опц.): экран помех / реликты
     ],
     legHub: { f: 0, s: 0, dropY: 0.6 },
     cables: [

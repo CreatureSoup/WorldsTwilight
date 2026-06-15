@@ -13,21 +13,30 @@ function drawFog(ctx, world, unit, camera, W, H) {
   const x1 = Math.floor((camera.x + W) / TILE) + 1;
   const y1 = Math.min(MAP_H - 1, Math.floor((camera.y + H) / TILE) + 1);
   const cols = x1 - x0 + 1, rows = y1 - y0 + 1;
-  if (cols <= 0 || rows <= 0) return;
+  if (cols <= 0 || rows <= 0) { ctx.fillStyle = 'rgb(7,5,10)'; ctx.fillRect(0, 0, W, H); return; }   // фейл-сейф: вырожденный диапазон → лучше полный туман, чем чистый экран (баг «туман пропал»)
   if (!_fogC) { _fogC = document.createElement('canvas'); _fogX = _fogC.getContext('2d'); }
   if (_fogC.width < cols || _fogC.height < rows) { _fogC.width = cols; _fogC.height = rows; }
   const img = _fogX.createImageData(cols, rows), d = img.data;
   const ux = unit.px / TILE - 0.5, uy = unit.py / TILE - 0.5;
+  const seen = world.seen, rt = world.revealT;
   for (let j = 0; j < rows; j++)
     for (let i = 0; i < cols; i++) {
       const tx = x0 + i, ty = y0 + j;
       let a;
-      if (!world.isSeen(tx, ty)) a = 1;
+      if (ty < 0 || ty >= MAP_H) a = 1;
       else {
-        let dxw = tx - ux;                              // расстояние до света — по кольцу
-        if (dxw > MAP_W / 2) dxw -= MAP_W; else if (dxw < -MAP_W / 2) dxw += MAP_W;
-        const dist = Math.hypot(dxw, ty - uy);
-        a = Math.min(1, Math.max(0, (dist - LIGHT_R0) / (LIGHT_R1 - LIGHT_R0))) * FOG_EXPLORED;
+        const idx = ty * MAP_W + wrapX(tx);
+        if (seen[idx] !== 1) a = 1;
+        else {
+          let rv = rt[idx];
+          if (rv < 255) { rv = Math.min(255, rv + REVEAL_FADE_STEP); rt[idx] = rv; }   // плавное проявление новооткрытого тайла
+          let dxw = tx - ux;                            // расстояние до света — по кольцу
+          if (dxw > MAP_W / 2) dxw -= MAP_W; else if (dxw < -MAP_W / 2) dxw += MAP_W;
+          const dist = Math.hypot(dxw, ty - uy);
+          const lit = Math.min(1, Math.max(0, (dist - LIGHT_R0) / (LIGHT_R1 - LIGHT_R0))) * FOG_EXPLORED;
+          const f = rv / 255;
+          a = lit * f + (1 - f);                        // от полного тумана (1) к градиенту по мере проявления
+        }
       }
       const o = (j * cols + i) * 4;
       d[o] = 7; d[o + 1] = 5; d[o + 2] = 10; d[o + 3] = Math.round(a * 255);  // PAL.void — тёплая темнота тумана
@@ -84,7 +93,7 @@ function _coneVisibility(world, camera, ax, ay, fx, fy, L, half) {
   }
   return pts;
 }
-function drawHeadlight(ctx, world, unit, camera, W, H) {
+function drawHeadlight(ctx, world, unit, camera, W, H, radLevel) {
   // вершина/направление — от узла реактора (через трансформ юнита) → свет дышит с ним
   const an = unitLightAnchor(world, unit, camera);
   const ax = an.ax, ay = an.ay, fx = an.fx, fy = an.fy;
@@ -96,8 +105,20 @@ function drawHeadlight(ctx, world, unit, camera, W, H) {
   const pl = (unit.stats && unit.stats.projLvl) || 0;       // равномерно по 3 уровням (без прожектора темно — норма)
   const half = 0.25 + pl * 0.11;                            // ширина: ур.0 0.25 (очень узкий) → ур.3 0.58
   const L = TILE * (3.5 + pl * 0.9);                        // длина/рассеивание: ур.0 3.5 → ур.3 6.2 тайла
-  const cutA = 0.60 + pl * 0.13, glowA = 0.05 + pl * 0.05;  // яркость: ур.0 0.60 (тусклый) → ур.3 ~0.99 (яркий)
-  const pts = _coneVisibility(world, camera, ax, ay, fx, fy, L, half);
+  let cutA = 0.60 + pl * 0.13, glowA = 0.05 + pl * 0.05;    // яркость: ур.0 0.60 (тусклый) → ур.3 ~0.99 (яркий)
+  // НЕСТАБИЛЬНОСТЬ ПРОЖЕКТОРА (живость, на всех уровнях): только КОНУС мигает (экран НЕ затемняем). Мигание
+  // ЯВНОЕ, со СЛУЧАЙНЫМ периодом/паттерном (планировщик `_flickerDip`) — без ощущения «гаснет по кулдауну».
+  // Увод угла («засмотрелся → вернул») — гладкими time-функциями.
+  let fxr = fx, fyr = fy;
+  {
+    const t = performance.now() / 1000;
+    const dip = _flickerDip();                            // 0..~0.9, случайные интервалы/глубина/паттерн
+    cutA *= Math.max(0.22, 1 - dip); glowA *= Math.max(0.22, 1 - dip);   // конус ощутимо притухает в моменты мигания
+    const angOff = 0.16 * Math.pow(Math.max(0, Math.sin(t * 0.43 + 4.0)), 3) * Math.sin(t * 0.6);   // увод угла и возврат
+    const ca = Math.cos(angOff), sa = Math.sin(angOff);
+    fxr = fx * ca - fy * sa; fyr = fx * sa + fy * ca;
+  }
+  const pts = _coneVisibility(world, camera, ax, ay, fxr, fyr, L, half);
   const lit = (g) => { g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]); g.closePath(); };
 
   if (!_hlC) { _hlC = document.createElement('canvas'); _hlX = _hlC.getContext('2d'); }
@@ -150,7 +171,30 @@ function drawHeadlight(ctx, world, unit, camera, W, H) {
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(_hlC, 0, 0); ctx.restore();
 
   // 3) ПЫЛЬ в луче: тонкая дрейфующая зернистость (клип по конусу, аддитивно)
-  _drawDust(ctx, pts, ax, ay, L, camera);
+  _drawDust(ctx, pts, ax, ay, L, camera, radLevel || 0);
+
+}
+
+// Планировщик мигания прожектора: редкие ЯВНЫЕ провалы яркости конуса со СЛУЧАЙНЫМ интервалом/глубиной/
+// длительностью + дрожащий суб-паттерн внутри провала → нет ощущения «по кулдауну». Math.random ТОЛЬКО на
+// СОБЫТИЕ (не per-frame → без стробоскопа); сам провал — гладкая огибающая. Возвращает 0..~0.9.
+let _flkT = 0, _flkLast = 0, _flkNext = 1.0, _flkStart = -9, _flkDur = 0, _flkDepth = 0, _flkSeed = 0;
+function _flickerDip() {
+  const now = performance.now() / 1000;
+  if (_flkLast === 0) _flkLast = now;
+  _flkT += Math.min(0.1, now - _flkLast); _flkLast = now;
+  if (_flkT >= _flkNext) {                                  // запланировать новое мигание
+    _flkDur = 0.12 + Math.random() * 0.5;                   // длительность провала
+    _flkDepth = 0.45 + Math.random() * 0.45;               // глубина (явное)
+    _flkSeed = Math.random() * 6.283;
+    _flkStart = _flkT;
+    _flkNext = _flkT + _flkDur + 0.7 + Math.random() * 3.8; // следующий — случайно нескоро
+  }
+  const e = _flkT - _flkStart;
+  if (e < 0 || e >= _flkDur) return 0;
+  const env = Math.sin((e / _flkDur) * Math.PI);            // плавный заход-выход провала
+  const pat = 0.75 + 0.25 * Math.sin(e * 38 + _flkSeed);    // дрожащий паттерн внутри (не ровный «выкл»)
+  return _flkDepth * env * pat;
 }
 
 // Пыль/взвесь в луче: ОТДЕЛЬНЫЕ пылинки, не тайл-паттерн. Каждая лёгкая — дрейфует
@@ -158,7 +202,7 @@ function drawHeadlight(ctx, world, unit, camera, W, H) {
 // кривая Лиссажу, направление постоянно меняется, без линейного «снега»). Пылинки
 // разложены на параллакс-сетке, анкерены в МИРЕ (при движении юнита проплывают мимо),
 // клип по конусу, плотнее у источника (фейд по дистанции). Спрайт-точка кэшируется.
-let _dustDot = null;
+let _dustDot = null, _dustDotRad = null;
 function _ensureDot() {
   if (_dustDot) return;
   _dustDot = document.createElement('canvas'); _dustDot.width = _dustDot.height = 16;
@@ -166,10 +210,16 @@ function _ensureDot() {
   const g = d.createRadialGradient(8, 8, 0, 8, 8, 8);
   g.addColorStop(0, 'rgba(255,243,212,1)'); g.addColorStop(0.45, 'rgba(255,240,205,0.5)'); g.addColorStop(1, 'rgba(255,240,205,0)');
   d.fillStyle = g; d.fillRect(0, 0, 16, 16);
+  // КИСЛОТНО-ЗЕЛЁНАЯ пылинка (загрязнение): тот же спрайт, другой тон — для зеленеющих при радиации крупинок.
+  _dustDotRad = document.createElement('canvas'); _dustDotRad.width = _dustDotRad.height = 16;
+  const r = _dustDotRad.getContext('2d');
+  const gr = r.createRadialGradient(8, 8, 0, 8, 8, 8);
+  gr.addColorStop(0, 'rgba(168,255,56,1)'); gr.addColorStop(0.45, 'rgba(150,235,40,0.5)'); gr.addColorStop(1, 'rgba(150,235,40,0)');
+  r.fillStyle = gr; r.fillRect(0, 0, 16, 16);
 }
 function _dustHash(i) { let h = Math.imul((i | 0) ^ 0x9e3779b9, 2654435761); h ^= h >>> 15; h = Math.imul(h, 2246822519); h ^= h >>> 13; return (h >>> 0) / 4294967296; }
 // Один параллакс-слой пыли: пылинка на ячейку сетки (мир), плавное блуждание, фейд по дистанции.
-function _dustLayer(ctx, camera, t, ax, ay, L, W, H, par, cell, szMin, szMax, bright, wander, seedOff) {
+function _dustLayer(ctx, camera, t, ax, ay, L, W, H, par, cell, szMin, szMax, bright, wander, seedOff, radLevel) {
   const camx = camera.x * par, camy = camera.y * par;            // эффективная камера слоя (параллакс)
   const gx0 = Math.floor((camx - cell) / cell), gx1 = Math.floor((camx + W + cell) / cell);
   const gy0 = Math.floor((camy - cell) / cell), gy1 = Math.floor((camy + H + cell) / cell);
@@ -189,17 +239,20 @@ function _dustLayer(ctx, camera, t, ax, ay, L, W, H, par, cell, szMin, szMax, br
       const tw = 0.6 + 0.4 * Math.sin(t * (0.4 + r2 * 0.9) + ph * 2.1);  // лёгкое мерцание
       const sz = szMin + r3 * (szMax - szMin);
       ctx.globalAlpha = Math.min(1, bright * fade * tw);
-      ctx.drawImage(_dustDot, sx - sz, sy - sz, sz * 2, sz * 2);
+      // ЗАГРЯЗНЕНИЕ: доля зелёных крупинок = radLevel напрямую (стабильный хеш r4 < radLevel) — детерминированно,
+      // без опросов (radLevel game уже считает каждый кадр). radLevel=0 → нет; 0.5 → половина; 1 → все.
+      const dot = r4 < radLevel ? _dustDotRad : _dustDot;
+      ctx.drawImage(dot, sx - sz, sy - sz, sz * 2, sz * 2);
     }
 }
-function _drawDust(ctx, pts, ax, ay, L, camera) {
+function _drawDust(ctx, pts, ax, ay, L, camera, radLevel) {
   _ensureDot();
   const t = performance.now() / 1000, W = camera.viewW, H = camera.viewH;
   ctx.save();
   ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.clip();
   ctx.globalCompositeOperation = 'lighter';
-  _dustLayer(ctx, camera, t, ax, ay, L, W, H, 1.0, TILE * 1.5, 0.8, 2.3, 1.0, 1.0, 0);        // ближний: крупнее, ярче
-  _dustLayer(ctx, camera, t, ax, ay, L, W, H, 0.55, TILE * 2.0, 0.5, 1.3, 0.6, 0.7, 90017);   // дальний: мельче, медленнее, тусклее
+  _dustLayer(ctx, camera, t, ax, ay, L, W, H, 1.0, TILE * 1.5, 0.8, 2.3, 1.0, 1.0, 0, radLevel);        // ближний: крупнее, ярче
+  _dustLayer(ctx, camera, t, ax, ay, L, W, H, 0.55, TILE * 2.0, 0.5, 1.3, 0.6, 0.7, 90017, radLevel);   // дальний: мельче, медленнее, тусклее
   ctx.globalAlpha = 1;
   ctx.restore();
 }

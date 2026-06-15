@@ -15,10 +15,11 @@
 // категории (`kind`); позиция берётся из resolveUnitRig — всегда совпадает с тем,
 // как деталь нарисована.
 const SLOT_META = {
-  drill:   { kind: 'drill',  label: 'БУР',       lx:  1, ly: -1 },
-  engine:  { kind: 'engine', label: 'ДВИГАТЕЛЬ', lx:  0, ly:  1 },
-  scanner: { kind: 'sensor', label: 'СКАНЕР',    lx: -1, ly: -1 },
-  cargo:   { kind: 'hold',   label: 'ТРЮМ',      lx: -1, ly:  1 },
+  drill:   { kind: 'drill',  label: 'БУР',     lx:  1,    ly: -0.9 },   // вправо-вверх
+  scanner: { kind: 'sensor', label: 'СКАНЕР',  lx:  0.5,  ly: -1.1 },   // вверх-ВПРАВО: не лезет на пустой круг доп-слота (тот вверху-слева)
+  cargo:   { kind: 'hold',   label: 'ТРЮМ',    lx: -1,    ly:  0   },   // влево
+  aux:     { kind: 'aux',    label: 'ДОП-СЛОТ', lx: -1.3, ly: -0.6 },   // доп-слот (экран помех) — влево-ВВЕРХ (не лезть на трюм); показ гейтнут _categoryActive
+  // engine НЕ показываем на сборке: двигатель — параметр КОРПУСА (стат остаётся, слот/галерея/выноска скрыты).
 };
 
 class Inventory {
@@ -46,17 +47,26 @@ class Inventory {
   // категории (как риг в тулзе). Менять можно при наличии других вариантов.
   defaultBuild() {
     this.modules = {};
-    for (const slot of HULL_DEFS[this.hull].slots)
+    const optional = HULL_DEFS[this.hull].optional || [];
+    for (const slot of HULL_DEFS[this.hull].slots) {
+      if (optional.includes(slot)) continue;   // доп-слот по умолчанию ПУСТ (опциональный)
       for (const key in MODULE_DEFS) if (MODULE_DEFS[key].category === slot
         && (!MODULE_DEFS[key].unlock || (typeof metaHas === 'function' && metaHas(MODULE_DEFS[key].unlock)))) { this.modules[slot] = key; break; }   // дефолт — первый НЕзагейченный вариант
+    }
+  }
+  // Слот показывается на сборке? Обязательные — всегда; опциональные (доп-слот) — если установлен ИЛИ есть доступный модуль.
+  _categoryActive(cat) {
+    if (!(HULL_DEFS[this.hull].optional || []).includes(cat)) return true;
+    if (this.modules[cat]) return true;
+    return Object.keys(MODULE_DEFS).some((k) => MODULE_DEFS[k].category === cat && (!MODULE_DEFS[k].unlock || (typeof metaHas === 'function' && metaHas(MODULE_DEFS[k].unlock))));
   }
   reset() { this.defaultBuild(); this.resetCargo(); this.unit = null; this.drag = null; this.scrollY = 0; }
   resetCargo() { for (const k in this.cargo) this.cargo[k] = 0; }
 
   // Производные статы по установленным модулям. HP — из корпуса.
   getStats() {
-    const hull = HULL_DEFS[this.hull];
-    const s = { maxHp: hull.hp, moveSpeed: 0, digMult: 0, scanR: 0, capacity: 0, healRate: 0,
+    const hull = HULL_DEFS[this.hull], optional = hull.optional || [];
+    const s = { maxHp: hull.hp, moveSpeed: 0, digMult: 0, scanR: 0, capacity: 0, healRate: 0, noiseResist: 0, printer: 0, printReach: 0,
                 canDig: false, canMove: false };
     for (const cat in this.modules) {
       const t = this.modules[cat]; if (!t) continue;
@@ -65,11 +75,15 @@ class Inventory {
       if (m.speed)    { s.moveSpeed = Math.max(s.moveSpeed, m.speed); s.canMove = true; }
       if (m.scanR)    s.scanR = Math.max(s.scanR, m.scanR);
       if (m.capacity) s.capacity += m.capacity;
-      if (m.healRate) s.healRate += m.healRate;   // ремонтный трюм
+      if (m.healRate) s.healRate += m.healRate;          // ремонтный трюм
+      if (m.noiseResist) s.noiseResist += m.noiseResist; // экран помех (доп-слот)
+      if (m.printer) s.printer += m.printer;             // модуль печати (доп-слот)
+      if (m.printReach) s.printReach = Math.max(s.printReach, m.printReach);   // базовый радиус печати
     }
-    // Готов к старту, когда все слоты корпуса заняты.
-    s.valid = HULL_DEFS[this.hull].slots.every((cat) => !!this.modules[cat]);
-    s.missing = HULL_DEFS[this.hull].slots.filter((cat) => !this.modules[cat]);
+    // Готов к старту, когда заняты все ОБЯЗАТЕЛЬНЫЕ слоты (опциональные — доп-слот — можно пустыми).
+    const req = hull.slots.filter((cat) => !optional.includes(cat));
+    s.valid = req.every((cat) => !!this.modules[cat]);
+    s.missing = req.filter((cat) => !this.modules[cat]);
     return s;
   }
 
@@ -115,11 +129,13 @@ class Inventory {
   _dummyUnit(allOn) {
     return {
       hull: this.hull, dx: 1, dy: 0, faceX: 1, state: IDLE, crouchT: 0, noAnim: false, px: 0, py: 0,
+      modules: this.modules,   // слот→модуль: превью показывает спрайт конкретного варианта
       stats: {
         canDig:   allOn || !!this.modules.drill,
         canMove:  allOn || !!this.modules.engine,
         scanR:    (allOn || this.modules.scanner) ? 1 : 0,
         capacity: (allOn || this.modules.cargo)   ? 1 : 0,
+        noiseResist: (allOn || this.modules.aux)  ? 1 : 0,   // доп-слот: деталь видна при установленном модуле
       },
     };
   }
@@ -143,7 +159,7 @@ class Inventory {
   // пол снизу (ty>=1). Конфиги в ДИЗАЙН-px (scale 1 — внешний `S` масштабирует панель целиком).
   _previewLegRig() {
     if (typeof makeLegRig !== 'function' || typeof updateLegRig !== 'function' || typeof legConfigsFromUnit !== 'function') return null;
-    const sig = this.hull + ':' + JSON.stringify(this.modules);
+    const sig = this.hull;   // ноги зависят ТОЛЬКО от корпуса (не от модулей) — не пересобираем нога-риг при смене модуля → нет дёрганья к полу
     if (!this._plRig || this._plSig !== sig) {
       this._plRig = makeLegRig(legConfigsFromUnit(this._dummyUnit(false), 1), 1);
       this._plSig = sig;
@@ -152,7 +168,21 @@ class Inventory {
       // колено в камень, _ikAvoidRock каждый кадр выталкивает его на ≥16px → мелкая дрожь одной ноги.
       let reach = 0; for (const L of this._plRig.legs) reach = Math.max(reach, L.reach || 0);
       this._plWy = TILE - reach * 0.72;
-      this._plRig._footSink = 0;   // стопы НА поверхность: окклюзии тут нет, утопленная стопа топила сустав в породу (дрожь)
+      // Стопы ЧУТЬ ВЫШЕ поверхности (sink < 0). В превью нет окклюзии (в игре утопленный сустав скрыт):
+      // голеностоп самой КОРОТКОЙ ноги случайно утыкался в породу (запас непредсказуем — куда воткнётся
+      // стопа, туда и сустав), `_ikAvoidRock` выталкивал его каждый кадр → дрожь ОДНОЙ ноги. Подъём уводит
+      // ВСЕ внутренние суставы над линией породы с запасом на «дыхание» корпуса (худший запас ~7px на 10 осадок).
+      this._plRig._footSink = -12;
+      // СТАБИЛЬНЫЙ вылет ног вниз (низшая точка относительно центра корпуса) — для привязки НИЗА
+      // композиции к кромке панели. Считаем ОДИН раз детерминированной осадкой: мгновенный max по
+      // кадрам «гуляет» (дыхание/шаги), и если кормить им b.cy каждый кадр — юнит подпрыгивает.
+      const fw = { tileAt: (tx, ty) => ({ type: ty >= 1 ? ROCK : AIR }) };
+      let drop = 0;
+      for (let i = 0; i < 360; i++) {
+        this._plRig.supportAngle = 0; updateLegRig(this._plRig, 1 / 120, 0, this._plWy, fw, { x: 0, y: 0 });
+        if (i >= 300) for (const Lg of this._plRig.legs) for (const p of (Lg.draw || Lg.pts)) drop = Math.max(drop, p.y - this._plWy);
+      }
+      this._plLegDrop = drop;
     }
     const world = { tileAt: (tx, ty) => ({ type: ty >= 1 ? ROCK : AIR }) };   // фейковый пол снизу (48px)
     this._plRig.supportAngle = 0;
@@ -175,6 +205,7 @@ class Inventory {
     if (def && def.kind === 'ring') {
       const R = (TILE - 8) / 2, bo = (this._plRig && this._plRig.bodyOff) || { x: 0, y: 0 };   // тот же сдвиг корпуса на щупальцах, что в превью
       for (const cat in SLOT_META) {
+        if (!this._categoryActive(cat)) continue;   // доп-слот скрыт, пока нет модуля
         const p = def.parts.find((pp) => pp.kind === SLOT_META[cat].kind); if (!p) continue;
         const a = (p.ang || 0) * Math.PI / 180;   // aim=0, flip=1 в превью
         push(cat, b.cx + (bo.x + Math.cos(a) * (p.rad || 0) * R) * S, b.cy + (bo.y + Math.sin(a) * (p.rad || 0) * R) * S);
@@ -183,6 +214,7 @@ class Inventory {
     }
     const rig = resolveUnitRig(0, 0, this._dummyUnit(true), this._rigTime());
     for (const cat in SLOT_META) {
+      if (!this._categoryActive(cat)) continue;   // доп-слот скрыт, пока нет модуля
       const part = rig.parts.find((p) => p.kind === SLOT_META[cat].kind); if (!part) continue;
       push(cat, b.cx + part.x * S, b.cy + part.y * S);
     }
@@ -198,12 +230,14 @@ class Inventory {
   CARD_H() { return 116; }
   computeCards() {
     const L = this.layout; if (!L) return { cards: [], headers: [], contentH: 0 };
-    const labels = { drill: 'БУРЫ', engine: 'ДВИГАТЕЛИ', scanner: 'СКАНЕРЫ', cargo: 'ТРЮМЫ' };
+    const labels = { drill: 'БУРЫ', engine: 'ДВИГАТЕЛИ', scanner: 'СКАНЕРЫ', cargo: 'ТРЮМЫ', aux: 'ДОП-СЛОТ' };
     const cw = this.CARD_W(), ch = this.CARD_H(), cgap = 10, hdrH = 22, rowGap = 18;
     const x0 = L.list.x + 14, y0 = L.list.y + 38 - this.scrollY;
     const cards = [], headers = [];
     let cy = y0;
     for (const cat of HULL_DEFS[this.hull].slots) {
+      if (cat === 'engine') continue;          // двигатель — параметр корпуса, в галерее не показываем
+      if (!this._categoryActive(cat)) continue; // доп-слот скрыт, пока нет доступного модуля
       headers.push({ label: labels[cat] || cat.toUpperCase(), x: x0, y: cy, w: L.list.w - 28 });
       cy += hdrH;
       // варианты слота; гейтнутые (`unlock`) показываются только при открытом узле СЕТИ ПАМЯТИ
@@ -234,18 +268,25 @@ class Inventory {
     if (this.inRect(x, y, L.back)) { if (this.onBack) this.onBack(); return; }
     if (this.inRect(x, y, L.start)) { if (this.getStats().valid && this.onStart) this.onStart(); return; }
     const card = this.cardAt(x, y);
-    if (card) this.drag = { type: card.type, category: card.category };
+    // ВЫБОР карточки в галерее = установка модуля в слот (перетаскивание отключено).
+    if (card) {
+      const optional = (HULL_DEFS[this.hull].optional || []).includes(card.category);
+      if (optional && this.modules[card.category] === card.type) delete this.modules[card.category];   // повторный клик по опц. слоту (доп-слот) — снять
+      else this.modules[card.category] = card.type;
+    }
+    // if (card) this.drag = { type: card.type, category: card.category };   // перетаскивание (отключено)
   }
   pointerMove(x, y) {
     this.mouse = { x, y };
-    this.hoverCard = this.drag ? null : this.cardAt(x, y);
-    this.hoverSlot = this.drag ? this.slotAt(x, y) : null;
+    this.hoverCard = this.cardAt(x, y);   // подсветка карточки под курсором
+    // this.hoverSlot = this.drag ? this.slotAt(x, y) : null;   // перетаскивание (отключено)
   }
-  pointerUp(x, y) {
-    if (!this.drag) return;
-    const slot = this.slotAt(x, y);
-    if (slot && slot.category === this.drag.category) this.modules[slot.category] = this.drag.type;
-    this.drag = null;
+  pointerUp() {
+    // перетаскивание отключено — установка идёт по клику (см. pointerDown)
+    // if (!this.drag) return;
+    // const slot = this.slotAt(x, y);
+    // if (slot && slot.category === this.drag.category) this.modules[slot.category] = this.drag.type;
+    // this.drag = null;
   }
 
   // =============================================================
@@ -253,8 +294,7 @@ class Inventory {
   // =============================================================
   draw(ctx, W, H) {
     const L = this.computeLayout(W, H);
-    this.hoverCard = this.drag ? null : this.cardAt(this.mouse.x, this.mouse.y);
-    this.hoverSlot = this.drag ? this.slotAt(this.mouse.x, this.mouse.y) : null;
+    this.hoverCard = this.cardAt(this.mouse.x, this.mouse.y);   // подсветка карточки (перетаскивание отключено)
 
     drawStaticBg(ctx, W, H);
     hazardTape(ctx, 0, 0, W, 5, PAL.amberDim);
@@ -265,7 +305,7 @@ class Inventory {
     ctx.fillStyle = PAL.chalk; ctx.font = `700 28px ${FONT_DISPLAY}`;
     ctx.fillText('ЧЕРТЁЖ', W / 2, 54);
     ctx.fillStyle = PAL.pewter; ctx.font = `11px ${FONT_MONO}`;
-    ctx.fillText('ТАЩИ КАРТОЧКУ МОДУЛЯ НА СВЕТЯЩИЙСЯ СЛОТ · ENTER · В ШАХТУ', W / 2, 74);
+    ctx.fillText('ВЫБЕРИ МОДУЛЬ В ГАЛЕРЕЕ — ОН ВСТАНЕТ В СЛОТ · ENTER · В ШАХТУ', W / 2, 74);
 
     this._drawBack(ctx, L.back);
     this._drawBlueprint(ctx, L);
@@ -273,7 +313,7 @@ class Inventory {
     this._drawList(ctx, L);
     this._drawStart(ctx, L);
 
-    if (this.drag) this._drawDragGhost(ctx);
+    // if (this.drag) this._drawDragGhost(ctx);   // карточка-призрак при перетаскивании (отключено)
   }
 
   // «← назад» — лаконичная стрелка в рамке со скошенным углом (как `.mt-back`/`.cx-back` в DOM-разделах)
@@ -310,18 +350,22 @@ class Inventory {
     ctx.strokeStyle = 'rgba(58,126,200,0.06)'; ctx.lineWidth = 1;
     for (let gy = b.y + 24; gy < b.y + b.h - 6; gy += 32) { ctx.beginPath(); ctx.moveTo(b.x + 6, gy + 0.5); ctx.lineTo(b.x + b.w - 6, gy + 0.5); ctx.stroke(); }
 
-    const slots = this.computeSlots();
-    // фоновые подписи-выноски (под юнитом)
-    for (const s of slots) this._drawCallout(ctx, s);
-
     // ЖИВОЙ риг юнита со спрайтами (по фактической сборке: нет модуля → деталь скрыта)
     const S = this.blueprintScale(L);
     const fakeCam = { x: 0, y: 0, screenX: (px) => px };
     const dum = this._dummyUnit(false), ringDef = UNIT_DEFS[this.hull] && UNIT_DEFS[this.hull].kind === 'ring';
+    const lr = ringDef ? this._previewLegRig() : null;
+    // НИЗ композиции привязан к нижней кромке: кончики ног уходят чуть ЗА кадр (вся сцена едет
+    // вместе — уровень пола относительно юнита НЕ меняется). Фикс. доля от высоты не годилась:
+    // в высоком окне масштаб лимитируется ШИРИНОЙ панели → юнит мельче высоты → снизу пустота.
+    // `_plLegDrop` — СТАБИЛЬНЫЙ (кэш), а не мгновенный max по кадрам (тот «гуляет» → юнит подпрыгивал).
+    if (lr) b.cy = (b.y + b.h - 6) + TILE * 0.5 - this._plLegDrop * S;   // +TILE*0.5 — насколько кончики за кромкой
+
+    const slots = this.computeSlots();
+
     ctx.save(); ctx.translate(b.cx, b.cy); ctx.scale(S, S);
     if (ringDef) {   // КОЛЬЦО: ноги-ЩУПАЛЬЦА (IK, как в игре) ПОД + кольцо-реактор/модули
       if (typeof partsHull === 'function') partsHull(dum.hull);
-      const lr = this._previewLegRig();
       if (lr) {   // IK-щупальца на фейковом полу + корпус едет на их bodyOff (как в игре)
         drawLegRig(ctx, lr, { y: this._plWy, screenX: (px) => px });
         drawRingUnit(ctx, null, dum, fakeCam, { scale: 1, dx: lr.bodyOff.x, dy: lr.bodyOff.y });
@@ -335,23 +379,24 @@ class Inventory {
     }
     ctx.restore();
 
-    // гнёзда поверх деталей. При перетаскивании карточки совпадающий по категории слот —
-    // ЯРКАЯ анимированная цель (радар-пинг: точка + расходящиеся кольца), остальные уводятся
-    // на второй план. Вне драга — тонкие кольца статуса (занят/пуст).
-    const tp = performance.now() / 1000;
+    // гнёзда — тонкие кольца статуса слота (занят cobalt / пуст amber). Перетаскивание отключено —
+    // ветки драга/радар-пинга закомментированы (`_drawSlotPing`/`_drawDragGhost` — для будущего ре-энейбла).
     for (const s of slots) {
       const filled = !!this.modules[s.category];
-      const matchable = this.drag && this.drag.category === s.category;
-      if (matchable) { this._drawSlotPing(ctx, s, this.hoverSlot && this.hoverSlot.category === s.category, tp); continue; }
+      // const matchable = this.drag && this.drag.category === s.category;
+      // if (matchable) { this._drawSlotPing(ctx, s, this.hoverSlot && this.hoverSlot.category === s.category, performance.now() / 1000); continue; }
       const r = 24;
       let col, lw, dash, alpha;
-      if (this.drag)       { col = PAL.bronze; lw = 1;   dash = [3, 5]; alpha = 0.3; }   // чужая категория — приглушить, чтобы цель выделялась
-      else if (filled)     { col = PAL.cobalt; lw = 1;   dash = [];     alpha = 0.5; }
+      // if (this.drag)    { col = PAL.bronze; lw = 1;   dash = [3, 5]; alpha = 0.3; }   // чужая категория при драге
+      if (filled)          { col = PAL.cobalt; lw = 1;   dash = [];     alpha = 0.5; }
       else                 { col = PAL.amber;  lw = 1.5; dash = [4, 4]; alpha = 1; }
       ctx.globalAlpha = alpha; ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.setLineDash(dash);
       ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, 6.283); ctx.stroke();
       ctx.setLineDash([]); ctx.globalAlpha = 1;
     }
+    // выноски ПОВЕРХ юнита: название установленного модуля (чип клампится внутрь панели)
+    for (const s of slots) this._drawCallout(ctx, s, b);
+
     ctx.restore();
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
@@ -382,20 +427,31 @@ class Inventory {
     ctx.restore();
   }
 
-  // Выноска: тонкая линия от кольца гнезда к фоновой подписи в сторону (lx,ly).
-  _drawCallout(ctx, s) {
-    const r = 24, len = 26, dx = s.lx, dy = s.ly;
-    const n = Math.hypot(dx, dy) || 1;
-    const ex = s.x + (dx / n) * (r + len), ey = s.y + (dy / n) * (r + len);
-    ctx.strokeStyle = 'rgba(122,112,94,0.45)'; ctx.lineWidth = 1;   // pewter-dim, фоновая
+  // Выноска ПОВЕРХ юнита: тёмный чип с НАЗВАНИЕМ установленного модуля + линия от гнезда к чипу.
+  // `b` — рект панели: чип клампится внутрь, чтобы длинные имена не обрезались кромкой.
+  _drawCallout(ctx, s, b) {
+    const r = 22, gap = 30, dx = s.lx, dy = s.ly, n = Math.hypot(dx, dy) || 1;
+    const type = this.modules[s.category], def = type && MODULE_DEFS[type];
+    const name = def ? def.name.toUpperCase() : 'МОДУЛЬ НЕ УСТАНОВЛЕН', accent = def ? def.color : PAL.bronze;
+    ctx.font = `bold 9px ${FONT_MONO}`;
+    const pad = 6, chipW = ctx.measureText(name).width + pad * 2, chipH = 17;
+    // желаемое место чипа в сторону (dx,dy), затем КЛАМП внутрь панели
+    let cx = s.x + (dx / n) * (r + gap) + (dx >= 0 ? 0 : -chipW);
+    let cy = s.y + (dy / n) * (r + gap) - chipH / 2;
+    cx = Math.max(b.x + 7, Math.min(cx, b.x + b.w - 7 - chipW));
+    cy = Math.max(b.y + 24, Math.min(cy, b.y + b.h - 7 - chipH));
+    // СГИБ: диагональ от кромки гнезда → колено → горизонталь к ближней стороне чипа
+    const chipLeft = (cx + chipW / 2) < s.x, nearX = chipLeft ? cx + chipW : cx, kneeY = cy + chipH / 2;
+    const kneeX = nearX + (chipLeft ? 14 : -14);
+    ctx.strokeStyle = accent; ctx.globalAlpha = 0.85; ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(s.x + (dx / n) * r, s.y + (dy / n) * r);
-    ctx.lineTo(ex, ey);
-    ctx.lineTo(ex + (dx >= 0 ? 14 : -14), ey);
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(122,112,94,0.7)'; ctx.font = `8px ${FONT_MONO}`;
-    ctx.textAlign = dx >= 0 ? 'left' : 'right'; ctx.textBaseline = 'middle';
-    ctx.fillText(s.label, ex + (dx >= 0 ? 16 : -16), ey);
+    ctx.lineTo(kneeX, kneeY); ctx.lineTo(nearX, kneeY);
+    ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(7,5,10,0.82)'; ctx.fillRect(cx, cy, chipW, chipH);   // тёмная плашка — читаемо поверх юнита
+    ctx.strokeStyle = accent; ctx.globalAlpha = 0.55; ctx.strokeRect(cx + 0.5, cy + 0.5, chipW - 1, chipH - 1); ctx.globalAlpha = 1;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = def ? PAL.chalk : PAL.ash; ctx.fillText(name, cx + pad, cy + chipH / 2 + 0.5);
   }
 
   _drawStats(ctx, L) {
@@ -440,7 +496,7 @@ class Inventory {
       if (c.y + c.h < innerY || c.y > innerY + innerH) continue;
       const installed = this.modules[c.category] === c.type;
       const hover = this.hoverCard && this.hoverCard.type === c.type;
-      this._drawCard(ctx, c.x, c.y, c.w, c.h, c.def, installed, hover);
+      this._drawCard(ctx, c.x, c.y, c.w, c.h, c.def, installed, hover, c.type);
     }
     ctx.restore();
 
@@ -456,7 +512,7 @@ class Inventory {
 
   // Карточка модуля: высокая и узкая (видно, что в галерее есть ещё). Сверху —
   // область ассета (пока крупная иконка-плейсхолдер), ниже имя и стат.
-  _drawCard(ctx, x, y, w, h, def, installed, hover) {
+  _drawCard(ctx, x, y, w, h, def, installed, hover, type) {
     const accent = def.color;
     ctx.fillStyle = installed ? 'rgba(20,16,12,0.96)' : 'rgba(13,10,14,0.92)';
     ctx.fillRect(x, y, w, h);
@@ -468,8 +524,9 @@ class Inventory {
     // спрайта нет (напр. сканер) — фолбэк на монохромную иконку.
     const imgH = Math.round(h * 0.52);
     ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x + 1, y + 1, w - 2, imgH);
+    // спрайт КОНКРЕТНОГО варианта модуля (`mod:<id>`) → откат на спрайт детали категории → проц-иконка
     const CAT2SPRITE = { drill: 'drill', engine: 'engine', cargo: 'hold', scanner: 'sensor' };
-    const sp = PART_SPRITES[CAT2SPRITE[def.category]];
+    const sp = (typeof spriteFor === 'function') ? (spriteFor('mod:' + type) || spriteFor(CAT2SPRITE[def.category])) : PART_SPRITES[CAT2SPRITE[def.category]];
     ctx.save(); ctx.translate(x + w / 2, y + 1 + imgH / 2);
     if (sp && sp.img && sp.img.complete) {
       const boxW = (w - 8) * 0.92, boxH = imgH * 0.84;
@@ -508,7 +565,7 @@ class Inventory {
     const m = MODULE_DEFS[this.drag.type];
     const w = this.CARD_W(), h = this.CARD_H();
     ctx.save(); ctx.globalAlpha = 0.92;
-    this._drawCard(ctx, this.mouse.x - w / 2, this.mouse.y - h / 2, w, h, m, false, false);
+    this._drawCard(ctx, this.mouse.x - w / 2, this.mouse.y - h / 2, w, h, m, false, false, this.drag.type);
     ctx.restore();
   }
 

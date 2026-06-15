@@ -62,7 +62,8 @@ function drawTachikoma(ctx, world, unit, camera, opts) {
     const p = it.part;
     ctx.save();
     if (crouch) { ctx.translate(rig.legHub.x, rig.legHub.y); ctx.scale(1, 0.7); ctx.translate(-rig.legHub.x, -rig.legHub.y); }
-    drawPart(ctx, p.kind, p.x, p.y, p.scale, p.angle, p.flip, t, p);
+    const sid = (typeof partSpriteId === 'function') ? partSpriteId(unit, p.id) : p.id;   // спрайт варианта модуля, если задан
+    drawPart(ctx, p.kind, p.x, p.y, p.scale, p.angle, p.flip, t, sid === p.id ? p : Object.assign({}, p, { id: sid }));
     ctx.restore();
   }
   if (scaled) ctx.restore();

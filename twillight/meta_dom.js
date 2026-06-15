@@ -48,6 +48,7 @@ function _routeOcti(x1, y1, x2, y2) { const [mx, my] = _elbow(x1, y1, x2, y2); r
 function _bundle(na, nb, kind) { const dx = nb.x - na.x, dy = nb.y - na.y, len = Math.hypot(dx, dy) || 1, px = -dy / len, py = dx / len; const offs = kind === 'ring' ? [-4.5, 4.5] : [-6.5, 0, 6.5]; return offs.map((o) => _routeOcti(na.x + px * o, na.y + py * o, nb.x + px * o, nb.y + py * o)); }
 
 let _mt = null, _mtGame = null, _mtView = { s: 0.62, tx: 0, ty: 0 }, _mtSel = null, _mtDrag = null;
+let _mtHold = null;   // контроллер удержания-покупки выбранного узла ({start,cancel}) — общий для ЛКМ и Пробела
 
 function metaDomEnsure() {
   if (_mt) return _mt;
@@ -72,7 +73,7 @@ function metaDomEnsure() {
     </header>
     <div style="position:relative;flex:1;display:flex;overflow:hidden">
       <div id="mtVp" class="vp" style="position:relative;flex:1;overflow:hidden;background:radial-gradient(ellipse at 50% 45%,rgba(212,160,66,0.05),transparent 60%),#0b0807;touch-action:none">
-        <div id="mtWorld" style="position:absolute;left:0;top:0;width:${MW}px;height:${MH}px;transform-origin:0 0"></div>
+        <div id="mtWorld" style="position:absolute;left:0;top:0;width:${META_CW}px;height:${META_CH}px;transform-origin:0 0"></div>
         <div style="position:absolute;right:18px;bottom:18px;display:flex;flex-direction:column;gap:6px;z-index:25">
           <button id="mtZin" style="width:38px;height:38px;font-size:18px;color:var(--gold);background:rgba(13,10,14,0.85);border:1px solid var(--gold-dim);cursor:pointer;line-height:1">+</button>
           <button id="mtZout" style="width:38px;height:38px;font-size:18px;color:var(--gold);background:rgba(13,10,14,0.85);border:1px solid var(--gold-dim);cursor:pointer;line-height:1">−</button>
@@ -136,16 +137,16 @@ function _mtLegend(c, t, mode) {
 }
 
 function _mtApplyView() { _mt.world.style.transform = `translate(${_mtView.tx}px,${_mtView.ty}px) scale(${_mtView.s})`; }
-function mtFit() { const vp = _mt.vp, W = vp.clientWidth, H = vp.clientHeight; const s = Math.min(W / (MW * 0.62), H / (MH * 0.62), 1) * 0.62; _mtView = { s, tx: (W - MW * s) / 2, ty: (H - MH * s) / 2 }; _mtApplyView(); }
+function mtFit() { const vp = _mt.vp, W = vp.clientWidth, H = vp.clientHeight; const s = Math.min(W / (META_CW * 0.62), H / (META_CH * 0.62), 1) * 0.62; _mtView = { s, tx: (W - META_CW * s) / 2, ty: (H - META_CH * s) / 2 }; _mtApplyView(); }
 function _mtZoom(f, cx, cy) { const ns = Math.max(0.28, Math.min(1.6, _mtView.s * f)), k = ns / _mtView.s; _mtView = { s: ns, tx: cx - (cx - _mtView.tx) * k, ty: cy - (cy - _mtView.ty) * k }; _mtApplyView(); }
 
 /* ---------- рёбра + узлы (svg + div), как в дизайне ---------- */
 function _mtWorldHTML(save) {
   const dist = _metaDist(save), st = (n) => metaState(save, n, dist), own = (id) => metaUnlocked(save, id);
-  let svg = `<svg width="${MW}" height="${MH}" style="position:absolute;inset:0">
+  let svg = `<svg width="${META_CW}" height="${META_CH}" style="position:absolute;inset:0">
     <defs><pattern id="mt-grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M60 0 H0 V60" fill="none" stroke="rgba(212,160,66,0.045)" stroke-width="1"/></pattern>
     <filter id="mt-gl" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
-    <rect width="${MW}" height="${MH}" fill="url(#mt-grid)"/>`;
+    <rect width="${META_CW}" height="${META_CH}" fill="url(#mt-grid)"/>`;
   [360, 640, 940].forEach((r) => { svg += `<circle cx="${MX}" cy="${MY}" r="${r}" fill="none" stroke="rgba(122,112,94,0.08)" stroke-width="1" stroke-dasharray="2 8"/>`; });
   for (const litPass of [false, true]) {
     for (const [a, b, kind] of META_EDGES) {
@@ -193,6 +194,7 @@ function _mtWorldHTML(save) {
         ${o ? `<div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.16em;color:${acc};margin-top:3px">● ЗАПИТАН</div>` : ''}
         ${av ? `<div style="display:inline-flex;align-items:center;gap:4px;margin-top:3px;font-family:var(--font-mono);font-size:11px;color:${can ? 'var(--gold)' : 'var(--blood-bright)'}">${_mtToken(11)}${n.cost}</div>` : ''}
         ${(o || av) && typeof metaUnlocksModule === 'function' && metaUnlocksModule(n.id) ? `<div style="display:block;margin:4px auto 0;width:fit-content;padding:1px 6px;border:1px solid var(--toxic);font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;color:var(--toxic)">+МОДУЛЬ</div>` : ''}
+        ${(o || av) && typeof metaUnlocksStruct === 'function' && metaUnlocksStruct(n.id) ? `<div style="display:block;margin:4px auto 0;width:fit-content;padding:1px 6px;border:1px solid ${acc};font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;color:${acc}">+СТРУКТУРА</div>` : ''}
         ${vis ? `<div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.16em;color:var(--ash);margin-top:3px">🔒 ЗАКРЫТ</div>` : ''}</div>`;
     } else if (!hid) {
       label = `<div style="position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:8px;text-align:center;pointer-events:none">
@@ -206,11 +208,13 @@ function _mtWorldHTML(save) {
 }
 
 function mtRenderCard() {
+  _mtHold = null;   // карточка перерисована — старый контроллер удержания невалиден (пере-привяжем ниже, если узел покупаем)
   const save = _mtGame.save, n = _mtSel ? META_BY_ID[_mtSel] : null, card = _mt.card;
   if (!n) { card.innerHTML = `<div style="padding:40px 26px;text-align:center;color:var(--ash);font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;line-height:1.8"><div style="opacity:0.4;margin-bottom:14px;display:flex;justify-content:center">${_mtToken(40)}</div>выбери узел<br>сети памяти</div>`; return; }
   const acc = n.accent, s = metaState(save, n), owned = metaUnlocked(save, n.id), can = metaCanBuy(save, n);
   const stTag = { owned: ['ЗАПИТАН', acc], avail: ['ДОСТУПЕН', 'var(--gold)'], visible: ['ЗАКРЫТ', 'var(--pewter)'], hidden: ['СКРЫТ', 'var(--ash)'] }[s];
   const hasMod = typeof metaUnlocksModule === 'function' && metaUnlocksModule(n.id);   // узел открывает новый модуль сборки
+  const hasStruct = typeof metaUnlocksStruct === 'function' && metaUnlocksStruct(n.id);   // узел открывает новую структуру для печати
   const prereq = metaDepNames(n);
   const lbl = (c) => `font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:${c};text-transform:uppercase`;
   let body = `<div><div style="${lbl('var(--ash)')}">ОПИСАНИЕ</div><p style="margin:8px 0 0;font-family:var(--font-body);font-size:13.5px;color:var(--bone);line-height:1.6">${s === 'visible' ? 'Узел зафиксирован сканером, но ещё не расшифрован. Запитай соседний узел, чтобы открыть описание и эффект.' : n.desc}</p></div>`;
@@ -231,20 +235,23 @@ function mtRenderCard() {
       <div style="margin-top:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <div style="display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid ${stTag[1]};color:${stTag[1]};font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase"><span style="width:6px;height:6px;border-radius:50%;background:${stTag[1]}"></span>${stTag[0]}</div>
         ${hasMod ? `<div style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--toxic);color:var(--toxic);font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase"><b style="font-weight:700">+</b>МОДУЛЬ</div>` : ''}
+        ${hasStruct ? `<div style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid ${acc};color:${acc};font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase"><b style="font-weight:700">+</b>СТРУКТУРА</div>` : ''}
       </div>
     </div>
     <div style="padding:18px 22px;display:flex;flex-direction:column;flex:1;overflow-y:auto">${body}</div>
     <div style="padding:16px 22px;border-top:1px solid ${acc}40">${footer}</div>`;
   const close = card.querySelector('#mtClose'); if (close) close.addEventListener('click', () => { _mtSel = null; mtRender(); });
-  const buy = card.querySelector('#mtBuy');     // покупка — УДЕРЖАНИЕ с горизонтальной заливкой
+  const buy = card.querySelector('#mtBuy');     // покупка — УДЕРЖАНИЕ (ЛКМ ИЛИ Пробел) с горизонтальной заливкой
   if (buy && can) {
     const fill = card.querySelector('#mtBuyFill'); let raf = null, t0 = 0; const DUR = 620;
     const tick = () => { const p = Math.min(1, (performance.now() - t0) / DUR); fill.style.width = (p * 100) + '%'; if (p >= 1) { raf = null; if (metaBuy(save, n)) mtRender(); return; } raf = requestAnimationFrame(tick); };
-    const startHold = (e) => { e.preventDefault(); t0 = performance.now(); if (raf) cancelAnimationFrame(raf); raf = requestAnimationFrame(tick); };
+    const startHold = (e) => { if (e) e.preventDefault(); if (raf) return;   // уже идёт — НЕ перезапускаем (иначе авто-репит Пробела сбрасывал бы заливку в ноль)
+      t0 = performance.now(); raf = requestAnimationFrame(tick); };
     const cancelHold = () => { if (raf) { cancelAnimationFrame(raf); raf = null; } fill.style.width = '0'; };
     buy.addEventListener('pointerdown', startHold);
     buy.addEventListener('pointerup', cancelHold);
     buy.addEventListener('pointerleave', cancelHold);
+    _mtHold = { start: startHold, cancel: cancelHold };   // Пробел при выбранном узле запитывает через этот же контроллер (см. _mtKey/_mtKeyUp)
   }
 }
 
@@ -260,6 +267,9 @@ function mtRender() {
 
 function _mtKey(e) {
   if (e.code === 'Escape') { metaDomBack(); return; }
+  // ПРОБЕЛ при выбранном покупаемом узле = удержание-запитывание (как зажатая ЛКМ на кнопке).
+  // keydown авто-репитится — startHold идемпотентен (не сбрасывает заливку); отпускание ловит _mtKeyUp.
+  if (e.code === 'Space') { e.preventDefault(); if (_mtHold) _mtHold.start(); return; }
   // ВРЕМЕННО (для тестов): K — полное обнуление меты: все узлы + банк МТ в ноль + кодекс
   // (диски данных + глоссарий). НЕ как «СБРОС» mtReset (тот ВОЗВРАЩАЕТ потраченные МТ). Убрать перед релизом.
   if (e.code === 'KeyK' && _mtGame) {
@@ -269,6 +279,7 @@ function _mtKey(e) {
     _mtSel = null; mtRender();
   }
 }
+function _mtKeyUp(e) { if (e.code === 'Space' && _mtHold) _mtHold.cancel(); }   // отпустил Пробел — отмена недозаполненной покупки
 function metaDomBack() { if (_mtGame) _mtGame.mode = 'menu'; metaDomHide(); }
-function metaDomShow(game) { _mtGame = game; _mtSel = null; const m = metaDomEnsure(); m.root.classList.add('show'); mtFit(); mtRender(); addEventListener('keydown', _mtKey); }
-function metaDomHide() { if (_mt) _mt.root.classList.remove('show'); removeEventListener('keydown', _mtKey); }
+function metaDomShow(game) { _mtGame = game; _mtSel = null; const m = metaDomEnsure(); m.root.classList.add('show'); mtFit(); mtRender(); addEventListener('keydown', _mtKey); addEventListener('keyup', _mtKeyUp); }
+function metaDomHide() { if (_mt) _mt.root.classList.remove('show'); removeEventListener('keydown', _mtKey); removeEventListener('keyup', _mtKeyUp); _mtHold = null; }

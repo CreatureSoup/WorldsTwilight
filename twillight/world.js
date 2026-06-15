@@ -11,6 +11,7 @@ class World {
     this._s = this.seed;
     this.tiles = new Array(MAP_W * MAP_H);
     this.seen = new Uint8Array(MAP_W * MAP_H); // туман войны
+    this.revealT = new Uint8Array(MAP_W * MAP_H); // 0..255 плавное проявление seen-тайлов (сглаживание открытия тумана)
     this.caverns = [];                          // дружественные чужие города
     this.wilds = [];                            // дикие города-гнёзда (источники волн)
     this.backdrops = [];                        // большие пещеры-сцены с фоном-объектом (объёмный скан)
@@ -51,15 +52,15 @@ class World {
     if (y < 0 || y >= MAP_H) return false;
     return this.seen[y * MAP_W + wrapX(x)] === 1;
   }
+  // Обзор КРУГОМ (Euclidean): радиус R тайлов вокруг (cx,cy). Целые тайлы (R округляем — дробный r напр. 3.5
+  // при вскрытии базы дал бы нецелые индексы Uint8Array → запись в пустоту → интро на чёрном фоне).
   reveal(cx, cy, r) {
-    const r2 = r * r;
-    const y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(MAP_H - 1, Math.ceil(cy + r));
-    const x0 = Math.floor(cx - r), x1 = Math.ceil(cx + r);
-    for (let y = y0; y <= y1; y++)
-      for (let x = x0; x <= x1; x++) {
-        const dx = x - cx, dy = y - cy;
-        if (dx * dx + dy * dy <= r2) this.seen[y * MAP_W + wrapX(x)] = 1;
-      }
+    const R = Math.max(0, Math.round(r)), r2 = R * R + 0.25;   // +0.25 — диагонали радиуса попадают в круг
+    const y0 = Math.max(0, cy - R), y1 = Math.min(MAP_H - 1, cy + R);
+    for (let y = y0; y <= y1; y++) {
+      const dy = y - cy;
+      for (let dx = -R; dx <= R; dx++) if (dx * dx + dy * dy <= r2) this.seen[y * MAP_W + wrapX(cx + dx)] = 1;
+    }
   }
   hardnessForY(y) {
     if (y < CAVE_Y0) {                          // НАД городом: 4 страты погребённой цивилизации
@@ -87,7 +88,17 @@ class World {
     if (y <= MAP_H * 0.78) return 'средний';
     return 'глубокий';
   }
-  inCave(x, y) { return x >= CAVE_X0 && x <= CAVE_X1 && y >= CAVE_Y0 && y <= CAVE_Y1; }
+  // Стартовая пещера — ОРГАНИЧНАЯ: плоский пол (нижние ряды — функционал базы: принтер/спавн/фундамент) +
+  // куполообразный потолок (полу-эллипс) с лёгкой шероховатостью кромки. Детерминированно (tileNoise по x,y)
+  // → одинаково на генерации и в рантайме.
+  inCave(x, y) {
+    if (x < CAVE_X0 || x > CAVE_X1 || y < CAVE_Y0 || y > CAVE_Y1) return false;
+    if (y >= CAVE_Y1 - 1) return true;                         // плоский пол (нижние 2 ряда)
+    const cx = (CAVE_X0 + CAVE_X1) / 2, fy = CAVE_Y1 - 1;
+    const nx = (x - cx) / ((CAVE_X1 - CAVE_X0) / 2 + 0.5), ny = (y - fy) / ((fy - CAVE_Y0) + 0.5);
+    const wob = (this.tileNoise(x * 2 + 5, y * 2 + 3) - 0.5) * 0.22;   // рваная кромка купола
+    return nx * nx + ny * ny <= 1 + wob;
+  }
 
   // тороидальная дистанция по X в тайлах
   torDist(a, b) { const d = Math.abs(a - b) % MAP_W; return Math.min(d, MAP_W - d); }

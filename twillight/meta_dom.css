@@ -19,6 +19,8 @@
 #metaScreen .pcb-flow { stroke-dasharray:3 8; animation:mt-pcbflow .8s linear infinite; }
 #metaScreen .pcb-flow-slow { stroke-dasharray:4 9; animation:mt-pcbflow 1.8s linear infinite; }
 @keyframes mt-pcbflow { to { stroke-dashoffset:-22; } }
+/* окно не в фокусе/скрыто (класс ставит game._syncIdle) — гасим бесконечный «ток по проводам»: компоновщик GPU грел впустую */
+html.bg-idle #metaScreen * { animation-play-state:paused !important; }
 #metaScreen button { font-family:var(--font-mono); }
 /* лёгкий hover-лифт узла (остальное — инлайн, как в дизайне) */
 #metaScreen .mt-node { transition:transform 110ms ease; }

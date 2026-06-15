@@ -23,8 +23,10 @@
 - **Запуск:** `index.html` двойным кликом, либо статик-сервер из `.claude/launch.json` (порт 8123).
 - **После КАЖДОГО изменения проверяй в браузере** (preview): скриншот ключевых экранов +
   `preview_console_logs` (ошибок быть не должно).
-- **rAF в превью тормозит** между «тихими» eval-вызовами (фоновая вкладка). Логику проверяй
-  детерминированно — шагай симуляцию вручную:
+- **rAF в превью тормозит** между «тихими» eval-вызовами (фоновая вкладка). Плюс **энергосбережение**:
+  при потере фокуса окна цикл падает до `BG_FPS`=4, при скрытии вкладки — ПОЛНАЯ пауза (см.
+  `spec_render.md`, перф-правила). В превью-iframe без фокуса игра идёт на 4fps — eval-правки видны с
+  задержкой; буди скриншотом/resize/фокусом. Логику проверяй детерминированно — шагай симуляцию вручную:
   ```js
   game.input.keys = new Set(['KeyS']);
   for (let i=0;i<120;i++) game.unit.update(1/60, game.input, game.world);
@@ -50,16 +52,22 @@
 | `unit.js` | Движение/бурение/HP. ⚠️ При пробитии тайла юнит НЕ двигается (решено с игроком, НЕ ЛОМАТЬ); «замок» `_dugBlock` (разовое нажатие = стой); падение непрерывное; `unit.stats` — единый источник статов. | `spec_unit.md` |
 | `camera.js` | Тороидальное следование, `screenX` — ближайшая копия по кольцу. | — |
 | `input.js` | Held-state по `e.code`. | — |
-| `city.js` | Таймер гибернации + 3 кольца. ⚠️ `drain()` (рейдер) срезает МАКС кольца НАВСЕГДА; `damage()` база лечит. | `spec_enemies.md` |
+| `city.js` | Таймер гибернации + 3 кольца. ⚠️ КОНТУРЫ как HP: база НЕ лечит кольца (только таймер), значение фиксируется при возврате; восстановление HP — авто-починка (`amb_regen`), возврат утерянных колец — `amb_recon`. `drain()` (рейдер) ест СНАЧАЛА таймер, потом HP активного кольца. | `spec_enemies.md` |
+| `firewall.js` | ФАЙРВОЛЛ базы (`Firewall`, `game.firewall`): взломщики у базы копят 3 сегмента; юнит на базе обороняет, узел `amb_fw` замедляет; полный = `breached` → гейм-овер 'hack'. Логика, виджет — `render_firewall`. | `spec_enemies.md` |
 | `cycle.js` | Таймер-фаза мира (~75с) — волны по циклам. | `spec_enemies.md` |
-| `enemy.js` / `ai.js` | Враги (hp=100, локомоция как юнит) + мозги/спавн (ai домешан в `Game.prototype`, грузится ПОСЛЕ game). Копатель: свип «городского диапазона», время до базы откалибровано ~330с±120 (ручка — vy-bias). | `spec_enemies.md` |
+| `enemy.js` / `ai.js` | Враги + мозги/спавн (ai домешан в `Game.prototype`, ПОСЛЕ game). Копатель/собиратель/рейдер + ЛЕТАЮЩИЕ боевые (`ENEMY_FLYERS`): **охотник** (таран-рывок, РАНИТ юнита), **взломщик** (взлом файрволла), **снайпер** (дистанц. выстрелы, кайт). СМЕРТЬ: `damage()` → `dying`+`deathT` (анимация обломков), `ai` чистит после `deathT`. | `spec_enemies.md` |
+| `structures.js` | Печатаемые игроком оборонные структуры (`Structures`, `game.structures`): стена/шипы (пассив) + турель/батарея (актив, энергия от юнита-реактора в радиусе; батарея — релей). Турель — хитскан+трассер. Логика, без Canvas; рендер — `render_structure`. ⚠️ `wrapDeltaPx(a,b)=a−b` (направление s→цель = `wrapDeltaPx(target,s)`). | `spec_structures.md` |
+| `print.js` | Поток печати (домешан в `Game.prototype`, ПОСЛЕ game). Принтер = `MODULE_DEFS.print` в доп-слоте (`unit.modules.aux==='print'`, unlock `vault_hub`). Режимы place→build: лок юнита (`unit.frozenPrint`), голограмма по мыши (R-поворот), ЛКМ/Пробел печать, Esc-отмена без траты; ресурс из `inventory.cargo` СПИСЫВАЕТСЯ при завершении. HUD-панель — `hud.drawPrintHud`. | `spec_structures.md` |
 | `falling.js` | Срыв нестабильной породы/валунов, урон, осколки. | `spec_world.md` |
+| `nav.js` | Навигатор «до города»: A* по тайлам (`navFindPath`), ДВА ПРОХОДА. Модель = локомоция юнита: ход/лаз (клинг) + СРЫВ-ПАДЕНИЕ (`_navFall`) + ПРОКОП породы. Проход 1 — ТОЛЬКО открытые тайлы (приоритет открытому ходу ЛЮБОЙ длины); если нет — проход 2 с прокопом (завал/прокоп под базу). Открытый ход всегда побеждает прокоп → путь находится всегда. Триггер активации — по реальной длине пути (`game._navReturnTime`). 4-связно, тор по X. Логика, без Canvas; рендер — `game._drawNavPath`, тумблер ПУТЬ — `hud.drawNavToggle` (клавиша N). | `spec_meta.md` |
+| `dust.js` | Косметические частицы: КРОШКА (грубая, гравитация) + тонкая ПЫЛЬ (лёгкая, оседает с дрейфом, висит — не дым). Бурение = крошка+пыль; фон с «потолка» = рандомно крошка/пыль/вместе, РЕДКО, только в видимом окне. Логика, без Canvas. | `spec_render.md` |
 | `visions.js` | Видения в темноте (логика; со стороны, противоположной взгляду). | `spec_render.md` |
 | `radar.js` | Детектор загрязнения (`RadarCompass`): пеленг на очаг в зоне фона + симуляция частиц-мороси («Гейгер-ветер»), «живые»/неточные показания. СВОЙСТВО СКАНЕРА (узел `mast_sr`), не модуль. | `spec_world.md` |
 | `hints.js` | Крупные сюжетные подсказки (одна за раз). | `spec_ui.md` |
 | `intro.js` | Заставка печати юнита (фазы, пропуск Пробелом). | `spec_ui.md` |
 | `loot.js` | Дроп ресурса (гравитация, подбор r=1, втягивание ~0.55с; трюм полон → лежит). | — |
-| `effects.js` | Лёгкие частицы (сдача груза). | — |
+| `effects.js` | Лёгкие частицы: сдача груза (`burst`) + всплывающий зелёный «+» лечения (`heal`, на тиках реген HP). | — |
+| `projectiles.js` | Выстрелы врагов (`Projectiles`, `game.shots`): снайпер `fire`, летят по прямой, бьют юнита/гаснут о породу. Тик в `updateEnemies`; рендер — `render_enemy.drawShots`. | `spec_enemies.md` |
 | `inventory.js` | Экран сборки ПЕРЕД забегом (drag модулей, живой IK-превью) + счётчики груза. | `spec_ui.md` |
 | `upgrades.js` | Апгрейды сессии (Dome Keeper): банк ресурсов, покупка удержанием. | `spec_ui.md` |
 | `unitdefs.js` / `anim.js` / `rig.js` | Блупринты деталей (данные) / чистый аниматор / резолв рига (один кадр: зеркало+поворот ±90°). | `spec_unit.md` |
@@ -68,19 +76,23 @@
 | `render_world.js` | Кладка/жилы/маркеры/ассет города. ⚠️ ОДИН профиль кромки `_ragDepth` кормит мир, тень И клип света — менять синхронно. `clipVisibleAir` — окклюзия юнита. | `spec_render.md` |
 | `render_light.js` | Туман/прожектор-конус (клип по видимой кромке)/пыль. | `spec_render.md` |
 | `render_unit.js` / `render_ring.js` | FK-корпус (scout) / юнит-КОЛЬЦО (core, дефолт). ⚠️ налево = зеркало, НЕ поворот 180°. `ringModuleScreenPos` для лучей сканера. | `spec_unit.md` |
-| `render_parts.js` | Спрайты деталей (namespacing `<hull>:<id>`), фолбэк-процедуры. | `spec_unit.md` |
+| `render_parts.js` | Спрайты деталей (namespacing `<hull>:<id>`), фолбэк-процедуры. `partSpriteId` — подмена спрайта детали на спрайт КОНКРЕТНОГО установленного варианта модуля (`mod:<id>`, по `unit.modules`). | `spec_unit.md` |
+| `module_assets.js` | Манифест АССЕТОВ ВАРИАНТОВ модулей (ключ `<hull>:mod:<id>` → `{url,scale,off,rot}`). Генерирует редактор (под-список вариантов в карточке детали). В репо — заглушка. | `design_editor.md` |
 | `render_scan.js` | Серверы-маркеры/хлам + общий `drawScanBeam` (сервер/враг/пещера). | `spec_render.md` |
 | `render_backdrop.js` | Фон пещер-сцен: ассет робота, паралакс, свип по маске ассета. | `spec_world.md` |
 | `render_falling.js` | Трещины нестабильной породы, валуны, летящие блоки. | `spec_world.md` |
+| `render_dust.js` | Частицы (`Dust`): крошка/камушек — `fillRect` (`bone`/`ash`); пыль — мягкий КЛУБ-дымка через КЭШИРОВАННЫЙ радиальный спрайт + `drawImage` (растёт+тает). В мире ПОД туманом/светом. | `spec_render.md` |
 | `render_visions.js` | Рендер видений. ⚠️ БЕЗ `ctx.filter`/офскринов — перф-правила в спеке. | `spec_render.md` |
 | `render_glitch.js` | Пост-помехи интерфейса от радиации (стадии по интенсивности). | `spec_render.md` |
-| `render_enemy.js` | Дроны врагов + рейдер с кольцом дренажа. | `spec_enemies.md` |
+| `render_enemy.js` | Дроны врагов (свой силуэт у типа: копатель/собиратель/рейдер + охотник-дротик/взломщик-интрудер/снайпер-ствол) + `drawShots` (трассеры выстрелов) + `drawEnemyDeath` (затухающий обломок+искры при `dying`). | `spec_enemies.md` |
+| `render_structure.js` | Структуры (`drawStructures`): процедурно стена-плита/шипы/турель(купол+ствол по `aimAng`)/батарея + энергобар/прогресс-бар/гибель/трассеры. В мире ПОД туманом. Ассеты — следующим этапом. ⚠️ перф-правила. | `spec_structures.md` |
 | `render_alert.js` | ОБНАРУЖЕНИЕ УГРОЗ (узел меты `mast_sa`): голо-маркеры поверх врагов (весь экран) и нестабильностей породы (радиус сенсора) + HUD-тумблер (V/клик). Гейт `metaHas('mast_sa')`. | `spec_enemies.md` |
 | `render_radar.js` | Виджет детектора загрязнения (HUD, «Гейгер-ветер», кибер-ацтек): линза-сонце с короной-интенсивностью + морось в ядро-глиф + внутренняя дуга-пеленг. Родня «КОЖУХА». Гейт `game._contamActive()`. | `spec_world.md` |
 | `render_city.js` | Hibernation Widget — статус города одной капсулой. | `spec_ui.md` |
+| `render_firewall.js` | Виджет ФАЙРВОЛЛА (под капсулой, при атаке): 3 сегмента ацтек-кибер-лабиринта, взлом заражает снизу вверх (вайб Eva-хака). | `spec_enemies.md` |
 | `render_resource.js` / `render_module.js` / `render_loot.js` / `render_fx.js` / `render_hint.js` / `render_intro.js` | Язык форм ресурсов / иконки модулей / дроп+лапы / частицы / крупная подсказка / заставка. | `spec_ui.md` |
 | `hud.js` / `ui_menu.js` | HUD-боксы+техно-рамки+кольцо извлечения+лог / меню+gameover-пересчёт. | `spec_ui.md` |
-| `meta.js` + `meta_dom.js/.css` | СЕТЬ ПАМЯТИ: граф+банк МТ + DOM-экран. 5 веток = категории анлоков (юнит/город/ядро/мир/структуры — см. спеку); стартовый узел `core` ПОКУПАЕТСЯ и открывает апгрейды ГОРОДА; прочие эффекты узлов подключать через `metaHas(id)`. ⚠️ временная клавиша K — полный вайп меты (тесты). | `spec_meta.md` |
+| `meta.js` + `meta_dom.js/.css` | СЕТЬ ПАМЯТИ: граф+банк МТ + DOM-экран. 5 веток = категории анлоков (юнит·синяя / город·жёлтая / мир·фиол. / ПЕЧАТЬ-СТРУКТУР·оранж.кастом / ЗАКРЫТО·красная — см. спеку); стартовый узел `core` ПОКУПАЕТСЯ и открывает апгрейды ГОРОДА; прочие эффекты узлов подключать через `metaHas(id)`. ⚠️ координаты узлов держат ПРАВИЛА РАЗМЕЩЕНИЯ — валидатор `_metaValidateLayout` ворчит в консоль на наложение/выход за холст/«втягивание» (правила — `spec_meta.md`). ⚠️ временная клавиша K — полный вайп меты (тесты). | `spec_meta.md` |
 | `codex_dom.js/.css` | БАЗА ДАННЫХ: кодекс-диски + глоссарий + внутриигровой попап (DOM-оверлей). | `spec_codex.md` |
 | `game.js` | ТОЛЬКО оркестрация: режимы (menu/inventory/intro/playing/upgrades/paused/gameover/progress/database), главный цикл, меню-навигация, склейка систем. Не наращивать — выноси подсистемы. | по теме |
 | `tools/rig_editor.html` | Standalone-редактор рига (открывать через превью-сервер). | `design_editor.md` |
@@ -90,12 +102,12 @@
 `render_shield.js`, `render_meta.js` (canvas-версия меты, суперседед DOM-ом), `assets/round-scout/`.
 
 **Порядок подключения в `index.html`:** `constants → save → meta → world → input → unit →
-camera → city → cycle → unitdefs → anim → rig → inventory → upgrades → loot → effects → falling →
-visions → hints → intro → enemy → radar → render_resource → render_module → render_world →
-render_backdrop → render_falling → render_loot → render_fx → render_parts → render_unit →
-render_ring → render_light → render_scan → render_visions → render_hint → render_enemy →
-render_alert → render_radar → render_intro → render_city → render_glitch → legik → tentacles → rigbridge → rig-core → hud →
-ui_menu → meta_dom → codex_dom → game → ai`.
+camera → city → firewall → cycle → unitdefs → anim → rig → inventory → upgrades → loot → effects → projectiles → falling → nav → dust →
+visions → hints → intro → enemy → structures → radar → render_resource → render_module → render_world →
+render_backdrop → render_falling → render_dust → render_loot → render_fx → render_parts → module_assets → render_unit →
+render_ring → render_light → render_scan → render_visions → render_hint → render_enemy → render_structure →
+render_alert → render_radar → render_intro → render_city → render_firewall → render_glitch → legik → tentacles → rigbridge → rig-core → hud →
+ui_menu → meta_dom → codex_dom → game → print → ai`.
 (`render_light` после `render_unit` — берёт `unitLightAnchor`; `render_scan` после `render_ring` —
 берёт `ringModuleScreenPos`; CSS оверлеев (`meta_dom.css`/`codex_dom.css`) инжектит загрузчик;
 `ai` после `game` — домешивает в прототип.) Классы/функции глобальные, без модулей.
@@ -105,7 +117,8 @@ ui_menu → meta_dom → codex_dom → game → ai`.
 | Документ | Что внутри |
 |---|---|
 | `spec_world.md` | Мир: геометрия/страты/палитра глубины, генерация, серверы, радиация, нестабильная порода и валуны, пещеры-сцены, тест-артефакты |
-| `spec_enemies.md` | Город (таймер/кольца/drain), враги и мозги, спавн волн, калибровка копателя, скан врагов |
+| `spec_enemies.md` | Город (таймер/кольца/drain), враги и мозги, спавн волн, калибровка копателя, скан врагов, смерть врагов |
+| `spec_structures.md` | Печать структур: энергомодель, `STRUCT_DEFS`, логика/рендер, смерть врагов, дорожная карта фаз |
 | `spec_unit.md` | Юнит: инварианты движения/бурения, статы, риг/блупринты, кольцо-рендер, спрайты деталей |
 | `spec_render.md` | Слои кадра, кромки/свет/тени, скан-лучи, видения, глитч-помехи, ⚠️ перф-правила Canvas2D |
 | `spec_codex.md` | База данных: диски/глоссарий, анимации, внутриигровой попап, источники данных, персист |
