@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Сорок островов · НЛМК — Антон Страхов</title>
+  <meta name="description" content="Командная настолка для НЛМК по мотивам романа «Рыцари сорока островов» Сергея Лукьяненко. Две кросс-функциональные команды соревнуются, но идут к общей цели. Симуляция процессов и рефлексия. Серия из 4 проектов." />
+  <meta name="theme-color" content="#0B0A10" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Advent+Pro:wght@600;700;800&family=Exo+2:wght@700;800&family=Geologica:wght@700;800&family=Manrope:wght@400;500;600;700;800&family=Prosto+One&family=Rubik+Mono+One&family=Russo+One&family=Tektur:wght@600;700;800&family=Unbounded:wght@600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23FF7A1A'/><stop offset='0.6' stop-color='%23E41E7B'/><stop offset='1' stop-color='%236B5FFF'/></linearGradient></defs><rect rx='8' width='32' height='32' fill='url(%23g)'/><rect x='6' y='6' width='20' height='20' rx='4' fill='%230B0A10'/></svg>" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="index.html">
+        <span class="brand__mark" aria-hidden="true"></span>
+        <span>
+          <span data-lang="ru">Антон Страхов</span><span data-lang="en">Anton Strakhov</span>
+          <br>
+          <small data-lang="ru">creaturesoup.com · геймдизайнер</small>
+          <small data-lang="en">creaturesoup.com · game designer</small>
+        </span>
+      </a>
+      <nav class="nav__links" aria-label="Primary">
+        <a class="nav__link" href="index.html#services"><span data-lang="ru">Чем полезен</span><span data-lang="en">Services</span></a>
+        <a class="nav__link" href="index.html#projects"><span data-lang="ru">Проекты</span><span data-lang="en">Projects</span></a>
+        <a class="nav__link" href="index.html#cases"><span data-lang="ru">Топ-кейсы</span><span data-lang="en">Featured</span></a>
+        <a class="nav__link" href="index.html#about"><span data-lang="ru">Об авторе</span><span data-lang="en">About</span></a>
+        <a class="nav__link" href="index.html#contact"><span data-lang="ru">Контакты</span><span data-lang="en">Contact</span></a>
+      </nav>
+      <div class="nav__tools">
+        <div class="lang" role="group" aria-label="Language">
+          <button class="lang__btn" data-lang-btn="ru">RU</button>
+          <button class="lang__btn" data-lang-btn="en">EN</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="case-hero case-hero--with-cover">
+      <div class="case-hero__bg" aria-hidden="true">
+        <img data-src="images/Сорок островов/cover.webp" alt="" loading="eager" />
+      </div>
+      <div class="container">
+        <a href="index.html#projects" class="case-hero__crumb">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          <span data-lang="ru">Все проекты</span><span data-lang="en">All projects</span>
+        </a>
+        <h1 class="case-hero__title">
+          <span data-lang="ru">Сорок островов —<br>конкурируем, но идём к общей цели</span>
+          <span data-lang="en">Forty Islands —<br>competing toward a shared goal</span>
+        </h1>
+        <p class="lede" style="margin-bottom: 2.5rem;">
+          <span data-lang="ru">Настольная игра для НЛМК по мотивам романа Сергея Лукьяненко «Рыцари сорока островов». Две кросс-функциональные команды соревнуются — но идут к общей цели. Симуляция процессов и рефлексия для команд, которые в реальности работают вместе.</span>
+          <span data-lang="en">A board game for NLMK after Sergey Lukyanenko's novel "Knights of the Forty Islands". Two cross-functional teams compete — yet move toward a shared goal. A process simulation and reflection tool for teams that work together in real life.</span>
+        </p>
+        <div class="case-hero__meta">
+          <div>
+            <span data-lang="ru">Клиент</span><span data-lang="en">Client</span>
+            <b>НЛМК · Корпоративный университет</b>
+          </div>
+          <div>
+            <span data-lang="ru">Роль</span><span data-lang="en">Role</span>
+            <b data-lang="ru">Геймдизайн настолки, визуал</b>
+            <b data-lang="en">Board game design, visuals</b>
+          </div>
+          <div>
+            <span data-lang="ru">Формат</span><span data-lang="en">Format</span>
+            <b data-lang="ru">Настолка · 2 команды по 5–6 человек · симуляция процессов</b>
+            <b data-lang="en">Board game · 2 teams of 5–6 · process simulation</b>
+          </div>
+          <div>
+            <span data-lang="ru">Цель</span><span data-lang="en">Goal</span>
+            <b data-lang="ru">Кросс-функциональное сотрудничество, рефлексия процессов</b>
+            <b data-lang="en">Cross-functional cooperation, process reflection</b>
+          </div>
+          <div>
+            <span data-lang="ru">Дальше</span><span data-lang="en">After</span>
+            <b data-lang="ru">Серия из 4 проектов для НЛМК</b>
+            <b data-lang="en">Series of 4 projects for NLMK</b>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="container">
+
+      <!-- CONTEXT -->
+      <div class="case-grid">
+        <div class="case-grid__col">
+          <h3><span data-lang="ru">Контекст</span><span data-lang="en">Context</span></h3>
+        </div>
+        <div class="case-grid__col case-grid__body">
+          <div class="block" data-lang="ru">
+            <p>Корпоративный университет НЛМК пришёл с задачей: <strong>две команды, которые в реальности работают вместе, должны выявить барьеры в своём взаимодействии</strong>, а после игры — спланировать шаги по их устранению. Обычный тренинг с этим справляется плохо: барьеры словесно «и так понятны», но не переживаются.</p>
+            <p>В качестве основы взяли <strong>роман Сергея Лукьяненко «Рыцари сорока островов»</strong>: подростков похитили из обычной жизни и разбросали по сорока островам, где живут кланы. Кому удастся подчинить все сорок островов — тот получит свободу. Это сильный фрейм, который сразу включает в людях желание играть, а не «проходить тренинг».</p>
+          </div>
+          <div class="block" data-lang="en">
+            <p>NLMK's Corporate University came with a brief: <strong>two teams who work together in real life have to surface the barriers in their interaction</strong>, and after the game — plan steps to remove them. A standard training does this badly: barriers are "verbally understood" but not felt.</p>
+            <p>As the source we took <strong>Sergey Lukyanenko's novel "Knights of the Forty Islands"</strong>: teenagers ripped from their lives and scattered across forty islands, where clans live. Whoever subjugates all forty wins their freedom. It's a strong frame that flips people into "play" mode instead of "training" mode.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- MY ROLE -->
+      <div class="case-grid">
+        <div class="case-grid__col">
+          <h3><span data-lang="ru">Моя роль</span><span data-lang="en">My role</span></h3>
+        </div>
+        <div class="case-grid__col case-grid__body">
+          <div class="block" data-lang="ru">
+            <p>Полный цикл: <strong>геймдизайн</strong> и <strong>визуальный дизайн</strong> всех компонентов. Концепция, механики, баланс, правила для ведущего, оформление поля, карт, замков, предметов, бойцов, ресурсов, жетонов.</p>
+            <p>«Сорок островов» — первый проект серии из четырёх для НЛМК. После неё пришли «Город систем», «Крейсер Федерация» и «Рыцари Средневековья» — клиент возвращался напрямую, без тендеров.</p>
+          </div>
+          <div class="block" data-lang="en">
+            <p>Full cycle: <strong>game design</strong> and <strong>visual design</strong> of every component. Concept, mechanics, balance, facilitator rules, board layout, cards, castles, items, fighters, resources, tokens.</p>
+            <p>"Forty Islands" was the first of four projects for NLMK. After it came "City of Systems", "Cruiser Federation", and "Medieval Knights" — the client returned directly each time, no tenders.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- KEY DECISIONS -->
+      <div class="case-grid">
+        <div class="case-grid__col">
+          <h3><span data-lang="ru">Ключевые решения</span><span data-lang="en">Key decisions</span></h3>
+        </div>
+        <div class="case-grid__col case-grid__body">
+          <div class="block" data-lang="ru">
+            <p><strong>Заявленная цель — ловушка.</strong> На входе игрокам объявляют: «победитель — тот, кто захватит все сорок островов». В самой механике написано иначе: захватить все сорок островов одной командой <strong>почти невозможно</strong>. Это сделано осознанно: суть рефлексии после игры — что навязанная цель «победить» съедает реальную «выйти из ситуации». Игроки сами должны заметить, что цель была неправильной.</p>
+            <p><strong>Чужие как тренер сотрудничества.</strong> На островах живут «Чужие» — внешняя сила, которая активно мешает плану. На четвёртом ходу они в открытую предлагают одной из команд: «убей соседа — отдадим вам два острова». Если команды соглашаются и идут на конфликт — Чужие усиливают противника десантами. Если объединяются — Чужие требуют вернуться к правилам и десантируются на оба клана. Это не «балансир», это <strong>дидактический механизм, провоцирующий разговор о том, кто реально на стороне игрока</strong>.</p>
+            <p><strong>Радиовышки и бункеры — скрытые кооперативные пути.</strong> На островах есть инфраструктура, которая не даёт «победы» в классическом смысле, но открывает альтернативные сценарии. Захват <strong>1 радиовышки</strong> = переговоры между командами 5 минут в раунд. <strong>2 вышки</strong> = слабый сигнал с Земли. <strong>3 вышки</strong> = можно подать ответ домой. Тайный путь: <strong>взорвать три бункера Чужих</strong> — система управления островами рушится, и игроки выходят из ситуации иначе, чем им предлагали. Эти пути не объявлены — игроки должны их собрать сами.</p>
+            <p><strong>Туман войны как информационный барьер.</strong> Острова накрыты «туманом» — нельзя посмотреть, что внутри, пока туда не вошёл боец или не использован специальный предмет. Это та же информационная асимметрия, что между подразделениями в реальности: пока не пришёл — не знаешь, что у соседа.</p>
+            <p><strong>Программирование действий.</strong> Каждый игрок в начале хода <strong>выкладывает три карточки действий</strong> на свой планшет — и ход разыгрывается уже по ним. Нельзя «передумать» в момент. Это превращает обсуждение перед ходом в реальные переговоры, а не «давайте я первый».</p>
+            <p><strong>Дорефлексия.</strong> До игры участники письменно отвечают на три вопроса: «какие взаимодействия в моей работе кросс-функциональные», «какие сложности в этих взаимодействиях», «какие из них наиболее остро задевают конкретно меня». После игры этот список сравнивается с тем, что произошло на столе — рефлексия становится конкретной, не «общей».</p>
+          </div>
+          <div class="block" data-lang="en">
+            <p><strong>The announced goal is a trap.</strong> At the start, players are told: "the winner is whoever captures all forty islands". The mechanics tell a different story: capturing all forty as a single team is <strong>nearly impossible</strong>. That's deliberate. The reflection after the game is exactly about how an imposed "win" goal eats the real "get out of the situation" goal. Players have to notice the framing problem themselves.</p>
+            <p><strong>The Aliens as a cooperation coach.</strong> The islands have "Aliens" — an external force that actively breaks plans. On turn four they openly offer one team: "kill the neighbour — we'll give you two islands". If teams accept and go for conflict, the Aliens reinforce the loser with drops. If teams unite, the Aliens demand a return to "the rules" and drop on both clans. This isn't a balance lever — it's a <strong>didactic mechanism that provokes a conversation about who is actually on the player's side</strong>.</p>
+            <p><strong>Radio towers and bunkers — hidden cooperative paths.</strong> The islands have infrastructure that doesn't deliver classic "victory" but opens alternative scenarios. Capturing <strong>1 radio tower</strong> = 5-minute negotiation between teams once per round. <strong>2 towers</strong> = a weak signal from Earth. <strong>3 towers</strong> = you can send an answer home. Secret path: <strong>blow up three Alien bunkers</strong> — the islands' control system breaks and players exit the situation in a way that wasn't offered to them. These paths aren't announced — players have to assemble them.</p>
+            <p><strong>Fog of war as information barrier.</strong> Islands are covered in "fog" — you can't see what's there until your fighter steps onto the island or you use a special item. The same information asymmetry that exists between departments in real life: until you've gone there, you don't know what your neighbour is doing.</p>
+            <p><strong>Action programming.</strong> Each player at the start of the turn <strong>lays out three action cards</strong> on their dashboard — and the turn plays out from those. No "changing your mind" mid-turn. This turns the pre-turn discussion into real negotiation, not "I'll go first".</p>
+            <p><strong>Pre-game reflection.</strong> Before the game, participants answer three questions in writing: "which interactions in my work are cross-functional", "what's hard about them", "which of those hit <em>me</em> the hardest". After the game, this list is compared to what happened on the table — reflection becomes specific, not "general".</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESULTS -->
+      <h2 style="margin: 4rem 0 2rem;">
+        <span data-lang="ru">Результаты</span>
+        <span data-lang="en">Results</span>
+      </h2>
+
+      <div class="results">
+        <div class="result">
+          <b>1-й</b>
+          <span data-lang="ru">проект серии — за ним пришли ещё 3 заказа от НЛМК</span>
+          <span data-lang="en">project of the series — 3 more NLMK orders followed</span>
+        </div>
+        <div class="result">
+          <b>2 × 5–6</b>
+          <span data-lang="ru">кросс-функциональные команды реальных коллег</span>
+          <span data-lang="en">cross-functional teams of real-world colleagues</span>
+        </div>
+        <div class="result">
+          <b>7</b>
+          <span data-lang="ru">типов кросс-функциональных проблем — рамка рефлексии</span>
+          <span data-lang="en">cross-functional problem types — the reflection frame</span>
+        </div>
+        <div class="result">
+          <b>План</b>
+          <span data-lang="ru">внедрения изменений в работе по итогам игры</span>
+          <span data-lang="en">a change-implementation plan at the end of the session</span>
+        </div>
+      </div>
+
+      <p class="muted" style="margin: -1rem 0 3rem;">
+        <span data-lang="ru">— На рефлексии группы прогоняют список из 7 проблем кросс-функциональных взаимодействий: противоречие целей, борьба за ресурсы, межличностные и межгрупповые конфликты, отсутствие единого инфополя, излишняя иерархичность, бюрократия, загруженность собственными делами. Какие видели на столе → как с этим работать в офисе.</span>
+        <span data-lang="en">— During reflection, groups walk through 7 cross-functional problem types: goal conflict, resource competition, interpersonal and inter-group conflict, lack of a shared information field, excess hierarchy, bureaucracy, overload with own work. Which appeared on the table → how to address it back at the office.</span>
+      </p>
+
+      <!-- TESTIMONIALS -->
+      <div class="case-grid">
+        <div class="case-grid__col">
+          <h3><span data-lang="ru">Что говорили в НЛМК</span><span data-lang="en">From NLMK</span></h3>
+        </div>
+        <div class="case-grid__col case-grid__body">
+          <div class="block" data-lang="ru">
+            <blockquote style="margin: 0 0 1.5rem; padding-left: 1rem; border-left: 2px solid var(--amber); color: var(--text-muted);">«Эта игра предназначена для двух команд, которые работают вместе в реальной жизни. Она направлена на то, чтобы две команды выявили барьеры в своём взаимодействии, а после игры, во время обсуждения, спланировали шаги по устранению данных барьеров».<br><span style="color: var(--text-dim); font-size: 0.85rem;">— Корпоративный университет НЛМК, методолог</span></blockquote>
+            <blockquote style="margin: 0 0 1.5rem; padding-left: 1rem; border-left: 2px solid var(--amber); color: var(--text-muted);">«Деловая игра — это не развлечение. Самостоятельный формат развития, который мы используем наравне с образовательными решениями. Игра помогает учиться в интересной форме, а знания и навыки, которые осваиваются в ходе игры, легко интегрируются в реальную жизнь».<br><span style="color: var(--text-dim); font-size: 0.85rem;">— Корпоративный университет НЛМК, заказчик программы</span></blockquote>
+            <p class="muted" style="font-style: italic;">«Эта игра учит нас общаться в команде и доверять друг другу». «В игровом формате у нас есть возможность совершать ошибки и находить пути их решения». «Игра учит формулировать цели и находить пути решения».<br><span style="color: var(--text-dim); font-size: 0.85rem;">— Из обратной связи участников игры</span></p>
+          </div>
+          <div class="block" data-lang="en">
+            <blockquote style="margin: 0 0 1.5rem; padding-left: 1rem; border-left: 2px solid var(--amber); color: var(--text-muted);">"This game is designed for two teams that work together in real life. Its goal is for the two teams to surface the barriers in their interaction, and after the game — during the discussion — plan steps to remove those barriers."<br><span style="color: var(--text-dim); font-size: 0.85rem;">— NLMK Corporate University, methodologist</span></blockquote>
+            <blockquote style="margin: 0 0 1.5rem; padding-left: 1rem; border-left: 2px solid var(--amber); color: var(--text-muted);">"A business game isn't entertainment. It's a self-contained development format we use alongside educational solutions. The game helps people learn in an engaging form, and the knowledge and skills they pick up integrate easily into real work."<br><span style="color: var(--text-dim); font-size: 0.85rem;">— NLMK Corporate University, program sponsor</span></blockquote>
+            <p class="muted" style="font-style: italic;">"This game teaches us to communicate as a team and trust each other." "In the game format we get to make mistakes and find ways to solve them." "The game teaches you to formulate goals and find paths to them."<br><span style="color: var(--text-dim); font-size: 0.85rem;">— From player feedback</span></p>
+          </div>
+        </div>
+      </div>
+
+      <h2 style="margin: 3rem 0 2rem;">
+        <span data-lang="ru">Компоненты игры</span>
+        <span data-lang="en">Game components</span>
+      </h2>
+
+      <div class="gallery">
+        <div class="gallery__item">
+          <img data-src="images/Сорок островов/new-big_map3 2.webp" alt="Большая карта" loading="lazy" />
+        </div>
+        <div class="gallery__item">
+          <img data-src="images/Сорок островов/player_board 2.webp" alt="Планшет игрока" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--square">
+          <img data-src="images/Сорок островов/new_castles_140.webp" alt="Замки" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--square">
+          <img data-src="images/Сорок островов/туман_острова.webp" alt="Туман — острова" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--portrait">
+          <img data-src="images/Сорок островов/ресусры_все.webp" alt="Все ресурсы" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--portrait">
+          <img data-src="images/Сорок островов/карта_боец.webp" alt="Карта — боец" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--portrait">
+          <img data-src="images/Сорок островов/карта_пришельцы.webp" alt="Карта — пришельцы" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--portrait">
+          <img data-src="images/Сорок островов/предмет_радиостанция.webp" alt="Предмет — радиостанция" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--portrait">
+          <img data-src="images/Сорок островов/предмет_труба.webp" alt="Предмет — труба" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--square">
+          <img data-src="images/Сорок островов/доп_острова_140х140.webp" alt="Дополнительные острова" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--square">
+          <img data-src="images/Сорок островов/жетон_01 4.webp" alt="Жетон" loading="lazy" />
+        </div>
+      </div>
+
+      <a class="next-case" href="case-city-of-systems.html" style="display: block;">
+        <small><span data-lang="ru">Следующий проект</span><span data-lang="en">Next project</span></small>
+        <h3>
+          <span data-lang="ru">НЛМК · Город систем →</span>
+          <span data-lang="en">NLMK · City of Systems →</span>
+        </h3>
+        <p class="muted">
+          <span data-lang="ru">Симуляция производственной цепочки: локальные решения → системные эффекты.</span>
+          <span data-lang="en">Production-chain simulation: local decisions → systemic effects.</span>
+        </p>
+      </a>
+
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container site-footer__inner">
+      <div class="site-footer__meta">
+        <span data-lang="ru">© 2026 · creaturesoup · Антон Страхов</span>
+        <span data-lang="en">© 2026 · creaturesoup · Anton Strakhov</span>
+      </div>
+      <div class="site-footer__links">
+        <a href="index.html">
+          <span data-lang="ru">← На главную</span>
+          <span data-lang="en">← Home</span>
+        </a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+  <script src="tweaks.js"></script>
+</body>
+</html>

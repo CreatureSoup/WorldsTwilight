@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Симулятор управления городом · NDA — Антон Страхов</title>
+  <meta name="description" content="Цифровой симулятор для подготовки муниципальных команд: 6–8 команд параллельно ведут свой город в общем кластере, разбирая реальные кейсы. Unity-прототип в 2022 → веб + офлайн-модули в 2023, гибридное проведение." />
+  <meta name="theme-color" content="#0B0A10" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Advent+Pro:wght@600;700;800&family=Exo+2:wght@700;800&family=Geologica:wght@700;800&family=Manrope:wght@400;500;600;700;800&family=Prosto+One&family=Rubik+Mono+One&family=Russo+One&family=Tektur:wght@600;700;800&family=Unbounded:wght@600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23FF7A1A'/><stop offset='0.6' stop-color='%23E41E7B'/><stop offset='1' stop-color='%236B5FFF'/></linearGradient></defs><rect rx='8' width='32' height='32' fill='url(%23g)'/><rect x='6' y='6' width='20' height='20' rx='4' fill='%230B0A10'/></svg>" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="index.html">
+        <span class="brand__mark" aria-hidden="true"></span>
+        <span>
+          <span data-lang="ru">Антон Страхов</span><span data-lang="en">Anton Strakhov</span>
+          <br>
+          <small data-lang="ru">creaturesoup.com · геймдизайнер</small>
+          <small data-lang="en">creaturesoup.com · game designer</small>
+        </span>
+      </a>
+      <nav class="nav__links" aria-label="Primary">
+        <a class="nav__link" href="index.html#services"><span data-lang="ru">Чем полезен</span><span data-lang="en">Services</span></a>
+        <a class="nav__link" href="index.html#projects"><span data-lang="ru">Проекты</span><span data-lang="en">Projects</span></a>
+        <a class="nav__link" href="index.html#cases"><span data-lang="ru">Топ-кейсы</span><span data-lang="en">Featured</span></a>
+        <a class="nav__link" href="index.html#about"><span data-lang="ru">Об авторе</span><span data-lang="en">About</span></a>
+        <a class="nav__link" href="index.html#contact"><span data-lang="ru">Контакты</span><span data-lang="en">Contact</span></a>
+      </nav>
+      <div class="nav__tools">
+        <div class="lang" role="group" aria-label="Language">
+          <button class="lang__btn" data-lang-btn="ru">RU</button>
+          <button class="lang__btn" data-lang-btn="en">EN</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="case-hero case-hero--with-cover">
+      <div class="case-hero__bg" aria-hidden="true">
+        <img data-src="images/Симулятор управления городом/cover.webp" alt="" loading="eager" />
+      </div>
+      <div class="container">
+        <a href="index.html#projects" class="case-hero__crumb">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          <span data-lang="ru">Все проекты</span><span data-lang="en">All projects</span>
+        </a>
+        <h1 class="case-hero__title">
+          <span data-lang="ru">Симулятор управления городом —<br>модель на реальных данных</span>
+          <span data-lang="en">City Management Simulator —<br>a model on real data</span>
+        </h1>
+        <p class="lede" style="margin-bottom: 2.5rem;">
+          <span data-lang="ru">Цифровой симулятор управления городом для подготовки муниципальных команд. 6–8 команд параллельно ведут свой город в общем кластере, разбирая реальные муниципальные кейсы. В 2022 — Unity-прототип, в 2023 — полноценная веб-версия с офлайн-модулями для гибридного проведения.</span>
+          <span data-lang="en">A digital city-management simulator for training municipal teams. 6–8 teams run their own city in a shared cluster in parallel, working through real municipal cases. 2022 — a Unity prototype; 2023 — a full web version with offline modules for hybrid delivery.</span>
+        </p>
+        <div class="case-hero__meta">
+          <div>
+            <span data-lang="ru">Клиент</span><span data-lang="en">Client</span>
+            <b data-lang="ru">Госуниверситет · NDA</b>
+            <b data-lang="en">Leading university · NDA</b>
+          </div>
+          <div>
+            <span data-lang="ru">Роль</span><span data-lang="en">Role</span>
+            <b data-lang="ru">Директор игры, главный геймдизайнер</b>
+            <b data-lang="en">Game Director, lead designer</b>
+          </div>
+          <div>
+            <span data-lang="ru">Формат</span><span data-lang="en">Format</span>
+            <b data-lang="ru">Веб + офлайн-модули (гибрид)</b>
+            <b data-lang="en">Web + offline modules (hybrid)</b>
+          </div>
+          <div>
+            <span data-lang="ru">Статус</span><span data-lang="en">Status</span>
+            <b data-lang="ru">Пилот проведён · готов к регулярным запускам</b>
+            <b data-lang="en">Pilot delivered · ready for recurring runs</b>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="container">
+
+      <div class="case-grid">
+        <div class="case-grid__col">
+          <h3><span data-lang="ru">Что это</span><span data-lang="en">What it is</span></h3>
+        </div>
+        <div class="case-grid__col case-grid__body">
+          <div class="block" data-lang="ru">
+            <p>Подготовка управленцев городского уровня — задача, в которой ошибка в обучении дороже, чем в обычном корпоративном тренинге. Симулятор должен моделировать реальность достаточно точно, чтобы выводы из сессии переносились на работу.</p>
+            <p>Под капотом — математическая модель на реальных муниципальных данных, а не упрощённый игровой балансир. Кейсы взяты из практики российских городов и ветвятся в зависимости от решений мэра: анализ, выбор исполнителя, направление, бюджет, форма контроля — каждый узел меняет траекторию.</p>
+            <p>6–8 команд ведут свои города параллельно, в общем кластере. Метрики и специализации соседей видны — это создаёт нативную интенцию сравнивать и обмениваться, а не конкурировать. Один из дидактических замыслов — научить муниципальные команды видеть в других городах не соперников, а коллег с похожими задачами.</p>
+          </div>
+          <div class="block" data-lang="en">
+            <p>Training city-level executives is a domain where a mistake in training costs more than in usual corporate training. The simulator has to model reality precisely enough that takeaways from a session transfer to actual work.</p>
+            <p>Under the hood is a math model on real municipal data, not a simplified game balance. Cases come from the practice of Russian cities and branch with the mayor's decisions: analysis, choice of executor, direction, budget, oversight — each node changes the trajectory.</p>
+            <p>Six to eight teams run their own cities in parallel, in a shared cluster. Neighbours' metrics and specializations are visible — that creates a natural urge to compare and exchange, not compete. One of the didactic goals: train municipal teams to see other cities not as rivals but as colleagues with the same kind of problems.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="case-grid">
+        <div class="case-grid__col">
+          <h3><span data-lang="ru">Что я сделал</span><span data-lang="en">What I did</span></h3>
+        </div>
+        <div class="case-grid__col case-grid__body">
+          <div class="block" data-lang="ru">
+            <p>В 2022 — концепция и Unity-прототип для проверки гипотез. В 2023 — полноценная веб-версия с офлайн-модулями для гибридного проведения.</p>
+            <p>Был <strong>Директором игры и главным геймдизайнером</strong>. Отвечал за концепцию, сеттинг, структуру кейсов, баланс модели на реальных данных, дашборд показателей, сценарий проведения. Координировал команду разработчиков и методологов.</p>
+            <p>Пилот проведён. Проект разработан для регулярных запусков.</p>
+          </div>
+          <div class="block" data-lang="en">
+            <p>2022 — concept and a Unity prototype to test hypotheses. 2023 — a full web version with offline modules for hybrid delivery.</p>
+            <p>I was <strong>Game Director and lead designer</strong>. I owned concept, setting, case structure, balance of the real-data model, the metrics dashboard, and the session scenario. Coordinated the engineering and methodology teams.</p>
+            <p>Pilot delivered. The project is built for recurring runs.</p>
+          </div>
+        </div>
+      </div>
+
+      <h2 style="margin: 3rem 0 2rem;">
+        <span data-lang="ru">Изображения скоро</span>
+        <span data-lang="en">Images coming soon</span>
+      </h2>
+
+      <div class="gallery">
+        <div class="gallery__item gallery__item--wide">
+          <img data-src="images/Симулятор управления городом/все на одном фрейме.webp" alt="Все экраны на одном фрейме" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--wide">
+          <img data-src="images/Симулятор управления городом/Активные кейсы.webp" alt="Активные кейсы" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--wide">
+          <img data-src="images/Симулятор управления городом/page-01.webp" alt="Экран симулятора" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--wide">
+          <img data-src="images/Симулятор управления городом/page-08.webp" alt="Экран симулятора" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--wide">
+          <img data-src="images/Симулятор управления городом/page-17.webp" alt="Экран симулятора" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--wide">
+          <img data-src="images/Симулятор управления городом/page-26.webp" alt="Экран симулятора" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--wide">
+          <img data-src="images/Симулятор управления городом/page-47.webp" alt="Экран симулятора" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--wide">
+          <img data-src="images/Симулятор управления городом/page-55.webp" alt="Экран симулятора" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--wide">
+          <img data-src="images/Симулятор управления городом/page-60.webp" alt="Экран симулятора" loading="lazy" />
+        </div>
+        <div class="gallery__item gallery__item--wide">
+          <img data-src="images/Симулятор управления городом/page-78.webp" alt="Экран симулятора" loading="lazy" />
+        </div>
+      </div>
+
+      <a class="next-case" href="case-netone-lean.html" style="display: block;">
+        <small><span data-lang="ru">Следующий проект</span><span data-lang="en">Next project</span></small>
+        <h3>
+          <span data-lang="ru">FMCG · NetOne — Lean Management →</span>
+          <span data-lang="en">FMCG · NetOne — Lean Management →</span>
+        </h3>
+        <p class="muted">
+          <span data-lang="ru">Кооп-онлайн-игра в Miro на 15 человек, ~3 часа. Lean-методология.</span>
+          <span data-lang="en">Co-op Miro online game for 15 players, ~3 hours. Lean methodology.</span>
+        </p>
+      </a>
+
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container site-footer__inner">
+      <div class="site-footer__meta">
+        <span data-lang="ru">© 2026 · creaturesoup · Антон Страхов</span>
+        <span data-lang="en">© 2026 · creaturesoup · Anton Strakhov</span>
+      </div>
+      <div class="site-footer__links">
+        <a href="index.html">
+          <span data-lang="ru">← На главную</span>
+          <span data-lang="en">← Home</span>
+        </a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+  <script src="tweaks.js"></script>
+</body>
+</html>
