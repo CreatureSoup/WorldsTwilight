@@ -10,10 +10,15 @@ const I18N_KEY = 'cs_lang';
 const supportedLangs = ['ru', 'en'];
 
 function getLang() {
+  // EN-перевод временно дорабатывается — форсируем RU по умолчанию.
+  // Когда EN будет готов, раскомментировать блок ниже и удалить return 'ru'.
+  return 'ru';
+  /*
   const saved = localStorage.getItem(I18N_KEY);
   if (saved && supportedLangs.includes(saved)) return saved;
   const nav = (navigator.language || 'ru').slice(0, 2).toLowerCase();
   return supportedLangs.includes(nav) ? nav : 'ru';
+  */
 }
 
 function setLang(lang) {
