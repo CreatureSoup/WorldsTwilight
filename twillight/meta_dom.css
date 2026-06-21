@@ -1,0 +1,32 @@
+/* СЕТЬ ПАМЯТИ — DOM-оверлей мета-прогресса. Порт дизайна meta/project/src/tech_web.jsx.
+   Токены — из meta/project/tokens.css; .vp/.pcb-flow/scanlines — из Tech Tree Web.html.
+   Узлы/рёбра/карта строятся в meta_dom.js (в основном инлайн-стили, как в исходнике). */
+#metaScreen {
+  --void:#07050a; --pit:#0d0a0e; --night:#14100c; --earth:#1a140e; --bronze:#2a2018;
+  --carbon:#3a302a; --ash:#5a5046; --pewter:#7a705e; --bone:#b8a896; --chalk:#e8dcc4;
+  --gold:#d4a042; --gold-bright:#f2c878; --gold-dim:#4a3618;
+  --blood:#a8281c; --blood-bright:#ff3a22; --toxic:#c8e25a; --amber:#f08a2a; --cobalt:#3a7ec8; --crystal:#8a7ed4;
+  --font-display:'Tektur','JetBrains Mono',sans-serif; --font-mono:'JetBrains Mono','IBM Plex Mono',monospace;
+  --font-body:'IBM Plex Sans Condensed','IBM Plex Sans',system-ui,sans-serif;
+  --scanlines:repeating-linear-gradient(to bottom, transparent 0 2px, rgba(232,220,196,0.018) 2px 3px);
+  position:fixed; inset:0; z-index:60; display:none; color:var(--bone);
+  font-family:var(--font-mono); -webkit-font-smoothing:antialiased;
+}
+#metaScreen.show { display:flex; flex-direction:column; }
+#metaScreen * { box-sizing:border-box; }
+#metaScreen .vp { cursor:grab; }
+#metaScreen .vp.drag { cursor:grabbing; }
+#metaScreen .pcb-flow { stroke-dasharray:3 8; animation:mt-pcbflow .8s linear infinite; }
+#metaScreen .pcb-flow-slow { stroke-dasharray:4 9; animation:mt-pcbflow 1.8s linear infinite; }
+@keyframes mt-pcbflow { to { stroke-dashoffset:-22; } }
+/* окно не в фокусе/скрыто (класс ставит game._syncIdle) — гасим бесконечный «ток по проводам»: компоновщик GPU грел впустую */
+html.bg-idle #metaScreen * { animation-play-state:paused !important; }
+#metaScreen button { font-family:var(--font-mono); }
+/* лёгкий hover-лифт узла (остальное — инлайн, как в дизайне) */
+#metaScreen .mt-node { transition:transform 110ms ease; }
+#metaScreen .mt-node.clk:hover { transform:scale(1.07); }
+/* лаконичная кнопка «назад» (стрелка) */
+#metaScreen .mt-back { width:40px; height:40px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+  background:rgba(13,10,14,.85); border:1px solid var(--gold-dim); color:var(--gold); cursor:pointer;
+  clip-path:polygon(0 0,calc(100% - 9px) 0,100% 9px,100% 100%,9px 100%,0 calc(100% - 9px)); transition:border-color .12s,color .12s,background .12s; }
+#metaScreen .mt-back:hover { border-color:var(--gold); color:var(--gold-bright); background:rgba(212,160,66,.10); }
