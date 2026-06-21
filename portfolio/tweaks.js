@@ -11,7 +11,7 @@
   const hidePanel = params.get('tweaks') === '0';
 
   const STORAGE_KEY = 'cs_tweaks';
-  const DEFAULTS = { font: 'unbounded', pill: 'outlined', faded: 'ghost', collapsed: false };
+  const DEFAULTS = { font: 'geologica', pill: 'outlined', faded: 'ghost', collapsed: false };
   // Миграция: старые шрифты, которых больше нет, мапим на Unbounded
   const LEGACY_FONTS = { play: 1, jura: 1, oswald: 1, syne: 1, 'red-hat': 1 };
 
