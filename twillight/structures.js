@@ -77,7 +77,7 @@ class Structures {
 
   // Шипы — пассивный урон/с врагу, стоящему на тайле (без энергии).
   _spikeTick(s, dt, enemies) {
-    for (const e of enemies) { if (e.dying || e.dead) continue; if (e.tileX === s.tileX && e.tileY === s.tileY) e.damage(s.def.dps * dt); }
+    for (const e of enemies) { if (e.dying || e.dead || e.friendly) continue; if (e.tileX === s.tileX && e.tileY === s.tileY) e.damage(s.def.dps * dt); }
   }
 
   // Турель — хитскан по ближайшему живому врагу в радиусе с прямой видимостью (тратит энергию, рисует трассер).
@@ -85,7 +85,7 @@ class Structures {
     s.fireCd -= dt;
     let best = null, bd = s.def.range + 0.5;
     for (const e of enemies) {
-      if (e.dying || e.dead) continue;
+      if (e.dying || e.dead || e.friendly) continue;
       const d = Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE;
       if (d < bd && this._los(world, s, e)) { bd = d; best = e; }
     }
@@ -102,13 +102,13 @@ class Structures {
   _railTick(s, dt, world, enemies) {
     s.fireCd -= dt;
     let best = null, bd = s.def.range + 0.5;
-    for (const e of enemies) { if (e.dying || e.dead) continue; const d = Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE; if (d < bd && this._los(world, s, e)) { bd = d; best = e; } }
+    for (const e of enemies) { if (e.dying || e.dead || e.friendly) continue; const d = Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE; if (d < bd && this._los(world, s, e)) { bd = d; best = e; } }
     if (!best) return;
     s.aimAng = Math.atan2(best.py - s.py, wrapDeltaPx(best.px, s.px));
     if (s.fireCd <= 0 && s.energy >= s.def.eShot) {
       s.fireCd = s.def.fireCd; s.energy -= s.def.eShot; s.flash = 0.12;
       const ex = s.px + Math.cos(s.aimAng) * s.def.range * TILE, ey = s.py + Math.sin(s.aimAng) * s.def.range * TILE;
-      for (const e of enemies) { if (e.dying || e.dead) continue; if (this._segDist(s.px, s.py, ex, ey, e.px, e.py) < TILE * 0.6) e.damage(s.def.dmg); }
+      for (const e of enemies) { if (e.dying || e.dead || e.friendly) continue; if (this._segDist(s.px, s.py, ex, ey, e.px, e.py) < TILE * 0.6) e.damage(s.def.dmg); }
       this.tracers.push({ x1: s.px, y1: s.py, x2: ex, y2: ey, life: 0, beam: true });
     }
   }
@@ -118,12 +118,12 @@ class Structures {
     s.active2 = false;
     if (s.energy <= 0) return;
     let best = null, bd = s.def.range + 0.5;
-    for (const e of enemies) { if (e.dying || e.dead) continue; const d = Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE; if (d < bd) { bd = d; best = e; } }
+    for (const e of enemies) { if (e.dying || e.dead || e.friendly) continue; const d = Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE; if (d < bd) { bd = d; best = e; } }
     if (!best) return;
     s.aimAng = Math.atan2(best.py - s.py, wrapDeltaPx(best.px, s.px)); s.active2 = true;
     s.energy = Math.max(0, s.energy - s.def.eRate * dt);
     for (const e of enemies) {
-      if (e.dying || e.dead) continue;
+      if (e.dying || e.dead || e.friendly) continue;
       const dx = wrapDeltaPx(e.px, s.px), dy = e.py - s.py;
       if (Math.hypot(dx, dy) / TILE > s.def.range) continue;
       const da = Math.abs(((Math.atan2(dy, dx) - s.aimAng + Math.PI) % (2 * Math.PI)) - Math.PI);
@@ -161,7 +161,7 @@ class Structures {
     s.active2 = false;
     if (s.energy <= 0) return;
     let any = false;
-    for (const e of enemies) { if (e.dying || e.dead) continue; if (Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE <= s.def.radius) { e.slowT = Math.max(e.slowT || 0, 0.25); any = true; } }
+    for (const e of enemies) { if (e.dying || e.dead || e.friendly) continue; if (Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE <= s.def.radius) { e.slowT = Math.max(e.slowT || 0, 0.25); any = true; } }
     s.active2 = any;
     if (any) s.energy = Math.max(0, s.energy - s.def.eRate * dt);
   }
@@ -180,7 +180,7 @@ class Structures {
     if (any) s.energy = Math.max(0, s.energy - s.def.eRate * dt);
   }
 
-  _inRadius(s, enemies) { return enemies.filter((e) => !e.dying && !e.dead && Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE <= s.def.radius); }
+  _inRadius(s, enemies) { return enemies.filter((e) => !e.dying && !e.dead && !e.friendly && Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE <= s.def.radius); }
   // Расстояние от точки до отрезка (в координатах, сдвинутых к x1 с тор-разворотом по X).
   _segDist(x1, y1, x2, y2, px, py) {
     const bx = wrapDeltaPx(x2, x1), by = y2 - y1, pxr = wrapDeltaPx(px, x1), pyr = py - y1;

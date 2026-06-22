@@ -51,6 +51,18 @@ Object.assign(Game.prototype, {
   },
   near(e, cx, cy, r) { const d = Math.abs(((e.tileX - cx) % MAP_W + MAP_W) % MAP_W); return Math.min(d, MAP_W - d) <= r && Math.abs(e.tileY - cy) <= r; },
   nestAt(x, y) { return this.world.wilds.find((w) => w.cx === x && w.cy === y); },   // гнездо по координатам дома врага
+  // РАЗБУЖЕННЫЙ город → автономная ДРУЖЕСТВЕННАЯ фракция (минимум): копатель + сборщик с флагом `friendly`.
+  // Живут в this.enemies (тикаются и в режиме истории, см. updateEnemies), турели игрока их игнорируют
+  // (structures: `e.friendly` пропускается). Дома — сам город (homeX/Y = центр каверны), склад — `cavern.loot`.
+  spawnFriendlyCity(c) {
+    if (c._friendlySpawned) return; c._friendlySpawned = true;
+    const homeR = Math.max(c.rx, c.ry) + 1;
+    for (const type of ['digger', 'collector']) {
+      const e = new Enemy(c.cx, c.cy, type, c.cx, c.cy, homeR);
+      e.friendly = true; e.cavern = c;
+      this.enemies.push(e);
+    }
+  },
   nearestResource(cx, cy, r) {
     let best = null, bestD = 1e9;
     for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
@@ -61,6 +73,14 @@ Object.assign(Game.prototype, {
     return best;
   },
   diggerBrain(e) {
+    if (e.friendly) {   // дружественный копатель: блуждание-копка ВОКРУГ своего города (случайные локальные цели), НЕ ищет города игрока
+      if (!e.target || this.near(e, e.target.x, e.target.y, 1)) {
+        const ang = Math.random() * 6.283, rad = 3 + Math.random() * 5;
+        const ty = Math.max(DIGGER_MIN_Y + 2, Math.min(MAP_H - 2, Math.round(e.homeY + Math.sin(ang) * rad)));
+        e.target = { x: wrapX(Math.round(e.homeX + Math.cos(ang) * rad)), y: ty }; e.commit = null;
+      }
+      return;
+    }
     if (e.state === 'seek') {
       for (const c of this.cities) if (!c.found && this.near(e, c.cx, c.cy, c.dr)) {
         c.found = true;
@@ -99,9 +119,9 @@ Object.assign(Game.prototype, {
         e.carry = t.resource; this.world.setAir(e.target.x, e.target.y);
         e.state = 'return'; e.target = { x: e.homeX, y: e.homeY };
       }
-    } else if (e.state === 'return' && this.near(e, e.homeX, e.homeY, e.homeR)) {                // донёс ресурс в гнездо
-      const n = this.nestAt(e.homeX, e.homeY); if (n) n.loot++;
-      e.dead = true;
+    } else if (e.state === 'return' && this.near(e, e.homeX, e.homeY, e.homeR)) {                // донёс ресурс домой
+      if (e.friendly) { if (e.cavern) e.cavern.loot = (e.cavern.loot || 0) + 1; e.carry = null; e.state = 'seek'; e.target = null; e.commit = null; }   // дружественный: склад в свой город, дальше работает (не исчезает)
+      else { const n = this.nestAt(e.homeX, e.homeY); if (n) n.loot++; e.dead = true; }
     }
   },
   // BFS-путь по проходимому ВОЗДУХУ (тайлы с опорой — где враг может стоять/лезть) от
@@ -272,9 +292,16 @@ Object.assign(Game.prototype, {
   updateEnemies(dt) {
     // ВЫСТРЕЛЫ тикают ВСЕГДА (до раннего выхода): останки роботов (hazards.js) стреляют и в режиме истории, где врагов нет.
     if (this.shots) this.shots.update(dt, this.world, this.unit, (dmg) => { if (!this.debug && this.unit) this.unit.hp = Math.max(0, this.unit.hp - dmg); }, this.debug ? null : (this.structures && this.structures.list));
-    if (this.storyMode) return;   // режим истории: дикий город не действует — ни спавна волн, ни мозгов
-    if (this.cycle.n !== this.lastCycleN) { this.onCycleStart(this.cycle.n); this.lastCycleN = this.cycle.n; }
+    const story = this.storyMode;   // режим истории: дикий город не действует, но РАЗБУЖЕННАЯ дружественная фракция работает
+    if (!story && this.cycle.n !== this.lastCycleN) {
+      this.onCycleStart(this.cycle.n); this.lastCycleN = this.cycle.n;
+      if (typeof metaHas === 'function' && metaHas('amb_predict')) {   // ПРОГНОЗ (узел amb_predict): лог о НОВОЙ угрозе следующего цикла
+        const f = this._waveHeadline(this.cycle.n + 1);
+        if (f && f.isNew) this.logEvent('ПРОГНОЗ · НАДВИГАЕТСЯ: ' + ENEMY_RU[f.type]);
+      }
+    }
     for (const e of this.enemies) {
+      if (story && !e.friendly) continue;   // в истории живут ТОЛЬКО дружественные (диких не спавним, существующих не тикаем)
       if (e.dying) {   // уничтожен: разовый выброс обломков, доигрываем анимацию, затем чистка (мозг/движение выкл)
         if (!e._fx) { e._fx = true; if (this.dust) for (let i = 0; i < 6; i++) { const a = Math.random() * 6.283, sp = TILE * (0.6 + Math.random() * 1.5); this.dust._grit(e.px, e.py, Math.cos(a) * sp, Math.sin(a) * sp - TILE * 0.5, Math.random() < 0.3); } }
         e.deathT -= dt; if (e.deathT <= 0) e.dead = true;

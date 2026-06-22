@@ -20,10 +20,10 @@ Object.assign(Game.prototype, {
     this.echo = { cd: 0, cdMax: ECHO_CD_BASE, wave: null, marks: [] };
     this._ridN = 0;
   },
-  // Сканер — ДОПОЛНИТЕЛЬНОЕ действие: клавиши БЕРЁМ ИЗ `MODULE_ACTION.scanner` (→ `KEY_SECONDARY`, Энтер), а не
+  // Сканер — ДОПОЛНИТЕЛЬНОЕ действие: клавиши БЕРЁМ ИЗ раскладки модуля (`moduleActionKeys` → цифра 1), а не
   // хардкодим. Главное действие (Пробел) занято буром/взаимодействием → конфликта нет при любой сборке.
   _scanWantFire() {
-    const keys = MODULE_ACTION.scanner === 'secondary' ? KEY_SECONDARY : [KEY_PRIMARY];
+    const keys = moduleActionKeys('scanner', this.unit && this.unit.modules && this.unit.modules.scanner);
     return this.input.pressed(...keys) && !this.printMode;
   },
 
@@ -69,7 +69,7 @@ Object.assign(Game.prototype, {
         }
         const RR = RADAR_R * TILE;
         for (const e of this.enemies) {
-          if (e.dead || e.dying) continue;
+          if (e.dead || e.dying || e.friendly) continue;   // дружественных радар не метит как врагов
           const bx = wrapDeltaPx(e.px, u.px), by = e.py - u.py;
           if (bx * bx + by * by > RR * RR) continue;
           if (inWedge(Math.atan2(by, bx))) this._radarBlip(rs, 'e' + (e._rid || (e._rid = ++this._ridN)), e.px, e.py, '#ff5038', true);

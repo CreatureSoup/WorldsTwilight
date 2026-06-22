@@ -101,6 +101,7 @@ class Inventory {
       if (m.noiseResist) s.noiseResist += m.noiseResist; // экран помех (доп-слот)
       if (m.printer) s.printer += m.printer;             // модуль печати (доп-слот)
       if (m.printReach) s.printReach = Math.max(s.printReach, m.printReach);   // базовый радиус печати
+      if (m.hack) s.hack = true;                         // модуль взлома (доп-слот): взлом/пробуждение города (hack.js)
     }
     // Готов к старту, когда заняты все ОБЯЗАТЕЛЬНЫЕ слоты (опциональные — доп-слот — можно пустыми).
     const req = hull.slots.filter((cat) => !optional.includes(cat));

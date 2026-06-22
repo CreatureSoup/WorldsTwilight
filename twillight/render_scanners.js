@@ -51,8 +51,15 @@ function drawEchoWave(ctx, game, camera) {
       ctx.strokeStyle = 'rgba(181,140,240,' + (0.2 * (1 - f) * (1 - k * 0.28)).toFixed(3) + ')'; ctx.lineWidth = 2 - k * 0.5;
       ctx.beginPath(); ctx.arc(ox, oy, rr, 0, 6.283); ctx.stroke();
     }
-    ctx.globalAlpha = 0.045 * (1 - f); ctx.fillStyle = '#b58cf0';
-    ctx.beginPath(); ctx.arc(ox, oy, r, 0, 6.283); ctx.fill(); ctx.globalAlpha = 1;
+    // внутренний градиент: мягкое лиловое ядро + светящаяся оболочка у фронта волны (затухает к концу)
+    if (r > 2) {
+      const a = 1 - f, g = ctx.createRadialGradient(ox, oy, r * 0.15, ox, oy, r);
+      g.addColorStop(0, `rgba(150,110,230,${(0.06 * a).toFixed(3)})`);
+      g.addColorStop(0.6, `rgba(165,120,240,${(0.05 * a).toFixed(3)})`);
+      g.addColorStop(0.9, `rgba(205,165,255,${(0.17 * a).toFixed(3)})`);   // светящийся фронт
+      g.addColorStop(1, 'rgba(181,140,240,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox, oy, r, 0, 6.283); ctx.fill();
+    }
   }
   for (const m of ec.marks) {                                                              // метки залежей (держатся и гаснут)
     const al = Math.max(0, 1 - m.age / ECHO_MARK_FADE); if (al <= 0.01) continue;
@@ -80,6 +87,8 @@ function drawRadarSwitch(ctx, game) {
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.restore();
 }
 
+// ⚠️ НЕ УДАЛЯТЬ ПОКА: scanCdInfo + drawScanCooldown — виджет кулдауна сканера. Вызов в game.drawScene ОТКЛЮЧЁН
+// (кулдаун теперь показывает заливка иконок в drawActionBar). Код оставлен на случай возврата виджета.
 // Активный сканер с кулдауном (радар ИЛИ эхо — взаимоисключающие) для виджета кулдауна.
 function scanCdInfo(game) {
   const u = game.unit; if (!u || !u.stats) return null;
@@ -91,7 +100,8 @@ function scanCdInfo(game) {
 function drawScanCooldown(ctx, game, W) {
   if (game.mode !== 'playing' || game.debug) return;
   const info = scanCdInfo(game); if (!info) return;
-  const keyHint = 'ВВОД';   // сканер — ДОПОЛНИТЕЛЬНОЕ действие: всегда Энтер (KEY_SECONDARY)
+  // сканер — ДОПОЛНИТЕЛЬНОЕ действие: метку клавиши берём из раскладки модуля (цифра 1)
+  const keyHint = keyLabel(moduleActionKeys('scanner', game.unit && game.unit.modules && game.unit.modules.scanner)[0]) || '1';
   const w = 138, h = 20, x = W - 12 - w, y = 32;
   ctx.save();
   ctx.fillStyle = 'rgba(13,12,16,0.82)'; ctx.fillRect(x, y, w, h);

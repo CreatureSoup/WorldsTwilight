@@ -34,7 +34,7 @@ Object.assign(Game.prototype, {
       if (this.logEvent) this.logEvent('ТЕХНОЛОГИЯ ИЗВЛЕЧЕНА: ' + a.tech.name);
     } else if (idx === 1) {                            // ОТДАТЬ ГОРОДУ — ДАННЫЕ
       this.dataCount = (this.dataCount || 0) + 1;
-      if (typeof codexGainData === 'function') { const r = codexGainData(ARTIFACT_DATA); if (r && typeof codexPopupShow === 'function') codexPopupShow(r, this._codexAnchor()); }
+      { const r = this._dataGain(ARTIFACT_DATA); if (r && typeof codexPopupShow === 'function') codexPopupShow(r, this._codexAnchor()); }   // множитель kart_data учитывается
       if (this.logEvent) this.logEvent('ДАННЫЕ АРТЕФАКТА ПЕРЕДАНЫ ГОРОДУ');
     } else {                                           // ПЕРЕРАБОТАТЬ — РЕСУРСЫ (дроп лутом из центра)
       const keys = Object.keys(RESOURCE_DEFS), cx = a.tx + a.w / 2, cy = a.ty + a.h / 2;

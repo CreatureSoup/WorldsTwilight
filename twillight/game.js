@@ -97,7 +97,8 @@ class Game {
       else if (this.mode === 'menu' || this.mode === 'paused' || this.mode === 'gameover') this.menuClick(x, y);
       else if (this.mode === 'artifact') this.artifactClick(x, y);
       else if (this.mode === 'playing' && !this.debug) {   // ЛКМ: подтвердить размещение печати / панель печати / HUD-тумблеры (УГРОЗЫ / ПУТЬ)
-        if (this.printMode === 'place') this.printConfirm();
+        if (this.actionBarClick(x, y)) {}   // кнопка активного действия (низ-центр) → инжект хоткея
+        else if (this.printMode === 'place') this.printConfirm();
         else if (!this.printClick(x, y) && !this.radarSwitchClick(x, y) && !this.alertClick(x, y)) this.navClick(x, y);
       }
       // во время забега инвентарь не открывается — сборка модулей только перед стартом
@@ -112,6 +113,7 @@ class Game {
       else if (this.mode === 'upgrades') this.upgrades.pointerMove(p.x, p.y);
     });
     this.canvas.addEventListener('mouseup', (e) => {
+      this.actionBarRelease();   // отпустили кнопку активного действия → снять удержание хоткея
       if (this.mode === 'inventory') { const { x, y } = pos(e); this.inventory.pointerUp(x, y); }
       else if (this.mode === 'upgrades') this.upgrades.pointerUp();
     });
@@ -121,6 +123,7 @@ class Game {
       if (this.mode === 'inventory' && this.inventory.drag) { const { x, y } = pos(e); this.inventory.pointerMove(x, y); }
     });
     window.addEventListener('mouseup', (e) => {
+      this.actionBarRelease();   // мышь отпущена даже вне канваса → снять удержание
       if (this.mode === 'inventory' && this.inventory.drag) { const { x, y } = pos(e); this.inventory.pointerUp(x, y); }
       else if (this.mode === 'upgrades') this.upgrades.pointerUp();
     });
@@ -219,6 +222,9 @@ class Game {
     this.imp = { charge: 0, cd: 0, dir: [1, 0], held: false, wave: null };   // импульсный бур: чистое состояние
     this.borers = [];   // винтовой бур: автономные щиты (пусто на старте)
     this._scanInit();   // радар/эхо-сканеры (варианты слота сканер): развёртка, блипы, кулдаун эхо
+    this._hackInit();   // взлом города (модуль взлома, доп-слот): канал взлома спящих каверн
+    this.awakenedCaverns = [];   // взломанные (разбуженные) города этого забега
+    this._winTimer = null; this._winCut = null;   // победа через взлом: большой таймер перехвата → кат-сцена (kart_hackcity)
     this.pendingArtifact = null; this.artifactSel = 0; this.artifactTechs = [];   // артефакты: модалка/выбор/извлечённые технологии (забег)
     this.hoardCargo = false;   // тумблер ГРУЗ: по умолчанию отдаём ресурс городу
     this.loot = new Loot();
@@ -230,6 +236,7 @@ class Game {
     this._discDone = false; this._discT = 0;                           // состояние опроса находок (сброс на забег)
     this.fx.clear(); this.dust.clear();
     this.cycle.reset();
+    this._epochBase = Math.floor(this.save.epoch || EPOCH_START);   // забег стартует с ТЕКУЩЕГО глобального цикла (первый цикл = эпоха, не 1)
     this.enemies = [];
     this.lastCycleN = 0;
     this.storyMode = !!(this.save && this.save.storyMode);   // забег фиксирует режим истории на старте: дикий город не действует
@@ -273,6 +280,7 @@ class Game {
     writeSave(this.save);
   }
   endRun() {
+    if (this._epochBase) { this.save.epoch = this._epochBase + (this.cycle.n - 1) + this.cycle.frac(); this._epochBase = 0; writeSave(this.save); }   // глобальный цикл += прожитые забегом циклы → меню продолжит тикать отсюда
     this.unit = null; this.world = null; this.city = null; this.loot = null; this.falling = null;
     this.navPath = null;
     this.metaResult = null;
@@ -291,6 +299,7 @@ class Game {
       { label: 'ДАННЫЕ',    accent: 'cobalt', value: this.dataCount,      coef: META_COEF.data },
       { label: 'ДИРЕКТИВЫ', accent: 'toxic',  value: this.directivesDone, coef: META_COEF.directive },
     ];
+    if (this.overReason === 'hack_win') rows.push({ label: 'ПОБЕДА · КЛАСТЕР', accent: 'toxic', value: 1, coef: META_WIN_BONUS });   // бонус за победу (перехват реактора)
     let total = 0;
     for (const r of rows) { r.tokens = Math.round(r.value * r.coef); total += r.tokens; }
     return { rows, total };
@@ -298,10 +307,34 @@ class Game {
 
   // Лог крупных событий: таймстэмп — номер цикла сессии. Виджет показывает последние.
   logEvent(text) {
-    const n = (this.cycle && this.cycle.n) || 1;
+    const n = (typeof this.cycleLabel === 'function' && this.cycle) ? this.cycleLabel() : ((this.cycle && this.cycle.n) || 1);
     this.eventLog.push({ cycle: n, text });
     if (this.eventLog.length > 16) this.eventLog.shift();
   }
+  // ── Ветвь МИР, тюнинг данных: `kart_hub` (−30% время скана) + `kart_data` (×фрагментов). Все источники
+  // проходят через _scanT (скорость накопления) и _dataGain (множитель + выдача в кодекс).
+  _scanT(base) { return base * ((typeof metaHas === 'function' && metaHas('kart_hub')) ? KART_SCAN_MULT : 1); }
+  _dataGain(n) { const m = (typeof metaHas === 'function' && metaHas('kart_data')) ? KART_DATA_MULT : 1; return (typeof codexGainData === 'function') ? codexGainData(Math.round(n * m)) : null; }
+  // ПРОГНОЗ ВОЛН (узел amb_predict): «заголовок» волны цикла nextN — высший по опасности доступный тип (`WAVE_TIERS`
+  // упорядочен по возрастанию); isNew=true, если тип ВПЕРВЫЕ появляется этим циклом (эскалация). null до первой волны.
+  _waveHeadline(nextN) {
+    const avail = WAVE_TIERS.filter((t) => nextN >= WAVE_CYCLE[t]);
+    if (!avail.length) return null;
+    const fresh = avail.filter((t) => WAVE_CYCLE[t] === nextN);
+    const list = fresh.length ? fresh : avail;
+    return { type: list[list.length - 1], isNew: fresh.length > 0 };
+  }
+  // ОТОБРАЖАЕМЫЙ номер цикла = глобальная эпоха забега (`_epochBase`, снимок save.epoch на старте) + прожитые циклы.
+  // Эскалация волн по-прежнему берёт session-relative `cycle.n` (1,2,3…) — глобальный номер чисто косметический.
+  cycleLabel() { return (this._epochBase ? this._epochBase + this.cycle.n - 1 : this.cycle.n); }
+  // Тик глобального цикла в МЕНЮ (1 цикл / CYCLE_TIME реального времени). Персист — только при смене целой части (редко).
+  _tickEpoch(dt) {
+    if (typeof CYCLE_TIME === 'undefined') return;
+    const before = Math.floor(this.save.epoch || EPOCH_START);
+    this.save.epoch = (this.save.epoch || EPOCH_START) + dt / CYCLE_TIME;
+    if (Math.floor(this.save.epoch) !== before) writeSave(this.save);
+  }
+
   // Сканирование выкопанных серверов: ближайший в радиусе SCAN_RADIUS качает данные (dt/SCAN_TIME);
   // уход прерывает (прогресс сохранён в server.data — вернулся, докачал). По концу — лог-событие.
   updateServers(dt) {
@@ -314,14 +347,14 @@ class Game {
       if (d <= SCAN_RADIUS * TILE && d < best) { best = d; active = s; }
     }
     if (active) {
-      active.data = Math.min(1, active.data + dt / SCAN_TIME);
+      active.data = Math.min(1, active.data + dt / this._scanT(SCAN_TIME));
       if (active.data >= 1) {
         active.done = true; this.dataCount++; this.logEvent('НАЙДЕНЫ НОВЫЕ ДАННЫЕ');
         // извлечённые данные → фрагмент(ы) текущего диска кодекса + попап на месте кольца скана.
         // Попап заменяет HUD-надпись «ДАННЫЕ ИЗВЛЕЧЕНЫ» (потому _scanDoneT=0); если диск уже полон
         // (попапа нет) — оставляем обычную HUD-надпись на 2.4с.
         let popped = false;
-        if (typeof codexGainData === 'function') { const r = codexGainData(CODEX_DATA_PER_SCAN); if (r && typeof codexPopupShow === 'function') { codexPopupShow(r, this._codexAnchor()); popped = true; } }
+        { const r = this._dataGain(CODEX_DATA_PER_SCAN); if (r && typeof codexPopupShow === 'function') { codexPopupShow(r, this._codexAnchor()); popped = true; } }
         this._scanMsg = null; this._scanDoneT = popped ? 0 : 2.4;   // сервер всегда даёт данные (надпись «ДАННЫЕ ИЗВЛЕЧЕНЫ»)
         active = null;
       }
@@ -337,13 +370,13 @@ class Game {
     if (!this.world || !this.unit || !this.enemies) return;
     let active = null, best = Infinity;
     for (const e of this.enemies) {
-      if (e.scanned || e.dying || e.dead || !this.world.isSeen(e.tileX, e.tileY)) continue;   // только видимые (не сквозь туман)
+      if (e.friendly || e.scanned || e.dying || e.dead || !this.world.isSeen(e.tileX, e.tileY)) continue;   // дружественных не сканируем как врагов; только видимые (не сквозь туман)
       const dx = wrapDeltaPx(this.unit.px, (e.tileX + 0.5) * TILE), dy = this.unit.py - (e.tileY + 0.5) * TILE;
       const d = Math.hypot(dx, dy);
       if (d <= SCAN_RADIUS * TILE && d < best) { best = d; active = e; }
     }
     if (active) {
-      active.scan = Math.min(1, active.scan + dt / SCAN_TIME);
+      active.scan = Math.min(1, active.scan + dt / this._scanT(SCAN_TIME));
       if (active.scan >= 1) {
         active.scanned = true;
         const nm = ENEMY_RU[active.type] || 'ЮНИТ';
@@ -352,7 +385,7 @@ class Game {
         } else {                                              // ПЕРВЫЙ скан типа: данные + глоссарий + лог
           this._idMark('unit:' + active.type); this.dataCount++; this.logEvent('СКАНИРОВАН ВРАЖЕСКИЙ ЮНИТ · ' + nm);
           this.discover('unit');
-          if (typeof codexGainData === 'function') { const r = codexGainData(CODEX_DATA_PER_SCAN); if (r && typeof codexPopupShow === 'function') codexPopupShow(r, this._codexAnchor()); }
+          { const r = this._dataGain(CODEX_DATA_PER_SCAN); if (r && typeof codexPopupShow === 'function') codexPopupShow(r, this._codexAnchor()); }
         }
         active = null;
       }
@@ -391,10 +424,17 @@ class Game {
     const scan = (cat, list, kx, ky) => { if (!list || exh(cat)) return; for (const o of list) if (!o._noticed && w.isSeen(o[kx], o[ky])) { o._noticed = true; this.discover(cat); } };
     scan('server', w.servers, 'tx', 'ty');
     scan('wild', w.wilds, 'cx', 'cy');
-    scan('sleep', w.caverns, 'cx', 'cy');
+    // НЕЙТРАЛЬНЫЙ ГОРОД: первая встреча КАЖДОГО → данные + лог + глоссарий (категория — разово). Города «спят».
+    if (w.caverns) for (const c of w.caverns) {
+      if (c._noticed || !w.isSeen(c.cx, c.cy)) continue;
+      c._noticed = true; this.discover('sleep'); this.dataCount++;
+      const r = this._dataGain(KART_CITY_DATA); if (r && typeof codexPopupShow === 'function') codexPopupShow(r, this._codexAnchor());
+      this.logEvent('НЕЙТРАЛЬНЫЙ ГОРОД ОБНАРУЖЕН · ' + (c.name || '').toUpperCase());
+    }
     // 'unit' — глоссарий вражеских юнитов теперь открывает СКАН (updateEnemyScan), не «увидел издалека»
     for (let i = 0; i < HINT_DEPTHS.length; i++) if (!this._depthFired.has(i) && u.tileY <= HINT_DEPTHS[i].y) { this._depthFired.add(i); if (this.hints) this.hints.show(HINT_DEPTHS[i].text); }
-    if (exh('server') && exh('wild') && exh('sleep') && this._depthFired.size >= HINT_DEPTHS.length) this._discDone = true;   // 'unit' — через скан, не через зрение
+    const cavAll = !w.caverns || w.caverns.every((c) => c._noticed);
+    if (exh('server') && exh('wild') && cavAll && this._depthFired.size >= HINT_DEPTHS.length) this._discDone = true;   // ждём все города (данные пер-город)
   }
   // вход в пещеру-сцену → объёмный сканер (свип) → извлечение данных в кодекс (разово)
   updateBackdrops(dt) {
@@ -402,10 +442,11 @@ class Game {
     for (const b of w.backdrops) {
       if (b.scanned) { b.reveal = 1; continue; }
       if (b.scanning) {
-        b.sweepT = Math.min(1, b.sweepT + dt / BACKDROP_SWEEP); b.reveal = b.sweepT;
+        b.sweepT = Math.min(1, b.sweepT + dt / this._scanT(BACKDROP_SWEEP)); b.reveal = b.sweepT;
         if (b.sweepT >= 1) { b.scanning = false; b.scanned = true; b.reveal = 1; this._backdropDone(b); }
       } else if (w.inEllipseList(u.tileX, u.tileY, [b])) {
-        b.scanning = true; b.sweepT = 0; this.logEvent('ОБЪЁМНЫЙ СКАН ПЕЩЕРЫ');
+        if (typeof metaHas !== 'function' || metaHas('kart_ruins')) { b.scanning = true; b.sweepT = 0; this.logEvent('ОБЪЁМНЫЙ СКАН ПЕЩЕРЫ'); }   // узел kart_ruins открывает извлечение данных из руин
+        else if (!b._noMethod) { b._noMethod = true; this.logEvent('РУИНЫ: НЕТ МЕТОДОВ ИЗВЛЕЧЕНИЯ ДАННЫХ'); }   // без узла — скан невозможен
       }
     }
   }
@@ -414,7 +455,7 @@ class Game {
     if (this._idKnown(key)) { this.logEvent('ОБЪЕКТ ОПОЗНАН · ПЕЩЕРА'); this._scanMsg = 'ОБЪЕКТ ОПОЗНАН'; this._scanDoneT = 2.0; return; }   // вид пещеры уже знаком — без данных/глоссария
     this._idMark(key);
     this.discover('cave');   // глоссарий: пещера · культ.слой (ПЕРВЫЙ раз для вида)
-    if (typeof codexGainData === 'function') { const r = codexGainData(BACKDROP_DATA); if (r && typeof codexPopupShow === 'function') codexPopupShow(r, this._codexAnchor()); }
+    { const r = this._dataGain(BACKDROP_DATA); if (r && typeof codexPopupShow === 'function') codexPopupShow(r, this._codexAnchor()); }
     this.logEvent('ДАННЫЕ ИЗ ПЕЩЕРЫ ИЗВЛЕЧЕНЫ');
   }
 
@@ -508,7 +549,7 @@ class Game {
 
   _alertActive() { return typeof metaHas === 'function' && metaHas(ALERT.node); }   // ОБНАРУЖЕНИЕ УГРОЗ открыто узлом mast_sa
   _contamActive() { return typeof metaHas === 'function' && metaHas('mast_sr') && this.unit && (this.unit.stats.scanR || 0) > 0; }   // ДЕТЕКТОР ЗАГРЯЗНЕНИЯ — свойство сканера, открыто узлом mast_sr
-  _alertThreats() { return this.enemies ? this.enemies.reduce((n, e) => n + (e.dead ? 0 : 1), 0) : 0; }
+  _alertThreats() { return this.enemies ? this.enemies.reduce((n, e) => n + ((e.dead || e.friendly) ? 0 : 1), 0) : 0; }   // дружественные — не угрозы
   // Клик в забеге: тумблер «ОБНАРУЖЕНИЕ УГРОЗ» в HUD (если узел открыт).
   alertClick(x, y) {
     if (!this._alertActive() || typeof alertHudRect !== 'function') return false;
@@ -578,6 +619,7 @@ class Game {
     }
     if (typeof drawBorerArrows === 'function' && !this.debug && typeof metaHas === 'function' && metaHas('mast_ds_nav')) drawBorerArrows(ctx, this, this.camera);   // узел: стрелки-указатели на запущенные щиты вокруг юнита
     if (typeof drawScanFx === 'function' && !this.debug) drawScanFx(ctx, this, this.camera);   // лучи сканера к серверу-хламу (поверх юнита)
+    if (typeof drawHackFx === 'function' && !this.debug) drawHackFx(ctx, this, this.camera);   // канал взлома города (лиловый тетер + кольцо-прогресс, поверх юнита)
     if (typeof drawEnemyScanFx === 'function' && !this.debug) drawEnemyScanFx(ctx, this, this.camera);   // лучи сканера к сканируемому врагу
     if (typeof drawBackdropScan === 'function' && !this.debug) drawBackdropScan(ctx, this, this.camera);   // конус сканера к объекту пещеры при объёмном скане
     drawFx(ctx, this.fx, this.camera);
@@ -592,15 +634,20 @@ class Game {
     }
     if (this.debug && typeof drawHazardDebug === 'function') drawHazardDebug(ctx, this, this.camera);   // ДЕБАГ: маркеры артефактов/роботов/мин (туман выкл)
     drawCrtOverlay(ctx, this.designW, this.designH);   // виньетка + скан-лайны поверх мира (HUD крупнее)
-    drawHUD(ctx, this.world, this.unit, this.inventory, { fps: this.fps, delivered: this.deliveredTotal, cycle: this.cycle, scan: this.activeScan || (this.scanEnemy ? { data: this.scanEnemy.scan } : null), scanDoneT: this._scanDoneT, scanMsg: this._scanMsg, log: this.eventLog, bank: (typeof metaHas === 'function' && metaHas('amb_hub')) ? this.upgrades.bank : null, hoard: this.hoardCargo }, this.designW, this.designH);
+    drawHUD(ctx, this.world, this.unit, this.inventory, { fps: this.fps, delivered: this.deliveredTotal, cycle: this.cycle, cycleNum: this.cycleLabel(), scan: this.activeScan || (this.scanEnemy ? { data: this.scanEnemy.scan } : null), scanDoneT: this._scanDoneT, scanMsg: this._scanMsg, log: this.eventLog, bank: (typeof metaHas === 'function' && metaHas('amb_hub')) ? this.upgrades.bank : null, hoard: this.hoardCargo }, this.designW, this.designH);
+    if (typeof drawWavePredict === 'function') drawWavePredict(ctx, this, 580, 24);   // ПРОГНОЗ ВОЛН (узел amb_predict): графический таймер + глиф угрозы, под «ЦИКЛ N»
     if (this.mode === 'playing' && !this.debug && this._alertActive() && typeof drawAlertToggle === 'function')
       drawAlertToggle(ctx, this.alertView, this._alertThreats(), performance.now() / 1000);   // HUD-тумблер (виден при владении узлом)
     if (this.mode === 'playing' && !this.debug && typeof drawPrintHud === 'function') drawPrintHud(ctx, this, this.designW, this.designH);   // панель печати структур / подсказка режима
     if (this.mode === 'playing' && !this.debug && typeof drawBorerStatus === 'function') drawBorerStatus(ctx, this, this.designW, this.designH);   // винтовой бур: статус щитов (несом/в ходу)
+    if (this.mode === 'playing' && !this.debug && this._winTimer && typeof drawWinTimer === 'function') drawWinTimer(ctx, this, this.designW);   // ПЕРЕХВАТ РЕАКТОРА: большой таймер победы (kart_hackcity)
+    if (typeof drawActionBar === 'function') drawActionBar(ctx, this, this.designW, this.designH);   // панель активных действий (низ-центр): дубль хоткеев кнопками
     if (this.mode === 'playing' && !this.debug && typeof metaHas === 'function' && metaHas('amb_nav') && typeof drawNavToggle === 'function')
       drawNavToggle(ctx, this.navView, this.designW);   // лаконичный HUD-тумблер ПУТЬ (над директивами; виден при владении узлом amb_nav)
     if (typeof drawRadarSwitch === 'function') drawRadarSwitch(ctx, this);   // HUD-чип переключателя типа ресурса радара (клик / C); скрыт без радара/при полном спектре
-    if (typeof drawScanCooldown === 'function') drawScanCooldown(ctx, this, this.designW);   // виджет кулдауна сканера (радар/эхо) — правый верх, под тумблером ПУТЬ
+    // ⚠️ НЕ УДАЛЯТЬ ПОКА: виджет кулдауна сканера временно ОТКЛЮЧЁН — кулдаун теперь показывает заливка иконок в
+    // панели активных действий (drawActionBar). Код виджета (drawScanCooldown/scanCdInfo, render_scanners.js) оставлен.
+    // if (typeof drawScanCooldown === 'function') drawScanCooldown(ctx, this, this.designW);
     if (this.mode === 'playing' && !this.debug && this.radar && this._contamActive() && typeof drawRadarCompass === 'function')
       drawRadarCompass(ctx, this.radar, 10, (typeof hudLeftBottom === 'function' ? hudLeftBottom(typeof metaHas === 'function' && metaHas('amb_hub')) : 118) + 6);   // под левым стеком HUD (ГРУЗ/БАНК)
     drawCity(ctx, this.city, this.designW);
@@ -665,6 +712,7 @@ class Game {
     ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
 
     if (this.mode !== this._modePrev) { this.menuSel = 0; this._modePrev = this.mode; }   // вход в меню → курсор на первую кнопку
+    if (this.mode === 'menu') this._tickEpoch(dt);   // глобальный цикл существования ИИ тикает на главной
 
     if (this.mode === 'playing' && this.debug) {
       // дебаг-обзор: свободная камера (WASD/стрелки), туман выкл, юнит заморожен и в
@@ -697,6 +745,7 @@ class Game {
       this.updatePrint(dt);   // ПЕЧАТЬ: размещение/печать структур, лок юнита, Esc-отмена (до unit.update — кадр уважит frozenPrint)
       this.updateImpulse(dt);   // ИМПУЛЬСНЫЙ БУР: заряд Пробелом/выстрел-волна (до unit.update — кадр уважит frozenImpulse)
       this.updateBorers(dt);    // ВИНТОВОЙ БУР: автономные щиты-проходчики (запуск/возврат по Пробелу)
+      this.updateHack(dt);      // ВЗЛОМ ГОРОДА: канал взлома у сердца спящей каверны (до unit.update — кадр уважит frozenHack)
       this.unit.update(dt, this.input, this.world);
       if (this.debugTentacles) updateTentacles(dt, this.unit, this.world);
       if (typeof updateRingAim === 'function' && UNIT_DEFS[this.unit.hull] && UNIT_DEFS[this.unit.hull].kind === 'ring') updateRingAim(dt, this.unit);   // доворот кластера кольца к направлению бурения
@@ -754,9 +803,15 @@ class Game {
       else if (this.city.dead) { this.overReason = 'city'; this.mode = 'gameover'; }
       else if (this.firewall.breached) { this.overReason = 'hack'; this.mode = 'gameover'; }
       else if (this.input.pressed('Escape') && !this.printMode && !this._printEsc) this.mode = 'paused';   // Esc в печати — отмена (см. updatePrint), не пауза
-      else if (this.input.pressed(KEY_PRIMARY) && atBase && this.unit.state === IDLE && !this.printMode) { this.upgrades.sel = 0; this.upgrades.scrollY = 0; this.mode = 'upgrades'; }   // апгрейды у базы — ГЛАВНОЕ действие (Пробел); ТОЛЬКО стоя (не в движении)
+      else if (this.input.pressed(KEY_PRIMARY) && atBase && this.unit.state === IDLE && !this.printMode && !this._actionHeld) { this.upgrades.sel = 0; this.upgrades.scrollY = 0; this.mode = 'upgrades'; }   // апгрейды у базы — ГЛАВНОЕ действие (Пробел); ТОЛЬКО стоя (не в движении); НЕ от клика по кнопке действия (`_actionHeld`)
       this._checkArtifacts();   // откопал артефакт рядом → модалка выбора (переключит mode на 'artifact')
+      this.updateWinTimer(dt);   // большой таймер перехвата реактора (kart_hackcity) → по концу mode 'hackwin'
       this.drawScene();
+    } else if (this.mode === 'hackwin') {
+      // КАТ-СЦЕНА ПОБЕДЫ: передача реактора города юниту (мир заморожен). Пробел/конец таймера → пересчёт-победа.
+      this._winCut.t += dt;
+      if (this._winCut.t >= WINCUT_DUR || this.input.pressed('Space', 'Enter', 'NumpadEnter')) this._finishHackWin();
+      else { this.drawScene(); if (typeof drawWinCutscene === 'function') drawWinCutscene(ctx, this, this.camera, this.designW, this.designH); }
     } else if (this.mode === 'upgrades') {
       if (this.input.pressed('Escape')) { this.upgrades.endHold(); this.mode = 'playing'; }
       else {

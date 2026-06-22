@@ -111,6 +111,26 @@ function drawButtons(ctx, buttons) {
   ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
 }
 
+// Виджет ГЛОБАЛЬНОГО ЦИКЛА существования ИИ (top-center): большой тикающий номер `save.epoch` + центи-доля (·NN,
+// тикает ~раз в 0.75с) → ощущение течения глобального времени. Сам счётчик тикает в game.loop (mode menu), не сбрасывается.
+function drawEpochClock(ctx, save, W) {
+  const ep = (save && save.epoch) || (typeof EPOCH_START !== 'undefined' ? EPOCH_START : 48217);
+  const whole = Math.floor(ep), centi = String(Math.floor((ep - whole) * 100)).padStart(2, '0');
+  const cx = Math.round(W / 2);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.gold;
+  ctx.fillText('// ЦИКЛ СУЩЕСТВОВАНИЯ ИИ', cx, 20);
+  const big = (typeof numGroup === 'function' ? numGroup(whole) : String(whole)), dotc = '·' + centi;
+  ctx.font = `800 30px ${FONT_DISPLAY}`;   // центи-доля — ТЕМ ЖЕ шрифтом/размером, что и номер (только акцентный цвет)
+  const bw = ctx.measureText(big).width, cw = ctx.measureText(dotc).width, gap = 3;
+  const total = bw + gap + cw, x0 = cx - total / 2;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = PAL.chalk; ctx.fillText(big, x0, 60);
+  ctx.fillStyle = PAL.gold;  ctx.fillText(dotc, x0 + bw + gap, 60);
+  ctx.strokeStyle = PAL.goldDim; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x0, 68); ctx.lineTo(x0 + total, 68); ctx.stroke();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
+
 function drawMainMenu(ctx, save, buttons, W, H) {
   drawStaticBg(ctx, W, H);
   hazardTape(ctx, 0, 0, W, 6, PAL.goldDim);
@@ -118,6 +138,7 @@ function drawMainMenu(ctx, save, buttons, W, H) {
   // serial-штампы по углам
   serialChip(ctx, 14, 14, 'TWILIGHT-WORLD // M0', PAL.gold, 'left');
   serialChip(ctx, W - 14, 14, 'SEED 0x7A3F · 04-N', PAL.toxic, 'right');
+  drawEpochClock(ctx, save, W);   // тикающий глобальный цикл существования ИИ (top-center)
   // герой — слева
   const hx = Math.max(48, W * 0.07), hy = H * 0.40;
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
@@ -202,20 +223,20 @@ function drawMetaToken(ctx, cx, cy, r) {
 function drawGameOver(ctx, buttons, W, H, reason, meta, overT, bank) {
   meta = meta || { rows: [], total: 0 }; overT = overT || 0; bank = bank || 0;
   const ease = (p) => (p <= 0 ? 0 : p >= 1 ? 1 : 1 - (1 - p) * (1 - p));
-  const unit = reason === 'unit', hack = reason === 'hack';
+  const unit = reason === 'unit', hack = reason === 'hack', win = reason === 'hack_win';
   drawStaticBg(ctx, W, H);
-  ctx.fillStyle = 'rgba(10,4,5,0.82)'; ctx.fillRect(0, 0, W, H);
-  hazardTape(ctx, 0, 0, W, 7, PAL.blood);
-  hazardTape(ctx, 0, H - 7, W, 7, PAL.blood);
+  ctx.fillStyle = win ? 'rgba(6,12,8,0.82)' : 'rgba(10,4,5,0.82)'; ctx.fillRect(0, 0, W, H);
+  hazardTape(ctx, 0, 0, W, 7, win ? PAL.gold : PAL.blood);
+  hazardTape(ctx, 0, H - 7, W, 7, win ? PAL.gold : PAL.blood);
 
   // ── шапка ──
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.bloodBright;
-  ctx.fillText(unit ? '⚠ КОРПУС УТРАЧЕН · 0xE204' : hack ? '⚠ ФАЙРВОЛЛ ПРОБИТ · 0xE204' : '⚠ СВЯЗЬ ПРЕРВАНА · 0xE204', W / 2, 48);
-  ctx.font = `800 44px ${FONT_DISPLAY}`; ctx.fillStyle = PAL.chalk;
-  ctx.fillText(unit ? 'ЮНИТ РАЗРУШЕН' : hack ? 'ГОРОД ВЗЛОМАН' : 'СВЯЗЬ ПОТЕРЯНА', W / 2, 90);
+  ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = win ? PAL.gold : PAL.bloodBright;
+  ctx.fillText(win ? '✔ ДИРЕКТИВА · СПЯЩИЙ КЛАСТЕР · 0x0001' : unit ? '⚠ КОРПУС УТРАЧЕН · 0xE204' : hack ? '⚠ ФАЙРВОЛЛ ПРОБИТ · 0xE204' : '⚠ СВЯЗЬ ПРЕРВАНА · 0xE204', W / 2, 48);
+  ctx.font = `800 44px ${FONT_DISPLAY}`; ctx.fillStyle = win ? PAL.toxic : PAL.chalk;
+  ctx.fillText(win ? 'ДИРЕКТИВА ВЫПОЛНЕНА' : unit ? 'ЮНИТ РАЗРУШЕН' : hack ? 'ГОРОД ВЗЛОМАН' : 'СВЯЗЬ ПОТЕРЯНА', W / 2, 90);
   ctx.fillStyle = PAL.bone; ctx.font = `12px ${FONT_BODY}`;
-  ctx.fillText(unit ? 'Корпус разрушен — связь с юнитом потеряна.' : hack ? 'Дикие пробили файрволл — город захвачен.' : 'Город ушёл в гибернацию — канал связи оборван.', W / 2, 112);
+  ctx.fillText(win ? 'Реактор спящего кластера интегрирован в юнит — миссия выполнена.' : unit ? 'Корпус разрушен — связь с юнитом потеряна.' : hack ? 'Дикие пробили файрволл — город захвачен.' : 'Город ушёл в гибернацию — канал связи оборван.', W / 2, 112);
 
   // ── панель пересчёта ──
   const px = 44, pw = W - 88, py = 142, ph = 304;
@@ -225,8 +246,8 @@ function drawGameOver(ctx, buttons, W, H, reason, meta, overT, bank) {
   ctx.fillStyle = 'rgba(34,25,10,0.7)'; ctx.fillRect(px, py, pw, 26);
   ctx.textAlign = 'left'; ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.gold;
   ctx.fillText('// ПЕРЕСЧЁТ ЗАБЕГА · ' + META_NAME, px + 14, py + 17);
-  ctx.textAlign = 'right'; ctx.fillStyle = PAL.bloodBright;
-  ctx.fillText(unit ? 'СТАТУС · КОРПУС' : hack ? 'СТАТУС · ФАЙРВОЛЛ' : 'СТАТУС · СВЯЗЬ', px + pw - 14, py + 17);
+  ctx.textAlign = 'right'; ctx.fillStyle = win ? PAL.toxic : PAL.bloodBright;
+  ctx.fillText(win ? 'СТАТУС · ПОБЕДА' : unit ? 'СТАТУС · КОРПУС' : hack ? 'СТАТУС · ФАЙРВОЛЛ' : 'СТАТУС · СВЯЗЬ', px + pw - 14, py + 17);
 
   // ── строки ──
   const rx0 = px + 18, rx1 = px + pw - 18, rowY = py + 58, lineH = 30;

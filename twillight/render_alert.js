@@ -108,7 +108,7 @@ function drawAlertOverlay(ctx, game, camera, W, H, t) {
   ctx.save();
   // 1) ВРАГИ — на всём экране (только видимые), прицел поверх дрона
   for (const e of (game.enemies || [])) {
-    if (e.dead) continue;
+    if (e.dead || e.friendly) continue;   // дружественные (разбуженный город) — не угрозы, без прицела
     const sx = camera.screenX(e.px), sy = e.py - camera.y;
     if (sx < -TILE || sx > W + TILE || sy < -TILE || sy > H + TILE) continue;
     _drawUnitMark(ctx, sx, sy, ALERT.unit, e, t);

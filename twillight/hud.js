@@ -305,10 +305,9 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
   if (dbg.cycle) {
     const gx = 580;
     ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = `700 14px ${FONT_DISPLAY}`; ctx.fillStyle = PAL.chalk;
-    ctx.fillText(`ЦИКЛ ${dbg.cycle.n}`, gx, 10);
-    ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
-    ctx.fillText(`СЛЕД. ЧЕРЕЗ ${Math.ceil(dbg.cycle.timeLeft())}С`, gx, 26);
-    ctx.textBaseline = 'alphabetic';
+    const cn = (dbg.cycleNum != null) ? dbg.cycleNum : dbg.cycle.n;   // глобальный цикл существования ИИ (эпоха + прожитые)
+    ctx.fillText(`ЦИКЛ ${typeof numGroup === 'function' ? numGroup(cn) : cn}`, gx, 10);
+    ctx.textBaseline = 'alphabetic';   // прогресс/таймер до волны рисует drawWavePredict (бар всегда, тип+отсчёт — с узлом)
   }
 
   // ===== ПРАВО, ПОД виджетом города: цели сессии (директивы) — компактно, мигающий квадрат на цель =====

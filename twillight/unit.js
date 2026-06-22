@@ -57,6 +57,7 @@ class Unit {
     this.drilling = false;
     if (this.frozenPrint) return;   // ПЕЧАТЬ: юнит залочен на месте (ввод/гравитация/бур выкл) — см. print.js
     if (this.frozenImpulse) return; // ИМПУЛЬСНЫЙ БУР: юнит стоит, пока копит заряд (аим/выстрел — impulse.js)
+    if (this.frozenHack) return;    // ВЗЛОМ: юнит стоит у сердца города, пока держит канал взлома (hack.js)
 
     if (this.dx === 1 || this.dx === -1) this.faceX = this.dx;  // запомнить горизонталь до возможной смены на «вверх/вниз»
 

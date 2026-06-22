@@ -8,6 +8,12 @@ function drawEnemies(ctx, enemies, camera) {
   for (const e of enemies) {
     const cx = Math.round(camera.screenX(e.px)), cy = Math.round(e.py - camera.y);
     const r = (TILE - 12) / 2;
+    if (e.friendly && !e.dying) {   // ДРУЖЕСТВЕННЫЙ (разбуженный город) — лазурный ореол-метка; турели игнорируют
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(90,210,180,0.65)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx, cy, r + 3, 0, 6.283); ctx.stroke();
+      ctx.restore();
+    }
     if (e.dying) { drawEnemyDeath(ctx, e, cx, cy, r); continue; }   // уничтожен: затухающий обломок + искры
     if (e.type === 'raider') { drawRaider(ctx, e, cx, cy, r); continue; }
     if (e.type === 'collector') { drawCollector(ctx, e, cx, cy, r); continue; }

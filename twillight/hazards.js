@@ -41,7 +41,7 @@ Object.assign(Game.prototype, {
         r.t += dt; if (r.t >= ROBOT_SETTLE_T) { r.state = 'dead'; r.t = 0; }
       } else if (r.state === 'dead' && !r.scanned && canScan && this._hazardScan(r, dt)) {
         r.scanned = true; this.dataCount = (this.dataCount || 0) + 1;
-        if (typeof codexGainData === 'function') codexGainData(typeof CODEX_DATA_PER_SCAN !== 'undefined' ? CODEX_DATA_PER_SCAN : 1);
+        this._dataGain(typeof CODEX_DATA_PER_SCAN !== 'undefined' ? CODEX_DATA_PER_SCAN : 1);   // множитель kart_data учитывается
         if (!this.debug) this.logEvent('ДАННЫЕ ИЗ ОСТАНКОВ ИЗВЛЕЧЕНЫ');
       }
     }
@@ -62,7 +62,7 @@ Object.assign(Game.prototype, {
     const u = this.unit; if (!u) return false;
     const px = (r.tx + 0.5) * TILE, py = (r.ty + 0.5) * TILE;
     if (Math.hypot(wrapDeltaPx(px, u.px), py - u.py) / TILE > SCAN_RADIUS || !this.world.isSeen(r.tx, r.ty)) return false;
-    r.scan = (r.scan || 0) + dt / SCAN_TIME;
+    r.scan = (r.scan || 0) + dt / this._scanT(SCAN_TIME);   // kart_hub ускоряет
     return r.scan >= 1;
   },
 

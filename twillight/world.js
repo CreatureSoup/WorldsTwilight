@@ -156,13 +156,14 @@ class World {
     }
     return list;
   }
-  // Дружественные чужие города (несут name/rep — задел под задания/мету).
+  // Нейтральные (спящие) чужие города. `awoken`/`hackT` — состояние взлома (hack.js): спят, пока юнит не
+  // взломает сердце (модуль взлома) у центра → пробуждение в автономную фракцию.
   genCaverns() {
     const H = MAP_H;
     const bands = [[H * 0.45, H * 0.57], [H * 0.60, H * 0.72], [H * 0.75, H * 0.87]].map((b) => [Math.round(b[0]), Math.round(b[1])]);   // ниже опущенного города
     const startCx = (CAVE_X0 + CAVE_X1) / 2;
     const list = this.placeNest(bands, OTHER_CITIES, [{ cx: startCx, cy: CAVE_FLOOR_Y }]);
-    return list.map((c, i) => ({ ...c, name: CITY_NAMES[i % CITY_NAMES.length], rep: 0 }));
+    return list.map((c, i) => ({ ...c, name: CITY_NAMES[i % CITY_NAMES.length], awoken: false, hackT: 0 }));
   }
   // Дикие города-гнёзда: глубже, разнесены от старта, дружественных и друг друга.
   genWilds() {
