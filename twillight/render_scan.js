@@ -26,7 +26,7 @@ function _drawServerDebug(ctx, x, y, s) {
   ctx.fillStyle = PAL.cobaltBright || PAL.cobalt;
   ctx.font = '700 8px ' + (typeof FONT_MONO !== 'undefined' ? FONT_MONO : 'monospace');
   ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-  ctx.fillText(s.done ? 'DATA·OK' : s.dug ? 'DATA·' + Math.round(s.data * 100) : 'СЕРВЕР', x, y - 15);
+  ctx.fillText(s.done ? 'DATA·OK' : s.dug ? 'DATA·' + Math.round(s.data * 100) : STR.world.scan.serverDebug, x, y - 15);
   ctx.restore();
 }
 

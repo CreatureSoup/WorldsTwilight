@@ -10,8 +10,10 @@ const HACK_HUE = '192,110,230';   // лиловый — акцент ветви 
 function drawHackFx(ctx, game, camera) {
   const h = game.activeHack; if (!h || !game.unit) return;
   const u = game.unit, p = Math.max(0, Math.min(1, h.t)), t = performance.now() / 1000;
+  const breach = !!h.breach;                                                   // КОНТР-ВЗЛОМ дикого гнезда (vs пробуждение спящего)
+  const hue = breach ? '230,96,72' : HACK_HUE;                                 // breach — агрессивный красно-лиловый; wake — лиловый
   const sx = camera.screenX(u.px), sy = u.py - camera.y;                       // юнит (исток)
-  const tx = camera.screenX(h.hx), ty = h.hy - camera.y;                       // сердце города (на полу каверны)
+  const tx = camera.screenX(h.hx), ty = h.hy - camera.y;                       // сердце цели (на полу каверны/гнезда)
   const dx = tx - sx, dy = ty - sy, len = Math.hypot(dx, dy) || 1, nx = dx / len, ny = dy / len, px = -ny, py = nx;
 
   ctx.save();
@@ -26,7 +28,7 @@ function drawHackFx(ctx, game, camera) {
   for (const pass of [0, 1]) {
     ctx.beginPath();
     for (let i = 0; i <= segs; i++) { const [x, y] = pt(i); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
-    ctx.strokeStyle = `rgba(${HACK_HUE},${pass ? 0.85 : 0.28})`;
+    ctx.strokeStyle = `rgba(${hue},${pass ? 0.85 : 0.28})`;
     ctx.lineWidth = pass ? 1.3 : 4; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     ctx.globalAlpha = pass ? (0.7 + 0.3 * Math.sin(t * 9)) : 0.5;
     ctx.stroke();
@@ -37,32 +39,48 @@ function drawHackFx(ctx, game, camera) {
   for (let k = 0; k < 3; k++) {
     const f = ((t * (0.6 + p * 0.9) + k / 3) % 1);
     const bx = sx + dx * f, by = sy + dy * f, s = 2.2;
-    ctx.fillStyle = `rgba(${HACK_HUE},${0.9 * (1 - Math.abs(f - 0.5) * 1.2)})`;
+    ctx.fillStyle = `rgba(${hue},${0.9 * (1 - Math.abs(f - 0.5) * 1.2)})`;
     ctx.fillRect(bx - s, by - s, s * 2, s * 2);
   }
 
-  // ── КОЛЬЦО-ПРОГРЕСС у сердца города ──
+  // ── КОЛЬЦО-ПРОГРЕСС у сердца цели ──
   const R = 17;
   ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-  ctx.strokeStyle = `rgba(${HACK_HUE},0.18)`;                       // фоновое кольцо
+  ctx.strokeStyle = `rgba(${hue},0.18)`;                       // фоновое кольцо
   ctx.beginPath(); ctx.arc(tx, ty, R, 0, Math.PI * 2); ctx.stroke();
-  ctx.strokeStyle = `rgba(${HACK_HUE},0.95)`;                       // дуга прогресса
+  ctx.strokeStyle = `rgba(${hue},0.95)`;                       // дуга прогресса
   ctx.beginPath(); ctx.arc(tx, ty, R, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p); ctx.stroke();
+  // breach: засечки по кольцу (зеркало файрволла). seg — активный порог (саботаж 3 / нейтрализация 8).
+  const seg = h.seg || WILD_BREACH_SEG;
+  if (breach) {
+    if (h.neutralize) {   // янтарная отметка ПОРОГА САБОТАЖА — дальше идёт нейтрализация
+      const a = -Math.PI / 2 + Math.PI * 2 * (WILD_BREACH_SEG / seg);
+      ctx.strokeStyle = 'rgba(240,138,42,0.85)'; ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.moveTo(tx + Math.cos(a) * (R - 5), ty + Math.sin(a) * (R - 5)); ctx.lineTo(tx + Math.cos(a) * (R + 5), ty + Math.sin(a) * (R + 5)); ctx.stroke();
+    } else {              // сегменты саботажа
+      ctx.strokeStyle = `rgba(${hue},0.5)`; ctx.lineWidth = 1.5;
+      for (let i = 1; i < seg; i++) {
+        const a = -Math.PI / 2 + Math.PI * 2 * (i / seg);
+        ctx.beginPath(); ctx.moveTo(tx + Math.cos(a) * (R - 4), ty + Math.sin(a) * (R - 4)); ctx.lineTo(tx + Math.cos(a) * (R + 4), ty + Math.sin(a) * (R + 4)); ctx.stroke();
+      }
+    }
+    ctx.lineWidth = 2.5;
+  }
   // мерцающий «фронт» взлома на конце дуги
   const fa = -Math.PI / 2 + Math.PI * 2 * p, fx = tx + Math.cos(fa) * R, fy = ty + Math.sin(fa) * R;
-  ctx.fillStyle = `rgba(${HACK_HUE},${0.6 + 0.4 * Math.sin(t * 18)})`;
+  ctx.fillStyle = `rgba(${hue},${0.6 + 0.4 * Math.sin(t * 18)})`;
   ctx.beginPath(); ctx.arc(fx, fy, 2.6, 0, Math.PI * 2); ctx.fill();
 
   // ── ЯДРО-ВСПЫШКА у цели (ярче к завершению) ──
   const cr = 6 + 8 * p, g = ctx.createRadialGradient(tx, ty, 0, tx, ty, cr);
-  g.addColorStop(0, `rgba(${HACK_HUE},${0.35 + 0.5 * p})`); g.addColorStop(1, `rgba(${HACK_HUE},0)`);
+  g.addColorStop(0, `rgba(${hue},${0.35 + 0.5 * p})`); g.addColorStop(1, `rgba(${hue},0)`);
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(tx, ty, cr, 0, Math.PI * 2); ctx.fill();
 
-  // процент в центре кольца
+  // метка в центре кольца: breach — сегменты N/M, wake — процент
   ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = `rgba(${HACK_HUE},0.95)`; ctx.font = `bold 9px ${typeof FONT_MONO !== 'undefined' ? FONT_MONO : 'monospace'}`;
+  ctx.fillStyle = `rgba(${hue},0.95)`; ctx.font = `bold 9px ${typeof FONT_MONO !== 'undefined' ? FONT_MONO : 'monospace'}`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(Math.round(p * 100) + '%', tx, ty);
+  ctx.fillText(breach ? (Math.floor(p * seg) + '/' + seg) : (Math.round(p * 100) + '%'), tx, ty);
   ctx.restore();
 }
 
@@ -78,8 +96,8 @@ function drawWinTimer(ctx, game, W) {
   const ex = x + 3 + (w - 6) * p;
   ctx.fillStyle = `rgba(${HACK_HUE},${0.6 + 0.4 * Math.sin(t * 8)})`; ctx.fillRect(ex - 2, y + 3, 3, h - 6);
   ctx.fillStyle = '#e8dcff'; ctx.font = `bold 10px ${FONT_MONO}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-  ctx.fillText('⚡ ПЕРЕХВАТ РЕАКТОРА', x + 10, y + h / 2);
-  ctx.textAlign = 'right'; ctx.fillText(Math.ceil(rem) + 'с', x + w - 10, y + h / 2);
+  ctx.fillText('⚡ ' + STR.fx.hack.winTimer, x + 10, y + h / 2);
+  ctx.textAlign = 'right'; ctx.fillText(Math.ceil(rem) + STR.fx.hack.secondsSuffix, x + w - 10, y + h / 2);
   ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left'; ctx.restore();
 }
 
@@ -125,11 +143,11 @@ function drawWinCutscene(ctx, game, camera, W, H) {
     ctx.globalCompositeOperation = 'source-over';
   }
 
-  const label = t < WINCUT_EXTRACT ? 'ИЗВЛЕЧЕНИЕ РЕАКТОРА' : trT < 1 ? 'ПЕРЕДАЧА ЯДРА' : 'ДИРЕКТИВА ВЫПОЛНЕНА';
+  const label = t < WINCUT_EXTRACT ? STR.fx.hack.cut.extract : trT < 1 ? STR.fx.hack.cut.transfer : STR.fx.hack.cut.done;
   const PALr = (typeof PAL !== 'undefined') ? PAL : {};
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = PALr.gold || '#d4a042'; ctx.font = `9px ${FONT_MONO}`; ctx.fillText('// ПЕРЕХВАТ КЛАСТЕРА', W / 2, 30);
+  ctx.fillStyle = PALr.gold || '#d4a042'; ctx.font = `9px ${FONT_MONO}`; ctx.fillText(STR.fx.hack.cut.tag, W / 2, 30);
   ctx.fillStyle = flT > 0 ? '#bfffd6' : (PALr.chalk || '#fff'); ctx.font = `700 24px ${FONT_DISPLAY}`; ctx.fillText(label, W / 2, 56);
-  ctx.fillStyle = PALr.pewter || '#9a8e7a'; ctx.font = `9px ${FONT_MONO}`; ctx.fillText('ПРОБЕЛ · ПРОПУСТИТЬ', W / 2, H - 20);
+  ctx.fillStyle = PALr.pewter || '#9a8e7a'; ctx.font = `9px ${FONT_MONO}`; ctx.fillText(STR.fx.hack.cut.skip, W / 2, H - 20);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.restore();
 }

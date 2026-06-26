@@ -25,7 +25,7 @@ Object.assign(Game.prototype, {
       for (const b of this.borers) { const d = Math.hypot(wrapDeltaPx(b.px, u.px), b.py - u.py); if (d < nd) { nd = d; near = b; } }
       if (near && nd <= SCREW_RECALL_R * TILE) {
         this.borers.splice(this.borers.indexOf(near), 1);   // «забрали» обратно на юнит
-        if (this.logEvent) this.logEvent('БУР-ЩИТ ВОЗВРАЩЁН');
+        if (this.logEvent) this.logEvent(STR.log.borerReturned);
       } else if (this.borers.length < this.borerMax()) {
         const dir = (u.dx !== 0 || u.dy !== 0) ? [u.dx, u.dy] : [u.faceX, 0];   // строго по ходу взгляда
         this.borers.push({ tileX: u.tileX, tileY: u.tileY, px: u.px, py: u.py, dx: dir[0], dy: dir[1], spin: 0 });

@@ -20,14 +20,14 @@ function _cityPhase(city) {
   return 'calm';
 }
 function _cityPhaseText(phase) {
-  if (phase === 'dying-outer') return 'ОТКЛЮЧЕНИЕ ВНЕШНЕГО КОНТУРА';
-  if (phase === 'dying-inner') return 'ОТКЛЮЧЕНИЕ ВНУТРЕННЕГО КОНТУРА';
-  if (phase === 'dying-core')  return 'ГИБЕРНАЦИЯ ЯДРА';
-  if (phase === 'charging')    return 'ПОДПИТКА ГОРОДА';
-  if (phase === 'full')        return 'ГОРОД ЗАПИТАН';
-  if (phase === 'urgent')      return 'СРОЧНО НА БАЗУ';
-  if (phase === 'caution')     return 'ВЕРНИСЬ К ПРИНТЕРУ';
-  return 'ДО ГИБЕРНАЦИИ';
+  if (phase === 'dying-outer') return STR.hud.city.phase.dyingOuter;
+  if (phase === 'dying-inner') return STR.hud.city.phase.dyingInner;
+  if (phase === 'dying-core')  return STR.hud.city.phase.dyingCore;
+  if (phase === 'charging')    return STR.hud.city.phase.charging;
+  if (phase === 'full')        return STR.hud.city.phase.full;
+  if (phase === 'urgent')      return STR.hud.city.phase.urgent;
+  if (phase === 'caution')     return STR.hud.city.phase.caution;
+  return STR.hud.city.phase.calm;
 }
 function _phaseColor(phase, blink) {
   if (phase.startsWith('dying')) return blink ? PAL.bloodBright : PAL.bloodDim;
@@ -224,7 +224,7 @@ function drawCity(ctx, city, W) {
   ctx.font = `7px ${FONT_MONO}`;
   ctx.fillStyle = PAL.ash;
   ctx.textAlign = 'right';
-  ctx.fillText(big3 ? 'СЕК' : 'С·МС', x + cw - padX, y + ch - 5);
+  ctx.fillText(big3 ? STR.hud.city.unitSec : STR.hud.city.unitSecMs, x + cw - padX, y + ch - 5);
 
   ctx.restore();
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';

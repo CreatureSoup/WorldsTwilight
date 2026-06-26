@@ -14,11 +14,11 @@ function drawInventory(ctx, inv, W, H) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   pulseDot(ctx, W / 2 - 110, 23, 3, PAL.gold);
   ctx.fillStyle = PAL.gold; ctx.font = `9px ${FONT_MONO}`;
-  ctx.fillText('// СБОРКА ЮНИТА · АКТИВНА', W / 2, 26);
+  ctx.fillText(STR.inventory.header.kicker, W / 2, 26);
   ctx.fillStyle = PAL.chalk; ctx.font = `700 28px ${FONT_DISPLAY}`;
-  ctx.fillText('ЧЕРТЁЖ', W / 2, 54);
+  ctx.fillText(STR.inventory.header.title, W / 2, 54);
   ctx.fillStyle = PAL.pewter; ctx.font = `11px ${FONT_MONO}`;
-  ctx.fillText('ВЫБЕРИ МОДУЛЬ В ГАЛЕРЕЕ — ОН ВСТАНЕТ В СЛОТ · ENTER · В ШАХТУ', W / 2, 74);
+  ctx.fillText(STR.inventory.header.controls, W / 2, 74);
 
   _invDrawBack(ctx, inv, L.back);
   _invDrawBlueprint(ctx, inv, L);
@@ -54,7 +54,7 @@ function _invDrawBack(ctx, inv, r) {
 
 function _invDrawBlueprint(ctx, inv, L) {
   const b = L.blueprint;
-  techPanel(ctx, b.x, b.y, b.w, b.h, { accent: PAL.cobalt, label: '// ЮНИТ · СКИТАЛЕЦ', serial: 'RIG' });
+  techPanel(ctx, b.x, b.y, b.w, b.h, { accent: PAL.cobalt, label: STR.inventory.blueprint.label, serial: 'RIG' });
 
   ctx.save();
   ctx.beginPath(); ctx.rect(b.x + 6, b.y + 22, b.w - 12, b.h - 28); ctx.clip();
@@ -145,7 +145,7 @@ function _invDrawSlotPing(ctx, s, hovering, t) {
 function _invDrawCallout(ctx, inv, s, b) {
   const r = 22, gap = 30, dx = s.lx, dy = s.ly, n = Math.hypot(dx, dy) || 1;
   const type = inv.modules[s.category], def = type && MODULE_DEFS[type];
-  const name = def ? def.name.toUpperCase() : 'МОДУЛЬ НЕ УСТАНОВЛЕН', accent = def ? def.color : PAL.bronze;
+  const name = def ? def.name.toUpperCase() : STR.inventory.callout.empty, accent = def ? def.color : PAL.bronze;
   ctx.font = `bold 9px ${FONT_MONO}`;
   const pad = 6, chipW = ctx.measureText(name).width + pad * 2, chipH = 17;
   // желаемое место чипа в сторону (dx,dy), затем КЛАМП внутрь панели
@@ -169,13 +169,13 @@ function _invDrawCallout(ctx, inv, s, b) {
 
 function _invDrawStats(ctx, inv, L) {
   const s = inv.getStats(), b = L.stats;
-  techPanel(ctx, b.x, b.y, b.w, b.h, { accent: PAL.gold, label: '// СВОДКА', serial: 'STATS' });
+  techPanel(ctx, b.x, b.y, b.w, b.h, { accent: PAL.gold, label: STR.inventory.stats.label, serial: 'STATS' });
   const items = [
-    ['ХП',       `${s.maxHp}`,                          PAL.bloodBright],
-    ['СКОРОСТЬ', s.canMove ? `${s.moveSpeed} т/с` : '—', PAL.cobalt],
-    ['БУР',      s.canDig ? `×${s.digMult.toFixed(1)}` : '—', PAL.amber],
-    ['СКАНЕР',   s.scanR ? `${s.scanR} т` : '—',        PAL.gold],
-    ['ГРУЗ',     `${s.capacity}`,                       PAL.toxic],
+    [STR.inventory.stats.hp,      `${s.maxHp}`,                          PAL.bloodBright],
+    [STR.inventory.stats.speed,   s.canMove ? STR.inventory.stats.speedVal(s.moveSpeed) : '—', PAL.cobalt],
+    [STR.inventory.stats.drill,   s.canDig ? `×${s.digMult.toFixed(1)}` : '—', PAL.amber],
+    [STR.inventory.stats.scanner, s.scanR ? STR.inventory.stats.scanVal(s.scanR) : '—', PAL.gold],
+    [STR.inventory.stats.cargo,   `${s.capacity}`,                       PAL.toxic],
   ];
   const cellW = (b.w - 24) / items.length;
   items.forEach(([k, v, c], i) => {
@@ -189,7 +189,7 @@ function _invDrawStats(ctx, inv, L) {
 }
 
 function _invDrawList(ctx, inv, L) {
-  techPanel(ctx, L.list.x, L.list.y, L.list.w, L.list.h, { accent: PAL.gold, label: '// МОДУЛИ', serial: 'CAT' });
+  techPanel(ctx, L.list.x, L.list.y, L.list.w, L.list.h, { accent: PAL.gold, label: STR.inventory.list.label, serial: 'CAT' });
   const { cards, headers, contentH } = inv.computeCards();
   const innerY = L.list.y + 30, innerH = L.list.h - 38;
   inv.maxScroll = Math.max(0, contentH - innerH);
@@ -260,16 +260,16 @@ function _invDrawCard(ctx, x, y, w, h, def, installed, hover, type) {
   ctx.fillText(def.name.toUpperCase(), x + w / 2, y + imgH + 20);
   // стат
   let statStr = '';
-  if (def.digMult)  statStr = `СИЛА ×${def.digMult.toFixed(1)}`;
-  if (def.speed)    statStr = `${def.speed} Т/С`;
-  if (def.scanR)    statStr = `РАДИУС ${def.scanR}`;
-  if (def.capacity) statStr = `ГРУЗ ${def.capacity}`;
+  if (def.digMult)  statStr = STR.inventory.card.force(def.digMult.toFixed(1));
+  if (def.speed)    statStr = STR.inventory.card.speed(def.speed);
+  if (def.scanR)    statStr = STR.inventory.card.radius(def.scanR);
+  if (def.capacity) statStr = STR.inventory.card.cargo(def.capacity);
   ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
   ctx.fillText(statStr, x + w / 2, y + imgH + 36);
   // бейдж «установлен» — галка в углу
   if (installed) {
     ctx.fillStyle = accent; ctx.font = `bold 8px ${FONT_MONO}`; ctx.textAlign = 'center';
-    ctx.fillText('✓ УСТАНОВЛЕН', x + w / 2, y + h - 8);
+    ctx.fillText(STR.inventory.card.installed, x + w / 2, y + h - 8);
   }
   ctx.textAlign = 'left';
 }
@@ -292,11 +292,11 @@ function _invDrawStart(ctx, inv, L) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   if (valid) {
     ctx.fillStyle = hot ? PAL.void : PAL.gold; ctx.font = `14px ${FONT_MONO}`;
-    ctx.fillText('В ШАХТУ ▶', b.x + b.w / 2, b.y + b.h / 2);
+    ctx.fillText(STR.inventory.start.go, b.x + b.w / 2, b.y + b.h / 2);
   } else {
     ctx.fillStyle = PAL.ash; ctx.font = `12px ${FONT_MONO}`;
-    const cat2label = { drill: 'бур', engine: 'двигатель', scanner: 'сканер', cargo: 'трюм' };
-    ctx.fillText('УСТАНОВИ: ' + s.missing.map((c) => cat2label[c]).join(', ').toUpperCase(), b.x + b.w / 2, b.y + b.h / 2);
+    const cat2label = STR.inventory.start.cat;
+    ctx.fillText(STR.inventory.start.missing(s.missing.map((c) => cat2label[c]).join(', ').toUpperCase()), b.x + b.w / 2, b.y + b.h / 2);
   }
   ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
 }

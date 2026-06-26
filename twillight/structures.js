@@ -70,6 +70,7 @@ class Structures {
         case 'jammer': this._jamTick(s, dt, enemies); break;
         case 'repair': this._repairTick(s, dt); break;
         case 'battery': this._batteryTick(s, dt); break;
+        case 'siege': this._siegeTick(s, dt, game); break;
       }
     }
     this.list = this.list.filter((s) => !(s.dying && s.deathT <= 0));
@@ -110,6 +111,29 @@ class Structures {
       const ex = s.px + Math.cos(s.aimAng) * s.def.range * TILE, ey = s.py + Math.sin(s.aimAng) * s.def.range * TILE;
       for (const e of enemies) { if (e.dying || e.dead || e.friendly) continue; if (this._segDist(s.px, s.py, ex, ey, e.px, e.py) < TILE * 0.6) e.damage(s.def.dmg); }
       this.tracers.push({ x1: s.px, y1: s.py, x2: ex, y2: ey, life: 0, beam: true });
+    }
+  }
+
+  // ОСАДНАЯ БАШНЯ — цель НЕ враги, а ДИКОЕ ГНЕЗДО: ближайшее живое в радиусе → резонанс-импульс по hp (площадь, не луч).
+  // Запитана юнитом-реактором (как турель). active2 — резонатор работает (рендер), pulse — расходящееся ударное кольцо.
+  _siegeTick(s, dt, game) {
+    s.fireCd -= dt;
+    const ws = game.world && game.world.wilds;
+    s.active2 = false; s.siegeTarget = null;
+    if (!ws) return;
+    let best = null, bd = s.def.range + 0.5, bh = null;
+    for (const w of ws) {
+      if (w.disabled) continue;
+      const h = game.wildHeart(w);
+      const d = Math.hypot(wrapDeltaPx(s.px, h.hx), s.py - h.hy) / TILE;
+      if (d < bd) { bd = d; best = w; bh = h; }
+    }
+    if (!best) return;
+    s.active2 = true; s.siegeTarget = { x: bh.hx, y: bh.hy };
+    s.aimAng = Math.atan2(bh.hy - s.py, wrapDeltaPx(bh.hx, s.px));   // дельта s→цель
+    if (s.fireCd <= 0 && s.energy >= s.def.eShot) {
+      s.fireCd = s.def.fireCd; s.energy -= s.def.eShot; s.flash = 0.1; s.pulse = 0.001;   // ударная волна-резонанс
+      game.damageWild(best, s.def.dmg);
     }
   }
 

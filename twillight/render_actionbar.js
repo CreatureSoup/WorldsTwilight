@@ -71,5 +71,8 @@ function _actionIcon(ctx, type, cx, cy, s, col) {
     ctx.beginPath(); ctx.moveTo(cx - s * 0.35, cy - s * 0.6); ctx.lineTo(cx - s * 0.62, cy - s * 0.6); ctx.lineTo(cx - s * 0.62, cy + s * 0.6); ctx.lineTo(cx - s * 0.35, cy + s * 0.6); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(cx + s * 0.35, cy - s * 0.6); ctx.lineTo(cx + s * 0.62, cy - s * 0.6); ctx.lineTo(cx + s * 0.62, cy + s * 0.6); ctx.lineTo(cx + s * 0.35, cy + s * 0.6); ctx.stroke();
     ctx.fillRect(cx - s * 0.2, cy - s * 0.2, s * 0.4, s * 0.4);
+  } else if (type === 'siege') {        // сфокусированный разряд: сходящийся клин + копьё-наконечник
+    ctx.beginPath(); ctx.moveTo(cx - s * 0.75, cy - s * 0.55); ctx.lineTo(cx - s * 0.2, cy); ctx.lineTo(cx - s * 0.75, cy + s * 0.55); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + s * 0.78, cy); ctx.lineTo(cx + s * 0.02, cy - s * 0.52); ctx.lineTo(cx + s * 0.02, cy + s * 0.52); ctx.closePath(); ctx.fill();
   }
 }

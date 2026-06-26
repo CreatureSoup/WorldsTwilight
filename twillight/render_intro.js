@@ -52,12 +52,12 @@ function drawIntro(ctx, intro, world, unit, camera, W, H) {
   }
 
   // этап + подсказка
-  const label = t < INTRO_PRINT ? 'ПЕЧАТЬ КОРПУСА'
-    : t < INTRO_PRINT + INTRO_REACTOR ? 'УСТАНОВКА РЕАКТОРА' : 'СИНХРОНИЗАЦИЯ СВЯЗИ';
+  const label = t < INTRO_PRINT ? STR.intro.phase.print
+    : t < INTRO_PRINT + INTRO_REACTOR ? STR.intro.phase.reactor : STR.intro.phase.sync;
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = PAL.gold; ctx.font = `9px ${FONT_MONO}`; ctx.fillText('// ПРИНТЕР', W / 2, 30);
+  ctx.fillStyle = PAL.gold; ctx.font = `9px ${FONT_MONO}`; ctx.fillText(STR.intro.tag, W / 2, 30);
   ctx.fillStyle = PAL.chalk; ctx.font = `700 22px ${FONT_DISPLAY}`; ctx.fillText(label, W / 2, 54);
   ctx.fillStyle = PAL.pewter; ctx.font = `9px ${FONT_MONO}`;
-  ctx.fillText('ПРОБЕЛ · ПРОПУСТИТЬ', W / 2, H - 20);
+  ctx.fillText(STR.intro.skip, W / 2, H - 20);
   ctx.textAlign = 'left';
 }

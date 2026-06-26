@@ -14,11 +14,11 @@ function drawUpgrades(ctx, u, W, H) {
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   pulseDot(ctx, L.list.x + 4, 24, 3, PAL.amber);
   ctx.fillStyle = PAL.amber; ctx.font = `9px ${FONT_MONO}`;
-  ctx.fillText('// НА БАЗЕ · ПРИНТЕР ОНЛАЙН', L.list.x + 16, 27);
+  ctx.fillText(STR.upgrades.kicker, L.list.x + 16, 27);
   ctx.fillStyle = PAL.chalk; ctx.font = `700 26px ${FONT_DISPLAY}`;
-  ctx.fillText('УЛУЧШЕНИЯ', L.list.x, 56);
+  ctx.fillText(STR.upgrades.title, L.list.x, 56);
   ctx.fillStyle = PAL.pewter; ctx.font = `9px ${FONT_MONO}`;
-  ctx.fillText(`ГОРОД «${u.cityName.toUpperCase()}» · WASD/КЛИК — ВЫБОР · ЗАЖМИ ПРОБЕЛ/ЛКМ — КУПИТЬ · ESC — ЗАКРЫТЬ`, L.list.x, 74);
+  ctx.fillText(STR.upgrades.controls(u.cityName.toUpperCase()), L.list.x, 74);
   // надпись «не хватает ресурсов»: если выбранный апгрейд не по карману (или была
   // неудачная попытка покупки) — мигаем в шапке справа от заголовка.
   const lowOnRes = u.selNextCost() && !u.selAffordable();
@@ -26,7 +26,7 @@ function drawUpgrades(ctx, u, W, H) {
   if (lowOnRes || flashing) {
     const a = flashing ? (0.6 + 0.4 * Math.sin(performance.now() / 120)) : 0.85;
     ctx.globalAlpha = a; ctx.fillStyle = PAL.bloodBright; ctx.font = `bold 12px ${FONT_MONO}`;
-    ctx.fillText('⚠ НЕ ХВАТАЕТ РЕСУРСОВ', L.list.x + 220, 54); ctx.globalAlpha = 1;
+    ctx.fillText('⚠ ' + STR.upgrades.lowRes, L.list.x + 220, 54); ctx.globalAlpha = 1;
   }
   _drawUpgWallet(ctx, u, L.list.x + L.list.w, 36);
 
@@ -56,12 +56,12 @@ function drawUpgrades(ctx, u, W, H) {
   };
 
   u._selScreenY = null;
-  drawSection('// ЮНИТ', PAL.cobalt, u.tracks.filter((t) => t.cat === 'unit'));
+  drawSection(STR.upgrades.secUnit, PAL.cobalt, u.tracks.filter((t) => t.cat === 'unit'));
   const cityTracks = u.tracks.filter((t) => t.cat === 'city');
-  if (cityTracks.length) drawSection('// ГОРОД · ' + u.cityName.toUpperCase(), PAL.amber, cityTracks);
+  if (cityTracks.length) drawSection(STR.upgrades.secCity(u.cityName.toUpperCase()), PAL.amber, cityTracks);
   else if (cy + 14 > innerY && cy < innerY + innerH) {   // раздел закрыт: не открыт ни один узел ветки ГОРОД
     ctx.fillStyle = PAL.ash; ctx.font = `9px ${FONT_MONO}`; ctx.textAlign = 'left';
-    ctx.fillText('// ГОРОД — ЗАКРЫТО · ОТКРОЙ ВЕТКУ «ГОРОД» В СЕТИ ПАМЯТИ', L.list.x, cy + 13);
+    ctx.fillText(STR.upgrades.secCityLocked, L.list.x, cy + 13);
     cy += 24;
   }
   ctx.restore();
@@ -126,7 +126,7 @@ function _drawUpgTrackRow(ctx, u, x, y, w, h, tr, selected) {
   ctx.fillStyle = PAL.pewter; ctx.font = `8px ${FONT_MONO}`; ctx.fillText(tr.sub, tx, y + 32);
   const cap = trCap(tr);
   ctx.fillStyle = lvl >= cap ? accent : PAL.bone; ctx.font = `9px ${FONT_MONO}`;
-  ctx.fillText('СЕЙЧАС: ' + tr.fmt(u.trackVal(tr, lvl)) + (lvl >= cap ? ' · MAX' : ''), tx, y + 47);
+  ctx.fillText(STR.upgrades.current(tr.fmt(u.trackVal(tr, lvl))) + (lvl >= cap ? STR.upgrades.maxSuffix : ''), tx, y + 47);
 
   // карточки уровней (ca/gap/cw/ch посчитаны выше): слоты между базовым `cap` и `metaCap.cap` —
   // «ЗАКРЫТО» (откроются узлом СЕТИ ПАМЯТИ); за `metaCap.cap`/`cap` ячеек уже нет (см. nCells).
@@ -139,8 +139,8 @@ function _drawUpgTrackRow(ctx, u, x, y, w, h, tr, selected) {
       ctx.strokeRect(cx + 0.5, y + 0.5, cw - 1, ch - 1); ctx.setLineDash([]);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       if (liftable) {
-        ctx.fillStyle = PAL.ash; ctx.font = `7px ${FONT_MONO}`; ctx.fillText('ЗАКРЫТО', cx + cw / 2, y + ch / 2 - 5);
-        ctx.fillStyle = PAL.carbon; ctx.fillText('СЕТЬ ПАМЯТИ', cx + cw / 2, y + ch / 2 + 8);
+        ctx.fillStyle = PAL.ash; ctx.font = `7px ${FONT_MONO}`; ctx.fillText(STR.upgrades.cellLocked, cx + cw / 2, y + ch / 2 - 5);
+        ctx.fillStyle = PAL.carbon; ctx.fillText(STR.upgrades.cellMemNet, cx + cw / 2, y + ch / 2 + 8);
       } else { ctx.fillStyle = PAL.carbon; ctx.font = `13px ${FONT_MONO}`; ctx.fillText('—', cx + cw / 2, y + ch / 2); }
       ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
       continue;
@@ -159,7 +159,7 @@ function _drawUpgTrackRow(ctx, u, x, y, w, h, tr, selected) {
     // «УР k»
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = owned ? accent : next ? PAL.bone : PAL.ash; ctx.font = `7px ${FONT_MONO}`;
-    ctx.fillText('УР ' + k, cx + 6, y + 13);
+    ctx.fillText(STR.upgrades.level(k), cx + 6, y + 13);
     if (owned) { ctx.fillStyle = accent; ctx.font = `9px ${FONT_MONO}`; ctx.textAlign = 'right'; ctx.fillText('✓', cx + cw - 6, y + 13); }
     // значение уровня (результат)
     ctx.textAlign = 'left'; ctx.fillStyle = owned ? PAL.chalk : next ? PAL.chalk : PAL.ash; ctx.font = `bold 10px ${FONT_MONO}`;

@@ -26,17 +26,17 @@ function drawAlertToggle(ctx, on, threats, t) {
   if (on) pulseDot(ctx, r.x + 13, midY, 3.2, PAL.toxic);
   else { ctx.fillStyle = PAL.ash; ctx.beginPath(); ctx.arc(r.x + 13, midY, 3, 0, 6.283); ctx.fill(); }
   ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = on ? PAL.chalk : PAL.pewter;
-  ctx.fillText('ОБНАРУЖЕНИЕ УГРОЗ', r.x + 22, midY + 0.5);
+  ctx.fillText(STR.hud.alert.title, r.x + 22, midY + 0.5);
   const sw = 30, sh = 14, sx = r.x + r.w - 12 - sw, sy = midY - sh / 2;
   ctx.fillStyle = on ? 'rgba(200,226,90,0.16)' : PAL.earth; ctx.fillRect(sx, sy, sw, sh);
   ctx.strokeStyle = on ? PAL.toxic : PAL.bronze; ctx.lineWidth = 1; ctx.strokeRect(sx + 0.5, sy + 0.5, sw - 1, sh - 1);
   ctx.font = `7px ${FONT_MONO}`; ctx.textBaseline = 'middle';
   if (on) {                                   // надпись слева, бегунок справа
-    ctx.fillStyle = PAL.toxic; ctx.textAlign = 'left'; ctx.fillText('ВКЛ', sx + 5, sy + sh / 2 + 0.5);
+    ctx.fillStyle = PAL.toxic; ctx.textAlign = 'left'; ctx.fillText(STR.hud.toggle.on, sx + 5, sy + sh / 2 + 0.5);
     ctx.fillStyle = PAL.toxic; ctx.fillRect(sx + sw - 9, sy + 2, 7, sh - 4);
   } else {                                    // бегунок слева, надпись справа
     ctx.fillStyle = PAL.ash; ctx.fillRect(sx + 2, sy + 2, 7, sh - 4);
-    ctx.fillStyle = PAL.ash; ctx.textAlign = 'right'; ctx.fillText('ВЫКЛ', sx + sw - 4, sy + sh / 2 + 0.5);
+    ctx.fillStyle = PAL.ash; ctx.textAlign = 'right'; ctx.fillText(STR.hud.toggle.off, sx + sw - 4, sy + sh / 2 + 0.5);
   }
   if (on && threats > 0) {                     // счётчик враждебных юнитов
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';

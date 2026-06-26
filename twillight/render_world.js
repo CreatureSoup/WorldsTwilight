@@ -163,16 +163,27 @@ function drawWildMarkers(ctx, world, camera, debug) {
     const sx = camera.screenX((w.cx + 0.5) * TILE);
     if (sx < -TILE * 5 || sx > camera.viewW + TILE * 5) continue;
     const fy = w.floorY * TILE - oy, ww = TILE * 2.6, h = TILE * 0.5;
-    ctx.fillStyle = '#2a2230';
+    ctx.fillStyle = w.disabled ? '#1b181f' : '#2a2230';
     for (let i = 0; i < 3; i++) {
       const cw = ww * (1 - i * 0.28), off = (tileHash(w.cx + i, w.floorY) - 0.5) * TILE * 0.5;
       ctx.fillRect(sx - cw / 2 + off, fy - (i + 1) * h, cw, h + 1);
     }
-    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 500 + w.cx);
-    ctx.fillStyle = `rgba(210,70,55,${0.45 + 0.4 * pulse})`;
+    // ядро-сердце: подавлено → тусклое серое; попадание осады → белая вспышка; САБОТАЖ → янтарный медленный пульс; иначе красный пульс
+    if (w.disabled) ctx.fillStyle = 'rgba(120,120,132,0.5)';
+    else if (w.hitT > 0) ctx.fillStyle = `rgba(255,240,220,${0.6 + 0.4 * (w.hitT / WILD_HIT_FLASH)})`;
+    else if (w.saboted) { const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 900 + w.cx); ctx.fillStyle = `rgba(225,150,60,${0.4 + 0.35 * pulse})`; }
+    else { const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 500 + w.cx); ctx.fillStyle = `rgba(210,70,55,${0.45 + 0.4 * pulse})`; }
     ctx.beginPath(); ctx.arc(sx, fy - h * 1.6, TILE * 0.17, 0, 6.283); ctx.fill();
-    ctx.fillStyle = PAL.bloodBright; ctx.font = `9px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText('ДИКИЙ ГОРОД', sx, fy - 3 * h - 6);
+    // полоса HP — когда гнездо ранено, но ещё живо (осада сбивает hp к 0 → ПОДАВЛЕНО)
+    if (!w.disabled && w.hp < w.maxHp) {
+      const bw = TILE * 1.6, bx = sx - bw / 2, byb = fy - 3 * h - 16, f = Math.max(0, w.hp / w.maxHp);
+      ctx.fillStyle = 'rgba(20,14,16,0.85)'; ctx.fillRect(bx - 1, byb - 1, bw + 2, 5);
+      ctx.fillStyle = PAL.blood; ctx.fillRect(bx, byb, bw * f, 3);
+    }
+    ctx.font = `9px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = w.disabled ? 'rgba(140,140,150,0.7)' : w.saboted ? PAL.amber : PAL.bloodBright;
+    const tag = w.disabled ? ' · ' + STR.world.wildDisabled : w.saboted ? ' · ' + STR.world.wildSaboted : '';
+    ctx.fillText(STR.world.wildCity + tag, sx, fy - 3 * h - 6);
     ctx.textAlign = 'left';
   }
 }

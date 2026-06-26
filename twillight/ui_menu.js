@@ -19,7 +19,7 @@ function drawDirectives(ctx, x, y, big) {
   if (typeof SESSION_GOALS === 'undefined') return;
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.gold;
-  ctx.fillText('// ТВОИ ДИРЕКТИВЫ ──────────', x, y);
+  ctx.fillText(STR.menu.directivesHdr, x, y);
   let yy = y + (big ? 19 : 15);
   SESSION_GOALS.forEach((g, i) => {
     const c = PAL[g.accent] || PAL.gold, sq = big ? 9 : 7, rowH = big ? 22 : 17;
@@ -86,8 +86,8 @@ function drawStartStoryToggle(ctx, b, on) {
   // двухстрочный лейбл
   const tx = sx + sz + 9, txtC = hot ? PAL.void : (on ? PAL.cobalt : PAL.bone);
   ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = txtC;
-  ctx.fillText('РЕЖИМ', tx, b.y + b.h / 2 - 6);
-  ctx.fillText('ИСТОРИИ', tx, b.y + b.h / 2 + 6);
+  ctx.fillText(STR.menu.story1, tx, b.y + b.h / 2 - 6);
+  ctx.fillText(STR.menu.story2, tx, b.y + b.h / 2 + 6);
   ctx.textBaseline = 'alphabetic';
 }
 
@@ -119,7 +119,7 @@ function drawEpochClock(ctx, save, W) {
   const cx = Math.round(W / 2);
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.gold;
-  ctx.fillText('// ЦИКЛ СУЩЕСТВОВАНИЯ ИИ', cx, 20);
+  ctx.fillText(STR.menu.epochLabel, cx, 20);
   const big = (typeof numGroup === 'function' ? numGroup(whole) : String(whole)), dotc = '·' + centi;
   ctx.font = `800 30px ${FONT_DISPLAY}`;   // центи-доля — ТЕМ ЖЕ шрифтом/размером, что и номер (только акцентный цвет)
   const bw = ctx.measureText(big).width, cw = ctx.measureText(dotc).width, gap = 3;
@@ -143,21 +143,21 @@ function drawMainMenu(ctx, save, buttons, W, H) {
   const hx = Math.max(48, W * 0.07), hy = H * 0.40;
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = PAL.gold; ctx.font = `9px ${FONT_MONO}`;
-  ctx.fillText('// ROGUELITE · КОПАЛКА · M0 ──────', hx, hy - 86);
-  ctx.font = `800 72px ${FONT_DISPLAY}`; ctx.fillStyle = PAL.chalk; ctx.fillText('СУМЕРКИ', hx, hy - 16);
-  ctx.fillStyle = PAL.gold; ctx.fillText('МИРА', hx, hy + 54);
+  ctx.fillText(STR.menu.tagline, hx, hy - 86);
+  ctx.font = `800 72px ${FONT_DISPLAY}`; ctx.fillStyle = PAL.chalk; ctx.fillText(STR.menu.title1, hx, hy - 16);
+  ctx.fillStyle = PAL.gold; ctx.fillText(STR.menu.title2, hx, hy + 54);
   ctx.fillStyle = PAL.bone; ctx.font = `12px ${FONT_BODY}`;
-  const storyEndY = wrapText(ctx, 'Ты — ИИ. Принтер ещё работает. Снаружи — скверна и древние города, которые ничего о тебе не знают.', hx, hy + 84, 360, 17);
+  const storyEndY = wrapText(ctx, STR.menu.subtitle, hx, hy + 84, 360, 17);
   // директивы сессии — крупные буллеты под сюжетным текстом
   drawDirectives(ctx, hx, storyEndY + 28, true);
   // нумерованный вертикальный список — внизу справа; в кнопке забега — встроенный тумблер «режим истории» (правая зона)
   buttons.forEach((b, i) => { menuLine(ctx, b, i + 1); if (b.story) drawStartStoryToggle(ctx, b, save.storyMode); });
   ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
-  ctx.fillText(`ЛУЧШАЯ ПРОХОДКА: ${save.bestDug}  ·  ЗАПУСКОВ: ${save.runs}  ·  БАНК: ${save.meta || 0} МТ`, W - 48, 96);
+  ctx.fillText(STR.menu.stats(save.bestDug, save.runs, save.meta || 0), W - 48, 96);
   // низ: PCB-пальцы + serial-полоса
   edgeFingers(ctx, W / 2 - 120, H - 12, 240, 24, PAL.goldDim);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
-  ctx.fillText('WASD · ВЫБОР   ПРОБЕЛ/ENTER · ПОДТВЕРДИТЬ', 16, H - 14);
+  ctx.fillText(STR.menu.controls, 16, H - 14);
   ctx.textAlign = 'right'; ctx.fillStyle = PAL.toxic; ctx.fillText('SKVERNA · 0.2 r/s', W - 16, H - 14);
   ctx.textAlign = 'left';
 }
@@ -165,8 +165,8 @@ function drawMainMenu(ctx, save, buttons, W, H) {
 function drawPauseMenu(ctx, buttons, W, H) {
   ctx.fillStyle = 'rgba(7,5,10,0.8)'; ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center';
-  ctx.fillStyle = PAL.gold; ctx.font = `9px ${FONT_MONO}`; ctx.fillText('// СТОП-КАДР', W / 2, H / 2 - 132);
-  ctx.fillStyle = PAL.chalk; ctx.font = `700 44px ${FONT_DISPLAY}`; ctx.fillText('ПАУЗА', W / 2, H / 2 - 92);
+  ctx.fillStyle = PAL.gold; ctx.font = `9px ${FONT_MONO}`; ctx.fillText(STR.menu.pauseTag, W / 2, H / 2 - 132);
+  ctx.fillStyle = PAL.chalk; ctx.font = `700 44px ${FONT_DISPLAY}`; ctx.fillText(STR.menu.pauseTitle, W / 2, H / 2 - 92);
   drawButtons(ctx, buttons);
   ctx.textAlign = 'left';
 }
@@ -223,7 +223,8 @@ function drawMetaToken(ctx, cx, cy, r) {
 function drawGameOver(ctx, buttons, W, H, reason, meta, overT, bank) {
   meta = meta || { rows: [], total: 0 }; overT = overT || 0; bank = bank || 0;
   const ease = (p) => (p <= 0 ? 0 : p >= 1 ? 1 : 1 - (1 - p) * (1 - p));
-  const unit = reason === 'unit', hack = reason === 'hack', win = reason === 'hack_win';
+  const unit = reason === 'unit', hack = reason === 'hack', win = reason === 'hack_win' || reason === 'threat_win';
+  const k = reason === 'threat_win' ? 'threatwin' : win ? 'win' : unit ? 'unit' : hack ? 'hack' : 'city';   // ключ строки причины (STR.gameover.*[k])
   drawStaticBg(ctx, W, H);
   ctx.fillStyle = win ? 'rgba(6,12,8,0.82)' : 'rgba(10,4,5,0.82)'; ctx.fillRect(0, 0, W, H);
   hazardTape(ctx, 0, 0, W, 7, win ? PAL.gold : PAL.blood);
@@ -232,11 +233,11 @@ function drawGameOver(ctx, buttons, W, H, reason, meta, overT, bank) {
   // ── шапка ──
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = win ? PAL.gold : PAL.bloodBright;
-  ctx.fillText(win ? '✔ ДИРЕКТИВА · СПЯЩИЙ КЛАСТЕР · 0x0001' : unit ? '⚠ КОРПУС УТРАЧЕН · 0xE204' : hack ? '⚠ ФАЙРВОЛЛ ПРОБИТ · 0xE204' : '⚠ СВЯЗЬ ПРЕРВАНА · 0xE204', W / 2, 48);
+  ctx.fillText(STR.gameover.tag[k], W / 2, 48);
   ctx.font = `800 44px ${FONT_DISPLAY}`; ctx.fillStyle = win ? PAL.toxic : PAL.chalk;
-  ctx.fillText(win ? 'ДИРЕКТИВА ВЫПОЛНЕНА' : unit ? 'ЮНИТ РАЗРУШЕН' : hack ? 'ГОРОД ВЗЛОМАН' : 'СВЯЗЬ ПОТЕРЯНА', W / 2, 90);
+  ctx.fillText(STR.gameover.title[k], W / 2, 90);
   ctx.fillStyle = PAL.bone; ctx.font = `12px ${FONT_BODY}`;
-  ctx.fillText(win ? 'Реактор спящего кластера интегрирован в юнит — миссия выполнена.' : unit ? 'Корпус разрушен — связь с юнитом потеряна.' : hack ? 'Дикие пробили файрволл — город захвачен.' : 'Город ушёл в гибернацию — канал связи оборван.', W / 2, 112);
+  ctx.fillText(STR.gameover.sub[k], W / 2, 112);
 
   // ── панель пересчёта ──
   const px = 44, pw = W - 88, py = 142, ph = 304;
@@ -245,9 +246,9 @@ function drawGameOver(ctx, buttons, W, H, reason, meta, overT, bank) {
   _panelCorners(ctx, px, py, pw, ph, PAL.gold);
   ctx.fillStyle = 'rgba(34,25,10,0.7)'; ctx.fillRect(px, py, pw, 26);
   ctx.textAlign = 'left'; ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = PAL.gold;
-  ctx.fillText('// ПЕРЕСЧЁТ ЗАБЕГА · ' + META_NAME, px + 14, py + 17);
+  ctx.fillText(STR.gameover.recalc(META_NAME), px + 14, py + 17);
   ctx.textAlign = 'right'; ctx.fillStyle = win ? PAL.toxic : PAL.bloodBright;
-  ctx.fillText(win ? 'СТАТУС · ПОБЕДА' : unit ? 'СТАТУС · КОРПУС' : hack ? 'СТАТУС · ФАЙРВОЛЛ' : 'СТАТУС · СВЯЗЬ', px + pw - 14, py + 17);
+  ctx.fillText(STR.gameover.status[k], px + pw - 14, py + 17);
 
   // ── строки ──
   const rx0 = px + 18, rx1 = px + pw - 18, rowY = py + 58, lineH = 30;
@@ -272,9 +273,9 @@ function drawGameOver(ctx, buttons, W, H, reason, meta, overT, bank) {
   ctx.fillStyle = 'rgba(44,32,12,0.55)'; ctx.fillRect(px + 10, bY, pw - 20, bH);
   const tcx = px + 36, tcy = bY + bH / 2;
   drawMetaToken(ctx, tcx, tcy, 16);   // тот же значок МТ, что в мета-прогрессе
-  ctx.textAlign = 'left'; ctx.font = `10px ${FONT_MONO}`; ctx.fillStyle = PAL.bone; ctx.fillText('ИТОГО ЗА ЗАБЕГ', tcx + 26, bY + 22);
+  ctx.textAlign = 'left'; ctx.font = `10px ${FONT_MONO}`; ctx.fillStyle = PAL.bone; ctx.fillText(STR.gameover.total, tcx + 26, bY + 22);
   const dispBank = (bank - meta.total) + shownTotal;
-  ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.toxic; ctx.fillText(`В БАНКЕ: ${dispBank} ${META_ABBR}`, tcx + 26, bY + bH - 12);
+  ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.toxic; ctx.fillText(STR.gameover.inBank(dispBank, META_ABBR), tcx + 26, bY + bH - 12);
   ctx.textAlign = 'right'; ctx.font = `800 40px ${FONT_DISPLAY}`; ctx.fillStyle = PAL.goldBright; ctx.fillText(`+${shownTotal}`, rx1 - 40, tcy + 13);
   ctx.font = `10px ${FONT_MONO}`; ctx.fillStyle = PAL.gold; ctx.fillText(META_ABBR, rx1, tcy + 13);
 

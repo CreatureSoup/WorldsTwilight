@@ -56,19 +56,19 @@ function metaDomEnsure() {
   root.innerHTML = `
     <header style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;padding:16px 24px;border-bottom:1px solid var(--bronze);background:linear-gradient(180deg,var(--pit),rgba(13,10,14,0.55));z-index:30">
       <div style="display:flex;align-items:center;gap:14px">
-        <button id="mtBack" class="mt-back" title="Назад · ESC" aria-label="Назад"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M13 5 L6 12 L13 19 M6 12 H20"/></svg></button>
+        <button id="mtBack" class="mt-back" title="${STR.meta.ui.backTitle}" aria-label="${STR.meta.ui.backAria}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"><path d="M13 5 L6 12 L13 19 M6 12 H20"/></svg></button>
         <div>
           <div style="margin-bottom:6px;white-space:nowrap"><span style="font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:var(--gold);text-transform:uppercase">META · v5</span></div>
-          <h1 style="font-family:var(--font-display);font-size:32px;font-weight:800;text-transform:uppercase;letter-spacing:-0.03em;color:var(--chalk);line-height:0.92;margin:0">Сеть <span style="color:var(--gold)">памяти</span></h1>
+          <h1 style="font-family:var(--font-display);font-size:32px;font-weight:800;text-transform:uppercase;letter-spacing:-0.03em;color:var(--chalk);line-height:0.92;margin:0">${STR.meta.ui.titleA} <span style="color:var(--gold)">${STR.meta.ui.titleB}</span></h1>
         </div>
       </div>
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
         <div style="position:relative;display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--night);border:1px solid var(--gold)">
           ${_mtBracket('var(--gold)')}${_mtToken(30)}
-          <div><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:var(--ash);text-transform:uppercase">МЕГА-ТОКЕНЫ · ИИ</div>
-          <div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--gold);line-height:1"><b id="mtTok">0</b><span style="font-size:11px;color:var(--ash);margin-left:4px">МТ</span></div></div>
+          <div><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:var(--ash);text-transform:uppercase">${STR.meta.ui.bankLabel}</div>
+          <div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--gold);line-height:1"><b id="mtTok">0</b><span style="font-size:11px;color:var(--ash);margin-left:4px">${STR.meta.ui.mt}</span></div></div>
         </div>
-        <button id="mtReset" style="font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;padding:9px 13px;cursor:pointer;background:transparent;color:var(--blood-bright);border:1px solid var(--blood)">⟲ Сброс</button>
+        <button id="mtReset" style="font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;padding:9px 13px;cursor:pointer;background:transparent;color:var(--blood-bright);border:1px solid var(--blood)">⟲ ${STR.meta.ui.reset}</button>
       </div>
     </header>
     <div style="position:relative;flex:1;display:flex;overflow:hidden">
@@ -81,11 +81,11 @@ function metaDomEnsure() {
         </div>
         <div style="position:absolute;left:18px;bottom:18px;z-index:25;display:flex;flex-direction:column;gap:8px">
           <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:rgba(13,10,14,0.85);border:1px solid var(--bronze)">
-            <span id="mtProgL" style="font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:var(--pewter);text-transform:uppercase">ЗАПИТАНО 0/${META_TOTAL}</span>
+            <span id="mtProgL" style="font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:var(--pewter);text-transform:uppercase">${STR.meta.ui.progress(0, META_TOTAL)}</span>
             <div style="width:130px;height:5px;background:var(--earth);border:1px solid var(--bronze)"><div id="mtProgBar" style="height:100%;width:0;background:var(--gold)"></div></div>
           </div>
           <div style="display:flex;gap:14px;padding:7px 12px;background:rgba(13,10,14,0.85);border:1px solid var(--bronze)">
-            ${_mtLegend('var(--gold)', 'запитан', 'fill')}${_mtLegend('var(--gold)', 'доступен')}${_mtLegend('var(--carbon)', 'виден', 'dash')}${_mtLegend('var(--bronze)', 'скрыт', 'ghost')}
+            ${_mtLegend('var(--gold)', STR.meta.ui.legPowered, 'fill')}${_mtLegend('var(--gold)', STR.meta.ui.legAvail)}${_mtLegend('var(--carbon)', STR.meta.ui.legVisible, 'dash')}${_mtLegend('var(--bronze)', STR.meta.ui.legHidden, 'ghost')}
           </div>
         </div>
       </div>
@@ -94,12 +94,12 @@ function metaDomEnsure() {
     <div id="mtModal" style="position:absolute;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(7,5,10,0.72)">
       <div style="width:380px;max-width:80%;position:relative;background:linear-gradient(180deg,var(--night),var(--pit));border:1px solid var(--blood);padding:26px;box-shadow:0 20px 60px -20px rgba(0,0,0,0.8)">
         ${_mtBracket('var(--blood)')}
-        <div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:var(--blood-bright);text-transform:uppercase;margin-bottom:10px">// ВНИМАНИЕ</div>
-        <div style="font-family:var(--font-display);font-size:20px;font-weight:700;text-transform:uppercase;color:var(--chalk);margin-bottom:10px">Сбросить сеть памяти?</div>
-        <p style="font-family:var(--font-body);font-size:13.5px;color:var(--bone);line-height:1.55;margin:0 0 22px">Все запитанные узлы погаснут. Потраченные МЕГА-ТОКЕНЫ полностью вернутся в банк.</p>
+        <div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:var(--blood-bright);text-transform:uppercase;margin-bottom:10px">${STR.meta.ui.modalTag}</div>
+        <div style="font-family:var(--font-display);font-size:20px;font-weight:700;text-transform:uppercase;color:var(--chalk);margin-bottom:10px">${STR.meta.ui.modalTitle}</div>
+        <p style="font-family:var(--font-body);font-size:13.5px;color:var(--bone);line-height:1.55;margin:0 0 22px">${STR.meta.ui.modalBody}</p>
         <div style="display:flex;gap:12px">
-          <button id="mtCancelReset" style="flex:1;padding:12px;font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;background:transparent;color:var(--bone);border:1px solid var(--bronze);cursor:pointer">Отмена</button>
-          <button id="mtDoReset" style="flex:1;padding:12px;font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;background:var(--blood);color:var(--chalk);border:1px solid var(--blood-bright);cursor:pointer">Сбросить</button>
+          <button id="mtCancelReset" style="flex:1;padding:12px;font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;background:transparent;color:var(--bone);border:1px solid var(--bronze);cursor:pointer">${STR.meta.ui.cancel}</button>
+          <button id="mtDoReset" style="flex:1;padding:12px;font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;background:var(--blood);color:var(--chalk);border:1px solid var(--blood-bright);cursor:pointer">${STR.meta.ui.confirmReset}</button>
         </div>
       </div>
     </div>`;
@@ -187,15 +187,20 @@ function _mtWorldHTML(save) {
     const fill = o ? `radial-gradient(circle at 50% 36%, ${acc}5e, rgba(13,10,8,0.92))` : 'rgba(13,10,8,0.92)';
     const glow = sel ? `0 0 30px -2px ${acc}` : o ? `0 0 22px -5px ${acc}, inset 0 0 20px -9px ${acc}` : 'none';
     const innerBox = `<div style="width:100%;height:100%;position:relative;transform:rotate(45deg);border-radius:${corner};border:2px solid ${borderC};border-style:${vis ? 'dashed' : 'solid'};background:${fill};box-shadow:${glow};display:flex;align-items:center;justify-content:center">${inner}</div>`;
+    // ⚠️ ИНВАРИАНТ: подпись узла ВСЕГДА центрируется строго под узлом — `left:50%` (центр бокса узла = n.x) +
+    // `transform:translateX(-50%)` (сдвиг на свою полуширину) + `text-align:center`. ОБЕ ветки ниже (обычный/ядро)
+    // держат этот контракт; три свойства центровки — НЕ менять. ⚠️ Ширина — `width:max-content` (бокс ОБНИМАЕТ текст),
+    // НЕ фиксированная: при фикс-ширине одиночное слово ШИРЕ бокса (напр. «РАЦИОНАЛИЗАЦИЯ» 132px > 124px) браузер
+    // прижимает строку влево (overflow только вправо) → подпись съезжает. `max-width` даёт перенос многословным.
     let label = '';
     if (!hid && n.kind !== 'core') {
-      label = `<div style="position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:6px;width:${Math.max(124, R * 3)}px;text-align:center;pointer-events:none">
+      label = `<div style="position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:6px;width:max-content;max-width:${Math.max(148, R * 3)}px;text-align:center;pointer-events:none">
         <div style="font-family:var(--font-display);font-size:${n.kind === 'cap' ? 20 : 16}px;font-weight:700;text-transform:uppercase;letter-spacing:-0.01em;color:${o ? 'var(--chalk)' : av ? 'var(--bone)' : 'var(--pewter)'};line-height:1.05">${vis ? '? ? ?' : n.name}</div>
-        ${o ? `<div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.16em;color:${acc};margin-top:3px">● ЗАПИТАН</div>` : ''}
+        ${o ? `<div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.16em;color:${acc};margin-top:3px">● ${STR.meta.ui.nodePowered}</div>` : ''}
         ${av ? `<div style="display:inline-flex;align-items:center;gap:4px;margin-top:3px;font-family:var(--font-mono);font-size:11px;color:${can ? 'var(--gold)' : 'var(--blood-bright)'}">${_mtToken(11)}${n.cost}</div>` : ''}
-        ${(o || av) && typeof metaUnlocksModule === 'function' && metaUnlocksModule(n.id) ? `<div style="display:block;margin:4px auto 0;width:fit-content;padding:1px 6px;border:1px solid var(--toxic);font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;color:var(--toxic)">+МОДУЛЬ</div>` : ''}
-        ${(o || av) && typeof metaUnlocksStruct === 'function' && metaUnlocksStruct(n.id) ? `<div style="display:block;margin:4px auto 0;width:fit-content;padding:1px 6px;border:1px solid ${acc};font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;color:${acc}">+СТРУКТУРА</div>` : ''}
-        ${vis ? `<div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.16em;color:var(--ash);margin-top:3px">🔒 ЗАКРЫТ</div>` : ''}</div>`;
+        ${(o || av) && typeof metaUnlocksModule === 'function' && metaUnlocksModule(n.id) ? `<div style="display:block;margin:4px auto 0;width:fit-content;padding:1px 6px;border:1px solid var(--toxic);font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;color:var(--toxic)">${STR.meta.ui.tagModule}</div>` : ''}
+        ${(o || av) && typeof metaUnlocksStruct === 'function' && metaUnlocksStruct(n.id) ? `<div style="display:block;margin:4px auto 0;width:fit-content;padding:1px 6px;border:1px solid ${acc};font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;color:${acc}">${STR.meta.ui.tagStruct}</div>` : ''}
+        ${vis ? `<div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.16em;color:var(--ash);margin-top:3px">🔒 ${STR.meta.ui.nodeLocked}</div>` : ''}</div>`;
     } else if (!hid) {
       label = `<div style="position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:8px;text-align:center;pointer-events:none">
         <div style="font-family:var(--font-display);font-size:22px;font-weight:800;text-transform:uppercase;letter-spacing:-0.01em;color:var(--chalk)">${n.name}</div>
@@ -210,34 +215,34 @@ function _mtWorldHTML(save) {
 function mtRenderCard() {
   _mtHold = null;   // карточка перерисована — старый контроллер удержания невалиден (пере-привяжем ниже, если узел покупаем)
   const save = _mtGame.save, n = _mtSel ? META_BY_ID[_mtSel] : null, card = _mt.card;
-  if (!n) { card.innerHTML = `<div style="padding:40px 26px;text-align:center;color:var(--ash);font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;line-height:1.8"><div style="opacity:0.4;margin-bottom:14px;display:flex;justify-content:center">${_mtToken(40)}</div>выбери узел<br>сети памяти</div>`; return; }
+  if (!n) { card.innerHTML = `<div style="padding:40px 26px;text-align:center;color:var(--ash);font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;line-height:1.8"><div style="opacity:0.4;margin-bottom:14px;display:flex;justify-content:center">${_mtToken(40)}</div>${STR.meta.ui.cardEmptyA}<br>${STR.meta.ui.cardEmptyB}</div>`; return; }
   const acc = n.accent, s = metaState(save, n), owned = metaUnlocked(save, n.id), can = metaCanBuy(save, n);
-  const stTag = { owned: ['ЗАПИТАН', acc], avail: ['ДОСТУПЕН', 'var(--gold)'], visible: ['ЗАКРЫТ', 'var(--pewter)'], hidden: ['СКРЫТ', 'var(--ash)'] }[s];
+  const stTag = { owned: [STR.meta.ui.stOwned, acc], avail: [STR.meta.ui.stAvail, 'var(--gold)'], visible: [STR.meta.ui.stVisible, 'var(--pewter)'], hidden: [STR.meta.ui.stHidden, 'var(--ash)'] }[s];
   const hasMod = typeof metaUnlocksModule === 'function' && metaUnlocksModule(n.id);   // узел открывает новый модуль сборки
   const hasStruct = typeof metaUnlocksStruct === 'function' && metaUnlocksStruct(n.id);   // узел открывает новую структуру для печати
   const prereq = metaDepNames(n);
   const lbl = (c) => `font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:${c};text-transform:uppercase`;
   // КРУПНЫЙ красный баннер для узлов БЕЗ функционала (n.wip) — виден когда описание расшифровано (не 'visible'). Убираем флаг по мере реализации.
-  const wipBanner = (n.wip && s !== 'visible') ? `<div style="margin-bottom:14px;padding:10px 13px;border:1px solid var(--blood);border-left:3px solid var(--blood-bright);background:rgba(168,40,28,0.12)"><div style="font-family:var(--font-display);font-size:16px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--blood-bright);line-height:1">В РАЗРАБОТКЕ</div><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;color:var(--bone);margin-top:5px;text-transform:uppercase">функционал ещё не подключён</div></div>` : '';
-  let body = wipBanner + `<div><div style="${lbl('var(--ash)')}">ОПИСАНИЕ</div><p style="margin:8px 0 0;font-family:var(--font-body);font-size:13.5px;color:var(--bone);line-height:1.6">${s === 'visible' ? 'Узел зафиксирован сканером, но ещё не расшифрован. Запитай соседний узел, чтобы открыть описание и эффект.' : n.desc}</p></div>`;
-  if (s !== 'visible' && prereq.length) body += `<div style="margin-top:16px"><div style="${lbl('var(--ash)')}">ТРЕБУЕТ</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${prereq.map((p) => `<span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--bone);background:var(--earth);border:1px solid var(--bronze);padding:4px 8px">${p}</span>`).join('')}</div></div>`;
-  if (n.kind === 'cap') body += `<div style="margin-top:16px;padding:12px 14px;border:1px solid var(--gold-dim);background:rgba(212,160,66,0.05)"><div style="${lbl('var(--gold)')}">ВЕРШИНА СЕТИ</div><p style="margin:6px 0 0;font-family:var(--font-body);font-size:12.5px;color:var(--pewter);line-height:1.55">Сходятся все три внешних узла верхней ветви. Самый дорогой и ценный узел дерева.</p></div>`;
+  const wipBanner = (n.wip && s !== 'visible') ? `<div style="margin-bottom:14px;padding:10px 13px;border:1px solid var(--blood);border-left:3px solid var(--blood-bright);background:rgba(168,40,28,0.12)"><div style="font-family:var(--font-display);font-size:16px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--blood-bright);line-height:1">${STR.meta.ui.wipTitle}</div><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;color:var(--bone);margin-top:5px;text-transform:uppercase">${STR.meta.ui.wipSub}</div></div>` : '';
+  let body = wipBanner + `<div><div style="${lbl('var(--ash)')}">${STR.meta.ui.hDesc}</div><p style="margin:8px 0 0;font-family:var(--font-body);font-size:13.5px;color:var(--bone);line-height:1.6">${s === 'visible' ? STR.meta.ui.descLocked : n.desc}</p></div>`;
+  if (s !== 'visible' && prereq.length) body += `<div style="margin-top:16px"><div style="${lbl('var(--ash)')}">${STR.meta.ui.hRequires}</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${prereq.map((p) => `<span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--bone);background:var(--earth);border:1px solid var(--bronze);padding:4px 8px">${p}</span>`).join('')}</div></div>`;
+  if (n.kind === 'cap') body += `<div style="margin-top:16px;padding:12px 14px;border:1px solid var(--gold-dim);background:rgba(212,160,66,0.05)"><div style="${lbl('var(--gold)')}">${STR.meta.ui.capTitle}</div><p style="margin:6px 0 0;font-family:var(--font-body);font-size:12.5px;color:var(--pewter);line-height:1.55">${STR.meta.ui.capDesc}</p></div>`;
   let footer;
-  if (owned) footer = `<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border:1px solid ${acc};color:${acc};font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase">● УЗЕЛ ЗАПИТАН</div>`;
-  else footer = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="${lbl('var(--ash)')}">СТОИМОСТЬ</span><span style="display:inline-flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:20px;font-weight:700;color:${can ? 'var(--gold)' : 'var(--blood-bright)'}">${_mtToken(20)}${n.cost}<span style="font-size:11px;color:var(--ash)">МТ</span></span></div>
-    <button id="mtBuy" ${can ? '' : 'disabled'} style="position:relative;overflow:hidden;width:100%;padding:14px;cursor:${can ? 'pointer' : 'not-allowed'};font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;background:${can ? 'rgba(212,160,66,0.14)' : 'transparent'};color:${can ? 'var(--gold-bright)' : 'var(--ash)'};border:1px solid ${can ? 'var(--gold)' : 'var(--bronze)'};clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px))"><span id="mtBuyFill" style="position:absolute;left:0;top:0;height:100%;width:0;background:var(--gold);opacity:.9;z-index:0"></span><span style="position:relative;z-index:1">${s === 'visible' ? '🔒 СНАЧАЛА ОТКРОЙ СОСЕДА' : can ? '▸ УДЕРЖИ · ЗАПИТАТЬ' : `НЕ ХВАТАЕТ ${n.cost - (save.meta || 0)} МТ`}</span></button>`;
+  if (owned) footer = `<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border:1px solid ${acc};color:${acc};font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase">● ${STR.meta.ui.nodePoweredFull}</div>`;
+  else footer = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="${lbl('var(--ash)')}">${STR.meta.ui.hCost}</span><span style="display:inline-flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:20px;font-weight:700;color:${can ? 'var(--gold)' : 'var(--blood-bright)'}">${_mtToken(20)}${n.cost}<span style="font-size:11px;color:var(--ash)">${STR.meta.ui.mt}</span></span></div>
+    <button id="mtBuy" ${can ? '' : 'disabled'} style="position:relative;overflow:hidden;width:100%;padding:14px;cursor:${can ? 'pointer' : 'not-allowed'};font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;background:${can ? 'rgba(212,160,66,0.14)' : 'transparent'};color:${can ? 'var(--gold-bright)' : 'var(--ash)'};border:1px solid ${can ? 'var(--gold)' : 'var(--bronze)'};clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px))"><span id="mtBuyFill" style="position:absolute;left:0;top:0;height:100%;width:0;background:var(--gold);opacity:.9;z-index:0"></span><span style="position:relative;z-index:1">${s === 'visible' ? '🔒 ' + STR.meta.ui.buyLocked : can ? '▸ ' + STR.meta.ui.buyHold : STR.meta.ui.buyShort(n.cost - (save.meta || 0))}</span></button>`;
   card.innerHTML = `${_mtBracket(acc)}
     <div style="padding:18px 22px 16px;border-bottom:1px solid ${acc}40;position:relative">
       <button id="mtClose" style="position:absolute;top:14px;right:16px;background:none;border:none;color:var(--pewter);cursor:pointer;font-family:var(--font-mono);font-size:16px;line-height:1">✕</button>
       <div style="display:flex;gap:14px;align-items:flex-start">
         <div style="width:52px;height:52px;flex-shrink:0;border:1px solid ${acc};display:flex;align-items:center;justify-content:center;color:${acc};background:var(--earth);clip-path:polygon(0 8px,8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%)">${MICON[n.icon] || ''}</div>
-        <div style="min-width:0"><div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><span style="width:8px;height:8px;background:${acc};display:inline-block"></span><span style="${lbl(acc)}">${n.sys || 'ЯДРО'}</span></div>
+        <div style="min-width:0"><div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><span style="width:8px;height:8px;background:${acc};display:inline-block"></span><span style="${lbl(acc)}">${n.sys || STR.meta.ui.sysCore}</span></div>
         <div style="font-family:var(--font-display);font-size:20px;font-weight:700;text-transform:uppercase;letter-spacing:-0.02em;color:var(--chalk);line-height:1.02">${n.name}</div></div>
       </div>
       <div style="margin-top:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <div style="display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid ${stTag[1]};color:${stTag[1]};font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase"><span style="width:6px;height:6px;border-radius:50%;background:${stTag[1]}"></span>${stTag[0]}</div>
-        ${hasMod ? `<div style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--toxic);color:var(--toxic);font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase"><b style="font-weight:700">+</b>МОДУЛЬ</div>` : ''}
-        ${hasStruct ? `<div style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid ${acc};color:${acc};font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase"><b style="font-weight:700">+</b>СТРУКТУРА</div>` : ''}
+        ${hasMod ? `<div style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--toxic);color:var(--toxic);font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase"><b style="font-weight:700">+</b>${STR.meta.ui.cardModule}</div>` : ''}
+        ${hasStruct ? `<div style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid ${acc};color:${acc};font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase"><b style="font-weight:700">+</b>${STR.meta.ui.cardStruct}</div>` : ''}
       </div>
     </div>
     <div style="padding:18px 22px;display:flex;flex-direction:column;flex:1;overflow-y:auto">${body}</div>
@@ -262,7 +267,7 @@ function mtRender() {
   _mt.world.innerHTML = _mtWorldHTML(save);
   _mt.tok.textContent = save.meta || 0;
   const pc = metaPoweredCount(save);
-  _mt.progL.textContent = `ЗАПИТАНО ${pc}/${META_TOTAL}`;
+  _mt.progL.textContent = STR.meta.ui.progress(pc, META_TOTAL);
   _mt.progBar.style.width = (100 * pc / META_TOTAL) + '%';
   mtRenderCard();
 }

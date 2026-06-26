@@ -63,17 +63,17 @@ function drawArtifactModal(ctx, game, W, H) {
   ctx.save();
   ctx.fillStyle = 'rgba(8,7,6,0.74)'; ctx.fillRect(0, 0, W, H);
   const pw = 760, ph = 380, px = (W - pw) / 2, py = (H - ph) / 2;
-  const cy = (typeof techPanel === 'function') ? techPanel(ctx, px, py, pw, ph, { accent: ART_ACCENT, label: '// АРТЕФАКТ · АКТИВАЦИЯ', serial: 'RELIC' }) : py + 30;
+  const cy = (typeof techPanel === 'function') ? techPanel(ctx, px, py, pw, ph, { accent: ART_ACCENT, label: STR.world.artifact.tag, serial: 'RELIC' }) : py + 30;
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = PAL.chalk; ctx.font = `700 26px ${FONT_DISPLAY}`;
-  ctx.fillText('ЧТО СДЕЛАТЬ С НАХОДКОЙ?', W / 2, cy + 24);
+  ctx.fillText(STR.world.artifact.prompt, W / 2, cy + 24);
   ctx.fillStyle = PAL.ash; ctx.font = `9px ${FONT_MONO}`;
-  ctx.fillText('← → ВЫБОР · ENTER ПОДТВЕРДИТЬ', W / 2, cy + 42);
+  ctx.fillText(STR.world.artifact.hint, W / 2, cy + 42);
 
   const choices = [
-    { label: 'ИЗВЛЕЧЬ ТЕХНОЛОГИЮ', sub: a.tech.name, desc: a.tech.desc, accent: ART_ACCENT, icon: 'tech' },
-    { label: 'ОТДАТЬ ГОРОДУ', sub: '+ ДАННЫЕ', desc: 'Фрагменты данных в кодекс и в зачёт забега (МТ).', accent: PAL.cobalt || '#5a8fd6', icon: 'data' },
-    { label: 'ПЕРЕРАБОТАТЬ', sub: '+ РЕСУРСЫ', desc: 'Несколько единиц ресурса дропом — подбери и неси.', accent: PAL.toxic || '#c8e25a', icon: 'scrap' },
+    { label: STR.world.artifact.tech.label, sub: a.tech.name, desc: a.tech.desc, accent: ART_ACCENT, icon: 'tech' },
+    { label: STR.world.artifact.data.label, sub: STR.world.artifact.data.sub, desc: STR.world.artifact.data.desc, accent: PAL.cobalt || '#5a8fd6', icon: 'data' },
+    { label: STR.world.artifact.scrap.label, sub: STR.world.artifact.scrap.sub, desc: STR.world.artifact.scrap.desc, accent: PAL.toxic || '#c8e25a', icon: 'scrap' },
   ];
   const gap = 22, cardW = (pw - 44 - gap * 2) / 3, cardH = 210, cardY = cy + 62, x0 = px + 22;
   const rects = [];
@@ -92,7 +92,7 @@ function drawArtifactModal(ctx, game, W, H) {
     ctx.fillStyle = PAL.pewter; ctx.font = `11px ${FONT_MONO}`; ctx.textAlign = 'left';
     const lines = _artWrap(ctx, c.desc, cardW - 26);
     lines.forEach((ln, k) => ctx.fillText(ln, cx + 13, cardY + 142 + k * 15));
-    if (sel) { ctx.textAlign = 'center'; ctx.fillStyle = c.accent; ctx.font = `bold 10px ${FONT_MONO}`; ctx.fillText('▸ ВЫБРАТЬ', cx + cardW / 2, cardY + cardH - 14); }
+    if (sel) { ctx.textAlign = 'center'; ctx.fillStyle = c.accent; ctx.font = `bold 10px ${FONT_MONO}`; ctx.fillText('▸ ' + STR.world.artifact.select, cx + cardW / 2, cardY + cardH - 14); }
   }
   game._artifactRects = rects;
   ctx.restore();

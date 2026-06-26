@@ -6,7 +6,7 @@
 // тратится ТОЛЬКО при завершении печати; отмена по Esc (place или build) — без траты. Юнит залочен
 // (unit.frozenPrint) в place и build. Размещение — на тайл-воздух с твёрдой поверхностью, в радиусе PRINT_REACH.
 
-const PRINT_TYPES = ['wall', 'spike', 'turret_mg', 'turret_rail', 'turret_mw', 'emp', 'repulsor', 'jammer', 'repair_drone', 'battery'];   // полный ростер; видимость чертежа — гейт по узлам меты (STRUCT_UNLOCK)
+const PRINT_TYPES = ['wall', 'spike', 'turret_mg', 'turret_rail', 'turret_mw', 'emp', 'repulsor', 'jammer', 'repair_drone', 'battery', 'siege_tower'];   // полный ростер; видимость чертежа — гейт по узлам меты (STRUCT_UNLOCK)
 
 Object.assign(Game.prototype, {
   printActive() { return !!(this.unit && this.unit.modules && this.unit.modules.aux === 'print'); },
@@ -80,7 +80,7 @@ Object.assign(Game.prototype, {
         const cost = this.structCost(this.printStruct.type);
         for (const k in cost) this.inventory.cargo[k] = Math.max(0, (this.inventory.cargo[k] || 0) - cost[k]);
         if (this.fx) this.fx.burst(this.printStruct.px, this.printStruct.py, Object.keys(cost));
-        if (this.logEvent) this.logEvent('СТРУКТУРА НАПЕЧАТАНА · ' + STRUCT_DEFS[this.printStruct.type].name.toUpperCase());
+        if (this.logEvent) this.logEvent(STR.log.structPrinted(STRUCT_DEFS[this.printStruct.type].name.toUpperCase()));
         this.printStruct = null; this.printMode = null;
         if (this.unit) this.unit.frozenPrint = false;
       }

@@ -75,19 +75,19 @@ class World {
     return 4.0;
   }
   layerName(y) {
-    if (y < SURFACE_ROWS) return 'поверхность';
-    for (const c of CEILING_CRUSTS) if (y >= c.y0 && y <= c.y1) return 'завал';
+    if (y < SURFACE_ROWS) return STR.hud.strata.surface;
+    for (const c of CEILING_CRUSTS) if (y >= c.y0 && y <= c.y1) return STR.hud.strata.rubble;
     if (y < CAVE_Y0) {                          // страты НАД городом (погребённая цивилизация)
-      if (y <= CEIL_BANDS[0]) return 'пепел';
-      if (y <= CEIL_BANDS[1]) return 'ржавчина';
-      if (y <= CEIL_BANDS[2]) return 'завал';
-      return 'перегной';
+      if (y <= CEIL_BANDS[0]) return STR.hud.strata.ash;
+      if (y <= CEIL_BANDS[1]) return STR.hud.strata.rust;
+      if (y <= CEIL_BANDS[2]) return STR.hud.strata.rubble;
+      return STR.hud.strata.humus;
     }
-    if (y <= CAVE_FLOOR_Y) return 'город';
-    if (y >= CRUST_Y0 && y <= CRUST_Y1) return 'корка';
-    if (y <= MAP_H * 0.5) return 'верхний';
-    if (y <= MAP_H * 0.78) return 'средний';
-    return 'глубокий';
+    if (y <= CAVE_FLOOR_Y) return STR.hud.strata.city;
+    if (y >= CRUST_Y0 && y <= CRUST_Y1) return STR.hud.strata.crust;
+    if (y <= MAP_H * 0.5) return STR.hud.strata.upper;
+    if (y <= MAP_H * 0.78) return STR.hud.strata.middle;
+    return STR.hud.strata.deep;
   }
   // Стартовая пещера — ОРГАНИЧНАЯ: плоский пол (нижние ряды — функционал базы: принтер/спавн/фундамент) +
   // куполообразный потолок (полу-эллипс) с лёгкой шероховатостью кромки. Детерминированно (tileNoise по x,y)

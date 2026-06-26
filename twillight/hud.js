@@ -10,7 +10,30 @@ function pulseSquare(ctx, x, y, s, color) { ctx.save(); ctx.globalAlpha = blinkA
 
 // ЛАКОНИЧНЫЙ тумблер «ПУТЬ» (показ навигации до города) — справа на ВЕРХНЕМ ряду (вровень с капсулой города /
 // счётчиком циклов). Rect общий с кликом (game.navClick).
-function navHudRect(W) { const w = 58, h = 15; return { x: W - 12 - w, y: 11, w, h }; }
+// МАЯЧОК ГОРОДА — верхний слот; ПУТЬ встаёт ПОД ним, если маячок открыт (оба тумблера не наезжают).
+function beaconHudRect(W) { const w = 58, h = 15; return { x: W - 12 - w, y: 11, w, h }; }
+function navHudRect(W) {
+  const w = 58, h = 15;
+  const down = (typeof metaHas === 'function' && metaHas('amb_beacon')) ? (h + 3) : 0;   // под маячком (если он есть) — иначе верхний слот
+  return { x: W - 12 - w, y: 11 + down, w, h };
+}
+function drawBeaconToggle(ctx, on, W) {
+  const r = beaconHudRect(W), acc = on ? PAL.amber : PAL.bronze, x = r.x, y = r.y, w = r.w, h = r.h, c = 4, iy = y + h / 2;
+  ctx.save();
+  ctx.beginPath();                              // пилюля со срезанными углами (как ПУТЬ)
+  ctx.moveTo(x + c, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + h - c); ctx.lineTo(x + w - c, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + c); ctx.closePath();
+  ctx.fillStyle = on ? 'rgba(240,138,42,0.12)' : 'rgba(13,10,14,0.45)'; ctx.fill();
+  ctx.strokeStyle = acc; ctx.lineWidth = 1; ctx.stroke();
+  // глиф-маяк: стрелка → точка-база (залит=вкл / контур=выкл)
+  ctx.strokeStyle = acc; ctx.fillStyle = acc; ctx.lineWidth = 1; const gx = x + 8;
+  ctx.beginPath(); ctx.moveTo(gx - 3, iy); ctx.lineTo(gx + 2, iy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(gx + 1.5, iy - 2.6); ctx.lineTo(gx + 5, iy); ctx.lineTo(gx + 1.5, iy + 2.6); ctx.closePath(); on ? ctx.fill() : ctx.stroke();
+  ctx.beginPath(); ctx.arc(gx + 9, iy, 1.5, 0, 6.283); on ? ctx.fill() : ctx.stroke();
+  ctx.font = `7px ${FONT_MONO}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  ctx.fillStyle = on ? PAL.chalk : PAL.pewter; ctx.fillText(STR.hud.beaconToggle, x + 27, iy + 0.5);
+  ctx.textBaseline = 'alphabetic';
+  ctx.restore();
+}
 function drawNavToggle(ctx, on, W) {
   const r = navHudRect(W), acc = on ? PAL.cobalt : PAL.bronze, x = r.x, y = r.y, w = r.w, h = r.h, c = 4, iy = y + h / 2;
   ctx.save();
@@ -24,7 +47,7 @@ function drawNavToggle(ctx, on, W) {
   ctx.setLineDash([1.5, 1.5]); ctx.beginPath(); ctx.moveTo(x + 10, iy); ctx.lineTo(x + 16, iy); ctx.stroke(); ctx.setLineDash([]);
   ctx.save(); ctx.translate(x + 19, iy); ctx.rotate(Math.PI / 4); if (on) ctx.fillRect(-1.7, -1.7, 3.4, 3.4); else ctx.strokeRect(-1.7, -1.7, 3.4, 3.4); ctx.restore();
   ctx.font = `7px ${FONT_MONO}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-  ctx.fillStyle = on ? PAL.chalk : PAL.pewter; ctx.fillText('ПУТЬ', x + 27, iy + 0.5);
+  ctx.fillStyle = on ? PAL.chalk : PAL.pewter; ctx.fillText(STR.hud.navToggle, x + 27, iy + 0.5);
   ctx.textBaseline = 'alphabetic';
   ctx.restore();
 }
@@ -60,7 +83,7 @@ function drawPrintHud(ctx, game, W, H) {
   ctx.save();   // ⚠️ ИЗОЛЯЦИЯ: внутри меняем globalAlpha (тусклые карточки/кнопка) — без restore утечка в след. кадр (мир/туман на 0.4 = «туман пропал»)
   const RED = PAL.blood || '#ff3a22', REDB = PAL.bloodBright || '#ff6a4a';
   const types = game.printTypes(), L = printPanelLayout(W, H, types);
-  techPanel(ctx, L.x, L.y, L.w, L.h, { accent: RED, label: '// ПЕЧАТЬ' });
+  techPanel(ctx, L.x, L.y, L.w, L.h, { accent: RED, label: STR.hud.print.title });
   drawCargoToggle(ctx, L.toggle, !!game.hoardCargo);   // тумблер копить/отдавать — только при установленном принтере (плашка видна)
   // имя наведённого чертежа рядом с заголовком — цветом самого объекта (отличным от красного заголовка)
   let hov = null; const m = game.menuMouse;
@@ -68,7 +91,7 @@ function drawPrintHud(ctx, game, W, H) {
   if (hov) {
     ctx.font = `8px ${FONT_MONO}`; ctx.textBaseline = 'top'; ctx.textAlign = 'left';
     ctx.fillStyle = STRUCT_DEFS[hov].color;
-    ctx.fillText(STRUCT_DEFS[hov].name.toUpperCase(), L.x + 11 + ctx.measureText('// ПЕЧАТЬ ').width, L.y + 9);
+    ctx.fillText(STRUCT_DEFS[hov].name.toUpperCase(), L.x + 11 + ctx.measureText(STR.hud.print.title + ' ').width, L.y + 9);
     ctx.textBaseline = 'alphabetic';
   }
   for (const c of L.cards) {
@@ -93,7 +116,7 @@ function drawPrintHud(ctx, game, W, H) {
     ctx.globalAlpha = afford ? 1 : 0.4;
     ctx.fillStyle = afford ? 'rgba(255,58,34,0.2)' : 'rgba(20,16,18,0.6)'; ctx.fillRect(b.x, b.y, b.w, b.h);
     ctx.strokeStyle = afford ? REDB : PAL.bronze; ctx.lineWidth = 1; ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
-    ctx.fillStyle = afford ? PAL.chalk : PAL.pewter; ctx.textAlign = 'center'; ctx.fillText('ПЕЧАТЬ', b.x + b.w / 2, b.y + b.h / 2 + 1);
+    ctx.fillStyle = afford ? PAL.chalk : PAL.pewter; ctx.textAlign = 'center'; ctx.fillText(STR.hud.print.button, b.x + b.w / 2, b.y + b.h / 2 + 1);
     ctx.textAlign = 'left';
   }
   ctx.restore();   // снимает все изменения ctx (globalAlpha/выравнивание) — никакой утечки в кадр
@@ -101,7 +124,7 @@ function drawPrintHud(ctx, game, W, H) {
 // Подсказка в режиме печати: при размещении — управление (steady); при печати — МИГАЮЩАЯ «Esc — отмена».
 function drawPrintHint(ctx, game, W, H) {
   const placing = game.printMode === 'place', REDB = PAL.bloodBright || '#ff6a4a';
-  const msg = placing ? 'ЛКМ / ПРОБЕЛ — ПЕЧАТЬ · R — ПОВОРОТ · ESC — ОТМЕНА' : 'ПЕЧАТЬ… · ESC — ОТМЕНА';
+  const msg = placing ? STR.hud.print.placeHint : STR.hud.print.printingHint;
   ctx.save(); ctx.font = `10px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const tw = ctx.measureText(msg).width, x = W / 2, y = H - 46;   // внизу по центру, над подсказкой управления
   ctx.fillStyle = 'rgba(13,10,14,0.82)'; ctx.fillRect(x - tw / 2 - 11, y - 11, tw + 22, 22);
@@ -231,7 +254,7 @@ function drawCargoToggle(ctx, r, hoard) {
   if (hoard) ctx.fillRect(gx - 4, iy - 3, 8, 6); else ctx.strokeRect(gx - 4 + 0.5, iy - 3 + 0.5, 7, 5);
   ctx.font = `7px ${FONT_MONO}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   ctx.fillStyle = hoard ? PAL.chalk : PAL.pewter;
-  ctx.fillText(hoard ? 'КОПИМ РЕСУРС' : 'СДАЁМ ГОРОДУ', gx + 11, iy + 0.5);
+  ctx.fillText(hoard ? STR.hud.cargo.hoard : STR.hud.cargo.deliver, gx + 11, iy + 0.5);
   ctx.textBaseline = 'alphabetic';
 }
 
@@ -243,7 +266,7 @@ function drawBorerStatus(ctx, game, W, H) {
   const deployed = (game.borers && game.borers.length) || 0, carried = Math.max(0, max - deployed);
   const x = 14, y = H - 96;
   ctx.save(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter; ctx.fillText('// ЩИТЫ-ПРОХОДЧИКИ', x, y);
+  ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter; ctx.fillText(STR.hud.borer.title, x, y);
   const iy = y + 9, iw = 26, ih = 12, gap = 7, r = ih / 2;
   for (let i = 0; i < max; i++) {                              // первые `carried` слотов — несомые, остальные — в ходу
     const ix = x + i * (iw + gap), out = i >= carried, cx0 = ix + r, cx1 = ix + iw - r, cyc = iy + r;
@@ -255,7 +278,7 @@ function drawBorerStatus(ctx, game, W, H) {
     ctx.fillStyle = out ? 'rgba(207,236,207,0.5)' : '#16241a'; ctx.beginPath(); ctx.arc(cx1 - 1.5, cyc, 1.6, 0, 6.283); ctx.fill();
   }
   ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.ash;
-  ctx.fillText(`НЕСУ ${carried} · В ХОДУ ${deployed}`, x, iy + ih + 11);
+  ctx.fillText(STR.hud.borer.counts(carried, deployed), x, iy + ih + 11);
   ctx.restore();
 }
 
@@ -264,16 +287,16 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
 
   // ===== TOP-LEFT: статус юнита (gold) — без энергии (упрощённая модель) =====
   const vx = HUD_VX, vy = HUD_VY, vw = HUD_VW, vh = HUD_VH;
-  let cy = techPanel(ctx, vx, vy, vw, vh, { accent: PAL.gold, label: '// ЮНИТ · НОРД', serial: 'TR-014' });
+  let cy = techPanel(ctx, vx, vy, vw, vh, { accent: PAL.gold, label: STR.hud.unit.title, serial: 'TR-014' });
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = PAL.pewter; ctx.font = `7px ${FONT_MONO}`;
-  ctx.fillText(`${world.layerName(unit.tileY)} · ГЛУБ ${depth} · ${unit.effectiveSpeed().toFixed(1)} т/с`, vx + 11, cy + 8);
+  ctx.fillText(STR.hud.unit.depthLine(world.layerName(unit.tileY), depth, unit.effectiveSpeed().toFixed(1)), vx + 11, cy + 8);
   const bx = vx + 11, bw = vw - 22, bh = 9;
-  hudBar(ctx, bx, cy + 24, bw, bh, unit.hp / unit.stats.maxHp, 'HP / КОРПУС', `${Math.round(unit.hp)}/${unit.stats.maxHp}`, 'hp');
+  hudBar(ctx, bx, cy + 24, bw, bh, unit.hp / unit.stats.maxHp, STR.hud.unit.hp, `${Math.round(unit.hp)}/${unit.stats.maxHp}`, 'hp');
 
   // ===== TOP-LEFT (под статусом): груз (toxic) — фигурки ресурсов + счётчик + тумблер копить/отдавать =====
   const gy = HUD_GY, gh = HUD_GH, used = inv.cargoUsed(), cap = inv.cargoCapacity();
-  const gcy = techPanel(ctx, vx, gy, vw, gh, { accent: PAL.toxic, label: '// ГРУЗ', serial: `${used}/${cap}`, bolts: false });
+  const gcy = techPanel(ctx, vx, gy, vw, gh, { accent: PAL.toxic, label: STR.hud.cargo.title, serial: `${used}/${cap}`, bolts: false });
   const counts = inv.cargoCounts(), keys = Object.keys(RESOURCE_DEFS);
   const cellW = (vw - 24) / keys.length, ry = gcy + 9;
   ctx.textBaseline = 'middle';
@@ -288,7 +311,7 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
   // ===== БАНК ГОРОДА (узел ГОРОД·Счётчик ресурсов): сданные ресурсы — gated `metaHas('amb_hub')` в game =====
   if (dbg.bank) {
     const by = gy + gh + 6, bgh = HUD_BANK_GH;   // авто-сдвиг под (потяжелевшую) плашку ГРУЗ
-    const bcy = techPanel(ctx, vx, by, vw, bgh, { accent: PAL.amber, label: '// БАНК ГОРОДА', bolts: false });
+    const bcy = techPanel(ctx, vx, by, vw, bgh, { accent: PAL.amber, label: STR.hud.bank.title, bolts: false });
     const bry = bcy + 9;
     ctx.textBaseline = 'middle';
     keys.forEach((key, i) => {
@@ -306,7 +329,7 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
     const gx = 580;
     ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = `700 14px ${FONT_DISPLAY}`; ctx.fillStyle = PAL.chalk;
     const cn = (dbg.cycleNum != null) ? dbg.cycleNum : dbg.cycle.n;   // глобальный цикл существования ИИ (эпоха + прожитые)
-    ctx.fillText(`ЦИКЛ ${typeof numGroup === 'function' ? numGroup(cn) : cn}`, gx, 10);
+    ctx.fillText(STR.hud.cycle(typeof numGroup === 'function' ? numGroup(cn) : cn), gx, 10);
     ctx.textBaseline = 'alphabetic';   // прогресс/таймер до волны рисует drawWavePredict (бар всегда, тип+отсчёт — с узлом)
   }
 
@@ -314,7 +337,7 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
   if (typeof SESSION_GOALS !== 'undefined') {
     const rx = W - 12; let dyG = 70;   // ниже капсулы гибернации (она занимает верх справа)
     ctx.textAlign = 'right'; ctx.textBaseline = 'top';
-    ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.gold; ctx.fillText('// ТВОИ ДИРЕКТИВЫ', rx, dyG); dyG += 14;
+    ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.gold; ctx.fillText(STR.hud.directives.title, rx, dyG); dyG += 14;
     for (const g of SESSION_GOALS) {
       ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.bone; ctx.textAlign = 'right';
       ctx.fillText(g.short, rx - 10, dyG + 1);
@@ -334,7 +357,7 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = PAL.chalk; ctx.font = `700 26px ${FONT_DISPLAY}`; ctx.fillText(`${Math.round(frac * 100)}`, ccx, ccy + 2);
     ctx.textBaseline = 'top'; ctx.font = `9px ${FONT_MONO}`; ctx.fillStyle = dbg.scan ? PAL.cobalt : (dbg.scanMsg ? PAL.pewter : PAL.toxic);
-    ctx.fillText(dbg.scan ? 'ИЗВЛЕЧЕНИЕ ДАННЫХ' : (dbg.scanMsg || 'ДАННЫЕ ИЗВЛЕЧЕНЫ'), ccx, ccy + r + 8);
+    ctx.fillText(dbg.scan ? STR.hud.scan.extracting : (dbg.scanMsg || STR.hud.scan.extracted), ccx, ccy + r + 8);
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
 
@@ -342,20 +365,20 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
   {
     const rx = W - 12, last = (dbg.log && dbg.log.length) ? dbg.log.slice(-3) : null;
     ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
-    ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.gold; ctx.fillText('// ЛОГ СОБЫТИЙ', rx, H - 54);
+    ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.gold; ctx.fillText(STR.hud.log.title, rx, H - 54);
     if (last) {
       last.forEach((e, i) => {
         ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
-        ctx.fillText(`Ц${e.cycle} · ${e.text}`, rx, H - 40 + i * 13);
+        ctx.fillText(STR.hud.log.entry(e.cycle, e.text), rx, H - 40 + i * 13);
       });
     } else {
       ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.ash;
-      ctx.fillText('— нет событий —', rx, H - 40);
+      ctx.fillText(STR.hud.log.empty, rx, H - 40);
     }
     ctx.textAlign = 'left';
   }
 
   // ===== BOTTOM: подсказка управления =====
   ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
-  ctx.fillText('WASD · ХОД/ЛАЗАНЬЕ    УПОР В ПОРОДУ = БУР    ESC · ПАУЗА', 12, H - 10);
+  ctx.fillText(STR.hud.controls, 12, H - 10);
 }

@@ -8,7 +8,7 @@
 Object.assign(Game.prototype, {
   // Волны: с началом каждого цикла гнёзда досылают врагов из случайного гнезда.
   onCycleStart(n) {
-    const nests = this.world.wilds; if (!nests.length) return;
+    const nests = this.world.wilds.filter((w) => !w.disabled); if (!nests.length) return;   // подавленные гнёзда волн не шлют
     const nest = () => nests[Math.floor(Math.random() * nests.length)];
     const homeR = (w) => Math.max(w.rx, w.ry) + 1;  // «дом» = вся каверна гнезда, иначе центр недостижим
     // копатель-разведчик: 1/цикл до числа цивилизованных городов, пока есть ненайденные
@@ -87,7 +87,7 @@ Object.assign(Game.prototype, {
         // докапываемся ВПЛОТНУЮ в пещеру любого города (база И чужие): пробой видим игроку,
         // к базе остаётся магистраль для рейдеров. Только база даёт телеграф-предупреждение.
         e.state = 'tocity'; e.target = { x: c.cx, y: c.cy }; e._toBase = (c === this.cities[0]);
-        if (e._toBase) this.logEvent('КОПАТЕЛЬ ЗАСЁК БАЗУ');   // только засёк (издалека, сквозь породу) — без громкой подсказки
+        if (e._toBase) this.logEvent(STR.log.diggerSpotBase);   // только засёк (издалека, сквозь породу) — без громкой подсказки
         break;
       }
       // разведка завершена (все города найдены) → домой, иначе копатель блуждал бы вечно
@@ -100,7 +100,7 @@ Object.assign(Game.prototype, {
       e.cityT = (e.cityT || 0) + 1;
       const reached = e._toBase ? (this.world.inCave(e.tileX, e.tileY) || (e.cityT > DIGGER_TOCITY_LIMIT && this.near(e, e.target.x, e.target.y, RAID_REACH_R))) : this.near(e, e.target.x, e.target.y, RAID_REACH_R);
       if (reached) {
-        if (e._toBase) { this.logEvent('МАГИСТРАЛЬ К БАЗЕ ПРОБИТА'); if (this.hints) this.hints.show('ПРОРЫВ К БАЗЕ'); e.state = 'return'; e.target = { x: e.homeX, y: e.homeY }; e._returning = true; }   // ПРОРЫВ — на РЕАЛЬНОМ влезании в пещеру (виден игроку)
+        if (e._toBase) { this.logEvent(STR.log.tunnelBreached); if (this.hints) this.hints.show(STR.log.breachHint); e.state = 'return'; e.target = { x: e.homeX, y: e.homeY }; e._returning = true; }   // ПРОРЫВ — на РЕАЛЬНОМ влезании в пещеру (виден игроку)
         else { e.state = 'seek'; e.target = null; }   // чужой город — лишь путевая точка: пробил и ПРОДОЛЖАЕТ искать (в т.ч. базу)
       }
     } else if (e.state === 'return') {   // ВОЗВРАТ ПЕШКОМ: gotoDir(airFirst) ведёт по своему тоннелю в гнездо (см. enemy._returning)
@@ -163,7 +163,7 @@ Object.assign(Game.prototype, {
     if (this._inBaseCave(e)) {
       e.draining = true; e.drainT += dt; e.commit = null;
       if (e.drainT >= RAID_DRAIN_TIME) {
-        if (!this.debug) { this.city.drain(RAID_DRAIN); this.logEvent('РЕЙДЕР ВЫСОСАЛ ЭНЕРГИЮ'); } // сначала таймер гибернации, переполнение — в HP кольца
+        if (!this.debug) { this.city.drain(RAID_DRAIN); this.logEvent(STR.log.raiderDrain(ENEMY_RU[e.type])); } // сначала таймер гибернации, переполнение — в HP кольца
         e.carry = 'charge'; e.draining = false; e.drainT = 0;
       }
       return;
@@ -209,12 +209,12 @@ Object.assign(Game.prototype, {
       if (!e.cHit && this.structures) for (const s of this.structures.list) {   // таран пробивает активную структуру при касании
         if (s.dying || s.def.solid || s.state !== 'active') continue;
         if (Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE <= HUNTER_HIT_R) {
-          e.cHit = true; if (!this.debug) { s.damage(HUNTER_STRUCT_DMG); this.logEvent('ОХОТНИК ПРОБИЛ СТРУКТУРУ'); }
+          e.cHit = true; if (!this.debug) { s.damage(HUNTER_STRUCT_DMG); this.logEvent(STR.log.hunterStruct); }
           this._hunterRecoverVel(e); return;
         }
       }
       if (u) { const dpx = wrapDeltaPx(u.px, e.px), dpy = u.py - e.py, d = Math.hypot(dpx, dpy);
-        if (!e.cHit && d / TILE <= HUNTER_HIT_R) { e.cHit = true; if (!this.debug) { u.hp = Math.max(0, u.hp - (HUNTER_DMG_MIN + Math.random() * (HUNTER_DMG_MAX - HUNTER_DMG_MIN))); this.logEvent('ОХОТНИК ТАРАНИЛ ЮНИТ'); } this._hunterRecover(e, dpx, dpy, d); return; }
+        if (!e.cHit && d / TILE <= HUNTER_HIT_R) { e.cHit = true; if (!this.debug) { u.hp = Math.max(0, u.hp - (HUNTER_DMG_MIN + Math.random() * (HUNTER_DMG_MAX - HUNTER_DMG_MIN))); this.logEvent(STR.log.hunterRam); } this._hunterRecover(e, dpx, dpy, d); return; }
       }
       if (e.cBlocked || e.cT >= HUNTER_CHARGE_MAX) this._hunterRecoverVel(e);
     } else if (e.cstate === 'recover') {
@@ -297,7 +297,7 @@ Object.assign(Game.prototype, {
       this.onCycleStart(this.cycle.n); this.lastCycleN = this.cycle.n;
       if (typeof metaHas === 'function' && metaHas('amb_predict')) {   // ПРОГНОЗ (узел amb_predict): лог о НОВОЙ угрозе следующего цикла
         const f = this._waveHeadline(this.cycle.n + 1);
-        if (f && f.isNew) this.logEvent('ПРОГНОЗ · НАДВИГАЕТСЯ: ' + ENEMY_RU[f.type]);
+        if (f && f.isNew) this.logEvent(STR.log.forecast(ENEMY_RU[f.type]));
       }
     }
     for (const e of this.enemies) {

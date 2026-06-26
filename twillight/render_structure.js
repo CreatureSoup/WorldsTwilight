@@ -51,6 +51,7 @@ function drawStructure(ctx, s, cx, cy) {
     if (b === 'microwave' && s.active2) drawMwCone(ctx, s, cx, dcy);
     else if ((b === 'jammer' || b === 'repair') && s.active2) drawAura(ctx, cx, dcy, s.def.radius, s.def.color);
     if ((b === 'emp' || b === 'repulsor') && s.pulse > 0) drawPulseRing(ctx, s, cx, dcy);
+    if (b === 'siege' && s.pulse > 0) drawSiegeShock(ctx, s, cx, dcy);   // резонанс-фронт к гнезду
   }
   ctx.save();
   if (building) ctx.globalAlpha = 0.45;
@@ -64,6 +65,7 @@ function drawStructure(ctx, s, cx, cy) {
     case 'jammer': drawJammerStruct(ctx, s, cx, dcy); break;
     case 'repair': drawRepairStruct(ctx, s, cx, dcy); break;
     case 'battery': drawBatteryStruct(ctx, s, cx, dcy); break;
+    case 'siege': drawSiegeStruct(ctx, s, cx, dcy); break;
   }
   ctx.restore();
   if (building) { drawBuildProgress(ctx, s, cx, dcy); return; }
@@ -189,6 +191,39 @@ function drawPulseRing(ctx, s, cx, cy) {
   const p = Math.min(1, s.pulse / 0.45), rr = s.def.radius * TILE * p;
   ctx.save(); ctx.globalAlpha = (1 - p) * 0.7; ctx.strokeStyle = s.def.color; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.arc(cx, cy, rr, 0, 6.283); ctx.stroke(); ctx.restore();
+}
+
+// ОСАДНАЯ БАШНЯ — высокая мачта с резонанс-диском, поворачивается к гнезду; пульсирующее ядро, когда резонирует.
+function drawSiegeStruct(ctx, s, cx, cy) {
+  const r = TILE / 2 - 4, off = s.active && s.energy < s.def.eShot ? 0.45 : 1;
+  ctx.save(); ctx.globalAlpha *= off; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const baseY = cy + r, topY = cy - r * 1.7;
+  ctx.strokeStyle = '#5a4a44'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(cx, baseY); ctx.lineTo(cx, topY); ctx.stroke();   // мачта
+  ctx.strokeStyle = '#3a302c'; ctx.lineWidth = 2; ctx.beginPath();   // раскосы
+  ctx.moveTo(cx - r * 0.7, baseY); ctx.lineTo(cx, cy - r * 0.2); ctx.lineTo(cx + r * 0.7, baseY); ctx.stroke();
+  const a = s.aimAng != null ? s.aimAng : -Math.PI / 2, dx = Math.cos(a), dy = Math.sin(a);
+  const hx = cx + dx * 3, hy = topY + dy * 3;
+  ctx.strokeStyle = s.def.color; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(hx, hy, r * 0.6, a - 1.15, a + 1.15); ctx.stroke();   // дуга-излучатель к цели
+  const beat = s.active2 ? (0.55 + 0.45 * Math.sin(performance.now() / 120)) : 0.45;
+  ctx.fillStyle = s.flash > 0 ? '#fff0e0' : s.def.color; ctx.globalAlpha *= beat;
+  ctx.beginPath(); ctx.arc(hx, hy, r * 0.24, 0, 6.283); ctx.fill();   // ядро-резонатор
+  ctx.restore();
+}
+
+// Резонанс-фронт: дуги-волны уходят от башни В СТОРОНУ гнезда (s.aimAng) — площадной удар, не луч.
+function drawSiegeShock(ctx, s, cx, cy) {
+  const p = Math.min(1, s.pulse / 0.45);
+  const a = s.aimAng != null ? s.aimAng : -Math.PI / 2, dx = Math.cos(a), dy = Math.sin(a);
+  const reach = s.def.range * TILE * 0.5;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (let i = 0; i < 3; i++) {
+    const f = p - i * 0.22; if (f <= 0 || f > 1) continue;
+    const d = f * reach;
+    ctx.globalAlpha = 0.4 * (1 - f); ctx.strokeStyle = s.def.color; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(cx + dx * d, cy + dy * d, TILE * 0.5 * f, a - 1.2, a + 1.2); ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawEnergyBar(ctx, s, cx, cy) {

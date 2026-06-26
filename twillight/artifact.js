@@ -21,7 +21,7 @@ Object.assign(Game.prototype, {
   },
   openArtifact(a) {
     this.pendingArtifact = a; this.artifactSel = 0; this.mode = 'artifact';
-    if (this.logEvent) this.logEvent('АРТЕФАКТ ОТКОПАН');
+    if (this.logEvent) this.logEvent(STR.log.artifactDug);
   },
   _artifactConsume(a) {   // потребить объект — все его тайлы в воздух (noTrigger: не сыпать породу сверху)
     for (let dy = 0; dy < a.h; dy++) for (let dx = 0; dx < a.w; dx++) this.world.setAir(wrapX(a.tx + dx), a.ty + dy, true);
@@ -31,15 +31,15 @@ Object.assign(Game.prototype, {
     const a = this.pendingArtifact; if (!a) return;
     if (idx === 0) {                                   // ИЗВЛЕЧЬ ТЕХНОЛОГИЮ (эффект — позже)
       (this.artifactTechs || (this.artifactTechs = [])).push(a.tech.id);
-      if (this.logEvent) this.logEvent('ТЕХНОЛОГИЯ ИЗВЛЕЧЕНА: ' + a.tech.name);
+      if (this.logEvent) this.logEvent(STR.log.techExtracted(a.tech.name));
     } else if (idx === 1) {                            // ОТДАТЬ ГОРОДУ — ДАННЫЕ
       this.dataCount = (this.dataCount || 0) + 1;
       { const r = this._dataGain(ARTIFACT_DATA); if (r && typeof codexPopupShow === 'function') codexPopupShow(r, this._codexAnchor()); }   // множитель kart_data учитывается
-      if (this.logEvent) this.logEvent('ДАННЫЕ АРТЕФАКТА ПЕРЕДАНЫ ГОРОДУ');
+      if (this.logEvent) this.logEvent(STR.log.artifactDataGiven);
     } else {                                           // ПЕРЕРАБОТАТЬ — РЕСУРСЫ (дроп лутом из центра)
       const keys = Object.keys(RESOURCE_DEFS), cx = a.tx + a.w / 2, cy = a.ty + a.h / 2;
       if (this.loot) for (let i = 0; i < ARTIFACT_SCRAP; i++) this.loot.spawn(wrapX(Math.round(cx + (Math.random() * 2 - 1))), Math.max(0, Math.round(cy + (Math.random() * 2 - 1))), keys[Math.floor(Math.random() * keys.length)]);
-      if (this.logEvent) this.logEvent('АРТЕФАКТ ПЕРЕРАБОТАН В РЕСУРС');
+      if (this.logEvent) this.logEvent(STR.log.artifactRecycled);
     }
     a.resolved = true; this._artifactConsume(a);
     this.pendingArtifact = null; this.mode = 'playing';

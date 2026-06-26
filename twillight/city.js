@@ -87,8 +87,8 @@ class City {
     if (this.activeRing() < 0) this.dead = true;
   }
 
-  update(dt, atBase, siphoned) {
-    this._updateState(dt, atBase, siphoned);
+  update(dt, atBase, siphoned, powered) {
+    this._updateState(dt, atBase, siphoned, powered);
     this._stepBarText();   // шаг анимации надписи фазы — состояние шагаем В ЛОГИКЕ (после смены charging/full/dying/timer), не в рендере
   }
 
@@ -104,7 +104,7 @@ class City {
     this._barText = _cityPhaseText(phase);
   }
 
-  _updateState(dt, atBase, siphoned) {
+  _updateState(dt, atBase, siphoned, powered) {
     if (this.dead) return;
     this.charging = false; this.full = false;
 
@@ -120,6 +120,8 @@ class City {
     }
 
     this._autoRepair(dt);   // вне базы контуры медленно чинятся сами (по уровню охвата)
+    this.powered = !!powered;   // print_cable: юнит в зоне питания → таймер ДЕРЖИТСЯ (не тикает, но и не дозаряжается)
+    if (powered) return;
     if (this.timer > 0) { this.timer = Math.max(0, this.timer - dt); return; }
 
     // таймер истёк — город гибнет: текущее кольцо теряет HP

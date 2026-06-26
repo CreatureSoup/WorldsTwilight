@@ -42,7 +42,7 @@ function drawWavePredict(ctx, game, x, y) {
   let tx = x;
   ctx.fillStyle = combat ? PAL.bone : PAL.pewter; ctx.fillText(nm, tx, y + 14); tx += ctx.measureText(nm).width + 8;
   ctx.fillStyle = col; ctx.fillText(mmss, tx, y + 14); tx += ctx.measureText(mmss).width + 8;
-  if (f.isNew) { ctx.fillStyle = '#ff3a22'; ctx.fillText('НОВАЯ', tx, y + 14); }
+  if (f.isNew) { ctx.fillStyle = '#ff3a22'; ctx.fillText(STR.hud.predict.fresh, tx, y + 14); }
   ctx.textBaseline = 'alphabetic';
 }
 

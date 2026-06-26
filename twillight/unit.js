@@ -29,6 +29,17 @@ class Unit {
     else if (prevMax != null && stats.maxHp > prevMax) this.hp += stats.maxHp - prevMax;  // апгрейд корпуса лечит НА ПРИБАВКУ (не полностью)
     this.hp = Math.min(this.hp, stats.maxHp);
   }
+  // print_life «Резервное тело»: тело печатается заново — полный сброс грид-стейта на старт (поля зеркалят конструктор), HP полный.
+  respawn(x, y) {
+    this.tileX = x; this.tileY = y;
+    this.px = x * TILE + TILE / 2; this.py = y * TILE + TILE / 2;
+    this.state = IDLE; this.dx = 1; this.dy = 0; this.faceX = 1; this._ringAim = 0;
+    this.fromX = x; this.fromY = y; this.toX = x; this.toY = y; this.progress = 0;
+    this.drilling = false; this.kinRamp = 0; this.kinDir = null; this.kinIdleT = 0;
+    this.dug = null; this.broke = false; this.crouchT = 0; this.crouchTarget = null;
+    this.frozenPrint = this.frozenImpulse = this.frozenHack = this.frozenSiege = false;
+    this.hp = this.stats.maxHp;
+  }
   // опора: только соседняя порода (клинг). Никаких «искусственных» полов —
   // пол стартовой пещеры держится за породу под ним (гарантируется генерацией).
   anchoredAt(world, x, y) {
@@ -58,6 +69,7 @@ class Unit {
     if (this.frozenPrint) return;   // ПЕЧАТЬ: юнит залочен на месте (ввод/гравитация/бур выкл) — см. print.js
     if (this.frozenImpulse) return; // ИМПУЛЬСНЫЙ БУР: юнит стоит, пока копит заряд (аим/выстрел — impulse.js)
     if (this.frozenHack) return;    // ВЗЛОМ: юнит стоит у сердца города, пока держит канал взлома (hack.js)
+    if (this.frozenSiege) return;   // ОСАДНЫЙ МОДУЛЬ: юнит стоит, пока копит заряд разряда (siege.js)
 
     if (this.dx === 1 || this.dx === -1) this.faceX = this.dx;  // запомнить горизонталь до возможной смены на «вверх/вниз»
 
@@ -131,6 +143,17 @@ class Unit {
       if (reqHx !== 0 && world.tileAt(this.tileX + reqHx, this.tileY - 1).type === AIR) {
         this.dx = reqHx; this.dy = 0;
         this.startMove(this.tileX + reqHx, this.tileY - 1, this.effectiveSpeed());
+        return;
+      }
+      // 1b) print_jump «Толчковые опоры»: ВОЛЬТ на уступ высотой 2 — когда сбоку на 1 стена (обычный залаз невозможен),
+      //     но есть headroom над головой и на 2 — воздух с опорой. Аддитивно: не меняет существующие случаи.
+      if (reqHx !== 0 && typeof metaHas === 'function' && metaHas('print_jump')
+          && world.tileAt(this.tileX, this.tileY - 1).type === AIR
+          && world.tileAt(this.tileX + reqHx, this.tileY - 1).type !== AIR
+          && world.tileAt(this.tileX + reqHx, this.tileY - 2).type === AIR
+          && this.anchoredAt(world, this.tileX + reqHx, this.tileY - 2)) {
+        this.dx = reqHx; this.dy = -1;
+        this.startMove(this.tileX + reqHx, this.tileY - 2, this.effectiveSpeed() * JUMP_SPEED_FRAC);
         return;
       }
       // 2) «вверх» в воздух без явного вбок

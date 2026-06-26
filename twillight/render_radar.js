@@ -8,7 +8,7 @@
 const RADAR_W = 188, RADAR_H = 56, RADAR_RAYS = 14;
 
 function drawRadarCompass(ctx, w, x, y) {
-  techPanel(ctx, x, y, RADAR_W, RADAR_H, { accent: PAL.toxic, label: '// ДЕТЕКТОР ЗАГРЯЗНЕНИЯ', bolts: false, hazardV: PAL.toxic });
+  techPanel(ctx, x, y, RADAR_W, RADAR_H, { accent: PAL.toxic, label: STR.hud.contam.title, bolts: false, hazardV: PAL.toxic });
   const cx = x + 36, cy = y + 34, R = 13, active = w.signal > 0.03, sig = w.signal;
   const pulse = 0.5 + 0.5 * Math.sin(w.t * 5);
 
@@ -66,7 +66,7 @@ function drawRadarCompass(ctx, w, x, y) {
 
   // статус справа (БЕЗ бара — интенсивность читается короной/ядром)
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = `9px ${FONT_MONO}`;
-  if (active) { ctx.fillStyle = PAL.toxic; ctx.fillText('ОЧАГ · В ЗОНЕ', x + 60, cy); }
-  else { ctx.fillStyle = PAL.ash; ctx.fillText('— СКАН ФОНА —', x + 60, cy); }
+  if (active) { ctx.fillStyle = PAL.toxic; ctx.fillText(STR.hud.contam.inZone, x + 60, cy); }
+  else { ctx.fillStyle = PAL.ash; ctx.fillText(STR.hud.contam.scanBg, x + 60, cy); }
   ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
 }

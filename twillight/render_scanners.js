@@ -82,7 +82,7 @@ function drawRadarSwitch(ctx, game) {
   ctx.fillStyle = def.color; ctx.fillRect(r.x + 8, r.y + r.h / 2 - 5, 10, 10);
   ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1; ctx.strokeRect(r.x + 8.5, r.y + r.h / 2 - 4.5, 9, 9);
   ctx.font = `9px ${FONT_MONO}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#cfe0f0';
-  ctx.fillText('РАДАР · ' + def.name.toUpperCase(), r.x + 24, r.y + r.h / 2 + 0.5);
+  ctx.fillText(STR.hud.scan.radarChip(def.name.toUpperCase()), r.x + 24, r.y + r.h / 2 + 0.5);
   ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(127,176,224,0.7)'; ctx.fillText('C ⟳', r.x + r.w - 8, r.y + r.h / 2 + 0.5);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.restore();
 }
@@ -92,8 +92,8 @@ function drawRadarSwitch(ctx, game) {
 // Активный сканер с кулдауном (радар ИЛИ эхо — взаимоисключающие) для виджета кулдауна.
 function scanCdInfo(game) {
   const u = game.unit; if (!u || !u.stats) return null;
-  if (u.stats.radar) { const rs = game.radarSweep; return { label: 'РАДАР', col: '#7fb0e0', cd: rs.cd, cdMax: rs.cdMax || RADAR_CD_BASE, busy: rs.sweeping }; }
-  if (u.stats.echoScan) { const ec = game.echo; return { label: 'ЭХО', col: '#b58cf0', cd: ec.cd, cdMax: ec.cdMax || ECHO_CD_BASE, busy: !!ec.wave }; }
+  if (u.stats.radar) { const rs = game.radarSweep; return { label: STR.hud.scan.radarLabel, col: '#7fb0e0', cd: rs.cd, cdMax: rs.cdMax || RADAR_CD_BASE, busy: rs.sweeping }; }
+  if (u.stats.echoScan) { const ec = game.echo; return { label: STR.hud.scan.echoLabel, col: '#b58cf0', cd: ec.cd, cdMax: ec.cdMax || ECHO_CD_BASE, busy: !!ec.wave }; }
   return null;
 }
 // Виджет кулдауна сканера — ПРАВЫЙ ВЕРХ, ПОД HUD-тумблером ПУТЬ (`navHudRect` y11-26 → этот с y32, не наложатся).
@@ -112,13 +112,13 @@ function drawScanCooldown(ctx, game, W) {
   ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(bx, by, bw, bh);
   if (info.busy) {                                   // идёт скан
     ctx.globalAlpha = 0.5 + 0.4 * Math.abs(Math.sin(t / 120)); ctx.fillStyle = info.col; ctx.fillRect(bx, by, bw, bh);
-    ctx.globalAlpha = 1; ctx.fillStyle = '#0a0a0e'; ctx.textAlign = 'center'; ctx.fillText('СКАН…', bx + bw / 2, y + h / 2);
+    ctx.globalAlpha = 1; ctx.fillStyle = '#0a0a0e'; ctx.textAlign = 'center'; ctx.fillText(STR.hud.scan.scanning, bx + bw / 2, y + h / 2);
   } else if (info.cd > 0) {                           // перезарядка
     ctx.fillStyle = info.col; ctx.globalAlpha = 0.6; ctx.fillRect(bx, by, bw * (1 - info.cd / info.cdMax), bh);
-    ctx.globalAlpha = 1; ctx.fillStyle = '#cfe0f0'; ctx.textAlign = 'right'; ctx.fillText(info.cd.toFixed(1) + 'с', x + w - 8, y + h / 2);
+    ctx.globalAlpha = 1; ctx.fillStyle = '#cfe0f0'; ctx.textAlign = 'right'; ctx.fillText(STR.hud.scan.cdSeconds(info.cd.toFixed(1)), x + w - 8, y + h / 2);
   } else {                                            // готов
     ctx.globalAlpha = 0.5 + 0.4 * Math.abs(Math.sin(t / 350)); ctx.fillStyle = info.col; ctx.fillRect(bx, by, bw, bh);
-    ctx.globalAlpha = 1; ctx.fillStyle = '#0a0a0e'; ctx.textAlign = 'center'; ctx.fillText('ГОТОВ ' + keyHint, bx + bw / 2, y + h / 2);
+    ctx.globalAlpha = 1; ctx.fillStyle = '#0a0a0e'; ctx.textAlign = 'center'; ctx.fillText(STR.hud.scan.ready(keyHint), bx + bw / 2, y + h / 2);
   }
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.restore();
 }

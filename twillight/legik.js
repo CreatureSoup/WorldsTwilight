@@ -126,6 +126,17 @@ function updateLegRig(rig, dt, cx, cy, world, walkVel) {
   let anchored = rig.legs.filter((L) => L.phase === 'shoot' || L.phase === 'hold').length;
   let planted = rig.legs.filter((L) => L.phase === 'hold').length;   // НА ЗЕМЛЕ сейчас (shoot ещё не воткнут) — отдельно от anchored: по этому гейтим отрыв при ходьбе, иначе «парит»
   const sa = rig.supportAngle || 0;
+  // РАСПОРКА: дальняя поверхность (потолок / противоположная стена) по направлению «вверх от опоры».
+  // Если она в пределах ~1 тайла (reach·1.15) — стопа В УПОР к ней: достаёт → на неё, чуть не достаёт
+  // (reach<тайла) → на макс. вылет к ней (стык скрыт окклюзией кромки, §11). Нет породы напротив → null.
+  const braceSurf = (baseX, baseY, ax, ay, reach) => {
+    const bdir = -Math.PI / 2 + sa, s = _ikSurface(world, baseX, baseY, bdir, reach * 1.3, rig._footSink);
+    if (!s) return null;
+    const dd = Math.hypot(s.x - ax, s.y - ay);
+    if (dd > reach * 1.15) return null;
+    const r = Math.min(dd, reach * 0.98);
+    return { x: ax + Math.cos(bdir) * r, y: ay + Math.sin(bdir) * r };
+  };
   for (const L of rig.legs) {
     const dir = L.dir + sa;                                  // направление reach с учётом опоры (вниз/стена/потолок)
     const hox = L.hipOff.x * Math.cos(sa) - L.hipOff.y * Math.sin(sa), hoy = L.hipOff.x * Math.sin(sa) + L.hipOff.y * Math.cos(sa);  // крепление поворачивается с корпусом
@@ -162,18 +173,21 @@ function updateLegRig(rig, dt, cx, cy, world, walkVel) {
           // не слипаются. Верхние ноги тянутся к ПОТОЛКУ (бракинг), если он есть; иначе — на пол.
           const tanX = Math.cos(sa), tanY = Math.sin(sa);                         // вдоль опоры (горизонт на полу)
           const baseX = cx + obx + tanX * L.stance * TILE, baseY = cy + oby + tanY * L.stance * TILE;
-          const downDir = Math.PI / 2 + sa, upDir = -Math.PI / 2 + sa;
+          const downDir = Math.PI / 2 + sa;
           // скан с запасом 1.3 (как ходячий 1.5): скан идёт от уровня ТЕЛА, а бедро может сидеть НИЖЕ
           // центра — без запаса нога с коротким reach не «видела» пол, хотя от бедра достаёт (вечный
           // ready = дрожь «не найду опору»). Гейт планта по реальной дистанции от бедра — ниже, без изменений.
-          for (const sd of (L.up ? [upDir, downDir] : [downDir])) {
-            const s = _ikSurface(world, baseX, baseY, sd, L.reach * 1.3, rig._footSink);
-            if (s && Math.hypot(s.x - ax, s.y - ay) <= L.reach * 0.99) { surf = s; break; }
-          }
+          if (L.up) surf = braceSurf(baseX, baseY, ax, ay, L.reach);   // верхняя нога — В УПОР в дальнюю поверхность (потолок/противоположная стена)
+          if (!surf) { const s = _ikSurface(world, baseX, baseY, downDir, L.reach * 1.3, rig._footSink); if (s && Math.hypot(s.x - ax, s.y - ay) <= L.reach * 0.99) surf = s; }   // иначе — вниз к опоре
         } else {
+          // РАСПОРКА НА ХОДУ: в штольне (порода с ПРОТИВОПОЛОЖНОЙ стороны хода) верхняя нога цепляется
+          // за дальнюю поверхность (потолок / противоположная стена), если она в досягаемости — юнит
+          // лезет/идёт ВРАСПОРКУ, а не по одной стенке. Косметика: реальную локомоцию несут НЕ-up-ноги
+          // (шагают вперёд по ходу). Нет породы напротив (открыто) → surf=null → обычный поиск ниже.
+          if (L.up) surf = braceSurf(cx + obx + Math.cos(sa) * L.stance * TILE, cy + oby + Math.sin(sa) * L.stance * TILE, ax, ay, L.reach);   // распорка в дальнюю поверхность
           // ХОД: максимально ВПЕРЁД, но достижимо ИЗ ПРЕДСКАЗАННОГО бедра — убывающий вынос,
           // первый годный (f=0 → строго вниз — всегда достаёт пол → нога ВСЕГДА встаёт, не висит).
-          for (const f of [1, 0.7, 0.45, 0.22, 0]) {
+          if (!surf) for (const f of [1, 0.7, 0.45, 0.22, 0]) {
             const ox = ax + Math.cos(velAng) * proj * stag * f, oy = ay + Math.sin(velAng) * proj * stag * f;
             const s = _ikSurface(world, ox, oy, scanDir, L.reach * 1.5, rig._footSink);
             if (s && Math.hypot(s.x - hipPx, s.y - hipPy) <= L.reach * 0.97) { surf = s; break; }

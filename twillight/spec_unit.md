@@ -129,9 +129,9 @@ grind (`t.type===ROCK && s.canDig && !s.impulse`). Копание — ЗВУКО
 СЕТИ ПАМЯТИ, ставятся в слот сканера. Оба с **фиксированным `scanR:1`** — туман снимается честным 1 тайлом
 (`spec_render`); сканеры НЕ раскрывают породу, только ищут залежи. `getStats` ставит `s.radar`/`s.echoScan`
 (+ `s.radarSpectrum`/`s.echoLong` из узлов-детей). Состояние — `_scanInit()` в `startSession`; тик — `updateScanners`.
-**Активация ОБОИХ — ЭНТЕР** (`_scanWantFire` → `KEY_SECONDARY`): сканер — ДОПОЛНИТЕЛЬНОЕ действие, бур — ГЛАВНОЕ
-(Пробел), поэтому НЕ конфликтуют ни при какой сборке (общее правило — `constants.js` `KEY_PRIMARY`/`KEY_SECONDARY`/
-`MODULE_ACTION`; см. CLAUDE.md `input.js`). Оба РАБОТАЮТ НА КУЛДАУНЕ. Стандартный трек СЕНСОР (радиус) скрыт при
+**Активация ОБОИХ — ЦИФРА 1** (`moduleActionKeys('scanner',…)` → `_scanWantFire`): сканер — ДОПОЛНИТЕЛЬНОЕ действие (своя цифра), бур — ГЛАВНОЕ
+(Пробел), поэтому НЕ конфликтуют ни при какой сборке (общее правило — `constants.js` `KEY_PRIMARY`/`KEY_ACTION(n)`/
+`MODULE_ACTION` (`scanner:1`); см. CLAUDE.md `input.js`). Оба РАБОТАЮТ НА КУЛДАУНЕ. Стандартный трек СЕНСОР (радиус) скрыт при
 радаре/эхо (`need: scanR>0 && !radar && !echoScan`) — у них вместо радиуса трек кулдауна.
 
 - **РАДАР** (`scanner_radar`, unlock `mast_rad`, `s.radar`): по активации (cd≤0) делает **ОДИН оборот** развёртки

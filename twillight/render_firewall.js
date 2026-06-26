@@ -13,9 +13,9 @@ function drawFirewall(ctx, fw, W, t) {
   ctx.strokeStyle = br ? '#ff3a22' : `rgba(200,226,90,${0.45 + 0.45 * alarm})`; ctx.lineWidth = 1.5; ctx.strokeRect(x + 0.5, y + 0.5, ww - 1, hh - 1);
   ctx.font = `8px ${FONT_MONO}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.fillStyle = br ? '#ff5038' : '#c8e25a';
-  ctx.fillText(br ? '// ФАЙРВОЛЛ ПРОБИТ' : '// ВЗЛОМ ФАЙРВОЛЛА', x + 10, y + 7);
+  ctx.fillText(br ? STR.hud.firewall.breached : STR.hud.firewall.hacking, x + 10, y + 7);
   ctx.textAlign = 'right'; ctx.fillStyle = '#8fae5a';
-  ctx.fillText('взломщиков: ' + fw.active, x + ww - 10, y + 7);
+  ctx.fillText(STR.hud.firewall.attackers(fw.active), x + ww - 10, y + 7);
   const pad = 10, gap = 8, cellW = (ww - pad * 2 - gap * (segs - 1)) / segs, cellH = hh - 32, cyT = y + 24;
   for (let i = 0; i < segs; i++) drawMazeCell(ctx, x + pad + i * (cellW + gap), cyT, cellW, cellH, Math.max(0, Math.min(1, fw.hack - i)), t, i, br);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';

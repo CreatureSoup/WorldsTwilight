@@ -15,10 +15,10 @@
 // категории (`kind`); позиция берётся из resolveUnitRig — всегда совпадает с тем,
 // как деталь нарисована.
 const SLOT_META = {
-  drill:   { kind: 'drill',  label: 'БУР',     lx:  1,    ly: -0.9 },   // вправо-вверх
-  scanner: { kind: 'sensor', label: 'СКАНЕР',  lx:  0.5,  ly: -1.1 },   // вверх-ВПРАВО: не лезет на пустой круг доп-слота (тот вверху-слева)
-  cargo:   { kind: 'hold',   label: 'ТРЮМ',    lx: -1,    ly:  0   },   // влево
-  aux:     { kind: 'aux',    label: 'ДОП-СЛОТ', lx: -1.3, ly: -0.6 },   // доп-слот (экран помех) — влево-ВВЕРХ (не лезть на трюм); показ гейтнут _categoryActive
+  drill:   { kind: 'drill',  label: STR.inventory.category.drill.slot,   lx:  1,    ly: -0.9 },   // вправо-вверх
+  scanner: { kind: 'sensor', label: STR.inventory.category.scanner.slot, lx:  0.5,  ly: -1.1 },   // вверх-ВПРАВО: не лезет на пустой круг доп-слота (тот вверху-слева)
+  cargo:   { kind: 'hold',   label: STR.inventory.category.cargo.slot,   lx: -1,    ly:  0   },   // влево
+  aux:     { kind: 'aux',    label: STR.inventory.category.aux.slot,     lx: -1.3, ly: -0.6 },   // доп-слот (экран помех) — влево-ВВЕРХ (не лезть на трюм); показ гейтнут _categoryActive
   // engine НЕ показываем на сборке: двигатель — параметр КОРПУСА (стат остаётся, слот/галерея/выноска скрыты).
 };
 
@@ -253,7 +253,7 @@ class Inventory {
   CARD_H() { return 116; }
   computeCards() {
     const L = this.layout; if (!L) return { cards: [], headers: [], contentH: 0 };
-    const labels = { drill: 'БУРЫ', engine: 'ДВИГАТЕЛИ', scanner: 'СКАНЕРЫ', cargo: 'ТРЮМЫ', aux: 'ДОП-СЛОТ' };
+    const labels = { drill: STR.inventory.category.drill.gallery, engine: STR.inventory.category.engine.gallery, scanner: STR.inventory.category.scanner.gallery, cargo: STR.inventory.category.cargo.gallery, aux: STR.inventory.category.aux.gallery };
     const cw = this.CARD_W(), ch = this.CARD_H(), cgap = 10, hdrH = 22, rowGap = 18;
     const x0 = L.list.x + 14, y0 = L.list.y + 38 - this.scrollY;
     const cards = [], headers = [];

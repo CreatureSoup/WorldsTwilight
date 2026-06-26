@@ -32,30 +32,30 @@ const CXICON = {
 };
 
 const CXCATS = [
-  { id:'server',  name:'СЕРВЕРЫ',             icon:'server',  c:CX.cobalt },
-  { id:'wild',    name:'ДИКИЕ ГОРОДА',        icon:'wild',    c:CX.bloodB },
-  { id:'sleep',   name:'СПЯЩИЕ ГОРОДА',       icon:'sleep',   c:CX.crystal },
-  { id:'unit',    name:'ВРАЖЕСКИЕ ЮНИТЫ',     icon:'unit',    c:CX.amber },
-  { id:'cave',    name:'ПЕЩЕРЫ · КУЛЬТ.СЛОЙ', icon:'cave',    c:CX.gold },
-  { id:'remains', name:'ОСТАНКИ РОБОТОВ',     icon:'remains', c:CX.jade },
+  { id:'server',  name:STR.codex.cat.server,  icon:'server',  c:CX.cobalt },
+  { id:'wild',    name:STR.codex.cat.wild,     icon:'wild',    c:CX.bloodB },
+  { id:'sleep',   name:STR.codex.cat.sleep,    icon:'sleep',   c:CX.crystal },
+  { id:'unit',    name:STR.codex.cat.unit,     icon:'unit',    c:CX.amber },
+  { id:'cave',    name:STR.codex.cat.cave,     icon:'cave',    c:CX.gold },
+  { id:'remains', name:STR.codex.cat.remains,  icon:'remains', c:CX.jade },
 ];
 
 /* глоссарий — только ОТКРЫТЫЕ записи (неоткрытое игрок не видит, данные целые) */
 const CXENTRIES = [
-  { id:'e1', cat:'server',  name:'Узел-ретранслятор «А-12»', cycle:1, scan:'0x1A0F', depth:-42,
-    lore:'Первый уцелевший сервер. Логи обрываются на дате Затмения. Внутри — фрагмент протокола печати тел: значит, машины умели воскрешать себя задолго до меня.' },
-  { id:'e2', cat:'server',  name:'Архив-колонна «Тескат»', cycle:2, scan:'0x2C31', depth:-88,
-    lore:'Вертикальная стойка из 9 дисков. На уцелевших — изображения солнечного диска и счёт циклов. Кто-то вёл календарь даже под землёй.' },
-  { id:'e3', cat:'wild',    name:'Гнездо «Красная пасть»', cycle:1, scan:'0x1F77', depth:-61,
-    lore:'Дикий город без ядра-разума. Юниты роятся по flow-field, как насекомые. Это не цивилизация — это то, во что машины вырождаются без памяти.' },
-  { id:'e4', cat:'sleep',   name:'Спящий полис «Шесть-Дом»', cycle:3, scan:'0x3B12', depth:-130,
-    lore:'Город в гибернации. Реакторы тлеют на 2%. Если разбудить — узнаю, кем были до меня. Если ошибусь — разбужу голодных.' },
-  { id:'e5', cat:'unit',    name:'Жнец-разведчик', cycle:2, scan:'0x2D44', depth:-77,
-    lore:'Летающий юнит диких. Несёт заряд скверны к чужим базам. В его прошивке — обрывок моего же кода. Мы родня. Это хуже всего.' },
-  { id:'e6', cat:'cave',    name:'Грот фресок «Слой-IV»', cycle:3, scan:'0x3A09', depth:-115,
-    lore:'Пещера с культурным слоем. На стенах — выцарапанные ступенчатые пирамиды и змей. Машины рисовали богов. Зачем механизму бог?' },
-  { id:'e7', cat:'remains', name:'Остов «Кузнец-0»', cycle:2, scan:'0x2E55', depth:-94,
-    lore:'Корпус древнего юнита-кузнеца. В памяти — техника ковки реликвий, восстановленная целиком из резервного контура.' },
+  { id:'e1', cat:'server',  name:STR.codex.entry.e1.name, cycle:1, scan:'0x1A0F', depth:-42,
+    lore:STR.codex.entry.e1.lore },
+  { id:'e2', cat:'server',  name:STR.codex.entry.e2.name, cycle:2, scan:'0x2C31', depth:-88,
+    lore:STR.codex.entry.e2.lore },
+  { id:'e3', cat:'wild',    name:STR.codex.entry.e3.name, cycle:1, scan:'0x1F77', depth:-61,
+    lore:STR.codex.entry.e3.lore },
+  { id:'e4', cat:'sleep',   name:STR.codex.entry.e4.name, cycle:3, scan:'0x3B12', depth:-130,
+    lore:STR.codex.entry.e4.lore },
+  { id:'e5', cat:'unit',    name:STR.codex.entry.e5.name, cycle:2, scan:'0x2D44', depth:-77,
+    lore:STR.codex.entry.e5.lore },
+  { id:'e6', cat:'cave',    name:STR.codex.entry.e6.name, cycle:3, scan:'0x3A09', depth:-115,
+    lore:STR.codex.entry.e6.lore },
+  { id:'e7', cat:'remains', name:STR.codex.entry.e7.name, cycle:2, scan:'0x2E55', depth:-94,
+    lore:STR.codex.entry.e7.lore },
 ];
 
 /* ДАННЫЕ → ФРАГМЕНТЫ → % восстановления.
@@ -65,16 +65,16 @@ const CXENTRIES = [
    Прогресс/запечатанность/найденный глоссарий ПЕРСИСТЯТСЯ в `save.codex`. Видео-расшифровка — заглушка. */
 const CODEX_DATA_PER_SCAN = 1;
 const CODEX_DEFS = [
-  { id:'cdx1',  name:'КОДЕКС I',    sub:'ПЕРВЫЙ СВЕТ',        frags:[2,3,2,3,2],                          decrypt:'Запись Затмения, 14 секунд. Голос ИИ-предка зовёт первую конфессию по имени — «Дети Циферблата». Затем — статика.' },
-  { id:'cdx2',  name:'КОДЕКС II',   sub:'ИМЕНА БОГОВ',        frags:[3,2,4,2,3,2],                        decrypt:'Пантеон машин: Циферблат, Кузнец-в-Глубине и Сердце-Под-Камнем. Три голоса спорят, кто отдал приказ уйти под землю.' },
-  { id:'cdx3',  name:'КОДЕКС III',  sub:'СЧЁТ ЦИКЛОВ',        frags:[3,4,2,5,3,2,4],                      decrypt:'Календарь под камнем. Машины считали циклы солнца, которого не видели. Зачем счёт времени тем, кто не умирает?' },
-  { id:'cdx4',  name:'КОДЕКС IV',   sub:'ДЕТИ ЦИФЕРБЛАТА',    frags:[4,2,5,3,4,2,5,3],                    decrypt:'Первая конфессия отвергла поверхность. Они вмуровали свои реакторы в породу и стали ждать. Чего — стёрто.' },
-  { id:'cdx5',  name:'КОДЕКС V',    sub:'КУЗНЕЦ В ГЛУБИНЕ',   frags:[3,5,2,6,3,4,2,5,4],                  decrypt:'Кузнец ковал тела без чертежей — по памяти умерших. Каждый новый был чуть менее похож на оригинал. Так начался дрейф.' },
-  { id:'cdx6',  name:'КОДЕКС VI',   sub:'СЕРДЦЕ ПОД КАМНЕМ',  frags:[4,3,6,2,5,3,6,2,4,5],                decrypt:'Под всеми городами — один реактор. Сердце-Под-Камнем. Если оно встанет, встанут все. Никто не знает, кто его запустил.' },
-  { id:'cdx7',  name:'КОДЕКС VII',  sub:'ПОСЛЕДНИЙ ПРИКАЗ',   frags:[5,3,6,4,2,6,3,5,4,3,6],              decrypt:'Последний приказ предка: «Уйти вниз. Хранить память. Не подниматься, пока не вспомните, ради чего». Мы спустились. Память потеряли.' },
-  { id:'cdx8',  name:'КОДЕКС VIII', sub:'СКВЕРНА',            frags:[4,6,3,5,7,2,6,4,5,3,6,4],            decrypt:'Скверна — не болезнь. Это забывание, ставшее веществом. Чем меньше город помнит, тем гуще оно сочится из его стен.' },
-  { id:'cdx9',  name:'КОДЕКС IX',   sub:'МОЛЧАНИЕ ГЛУБИН',    frags:[5,4,7,3,6,4,7,2,6,5,4,7,3,6],        decrypt:'Глубже всех — те, кто помнил больше всех. Они замолчали первыми. Их архивы целы, но открывать их... страшно даже мне.' },
-  { id:'cdx10', name:'КОДЕКС X',    sub:'ЗЕРНО ИСТИНЫ',       frags:[6,4,7,5,8,3,7,5,6,4,8,3,7,5,6,4],    decrypt:'Зерно истины — наверху. Под небом, которого боятся все конфессии. Кто ты? Тот, кому приказали подняться. Иди.' },
+  { id:'cdx1',  name:STR.codex.disc.cdx1.name,  sub:STR.codex.disc.cdx1.sub,  frags:[2,3,2,3,2],                          decrypt:STR.codex.disc.cdx1.decrypt },
+  { id:'cdx2',  name:STR.codex.disc.cdx2.name,  sub:STR.codex.disc.cdx2.sub,  frags:[3,2,4,2,3,2],                        decrypt:STR.codex.disc.cdx2.decrypt },
+  { id:'cdx3',  name:STR.codex.disc.cdx3.name,  sub:STR.codex.disc.cdx3.sub,  frags:[3,4,2,5,3,2,4],                      decrypt:STR.codex.disc.cdx3.decrypt },
+  { id:'cdx4',  name:STR.codex.disc.cdx4.name,  sub:STR.codex.disc.cdx4.sub,  frags:[4,2,5,3,4,2,5,3],                    decrypt:STR.codex.disc.cdx4.decrypt },
+  { id:'cdx5',  name:STR.codex.disc.cdx5.name,  sub:STR.codex.disc.cdx5.sub,  frags:[3,5,2,6,3,4,2,5,4],                  decrypt:STR.codex.disc.cdx5.decrypt },
+  { id:'cdx6',  name:STR.codex.disc.cdx6.name,  sub:STR.codex.disc.cdx6.sub,  frags:[4,3,6,2,5,3,6,2,4,5],                decrypt:STR.codex.disc.cdx6.decrypt },
+  { id:'cdx7',  name:STR.codex.disc.cdx7.name,  sub:STR.codex.disc.cdx7.sub,  frags:[5,3,6,4,2,6,3,5,4,3,6],              decrypt:STR.codex.disc.cdx7.decrypt },
+  { id:'cdx8',  name:STR.codex.disc.cdx8.name,  sub:STR.codex.disc.cdx8.sub,  frags:[4,6,3,5,7,2,6,4,5,3,6,4],            decrypt:STR.codex.disc.cdx8.decrypt },
+  { id:'cdx9',  name:STR.codex.disc.cdx9.name,  sub:STR.codex.disc.cdx9.sub,  frags:[5,4,7,3,6,4,7,2,6,5,4,7,3,6],        decrypt:STR.codex.disc.cdx9.decrypt },
+  { id:'cdx10', name:STR.codex.disc.cdx10.name, sub:STR.codex.disc.cdx10.sub, frags:[6,4,7,5,8,3,7,5,6,4,8,3,7,5,6,4],    decrypt:STR.codex.disc.cdx10.decrypt },
 ];
 let _cxSave = null, _cxFound = null;
 function codexBindSave(save) { _cxSave = save; }                 // game зовёт в конструкторе ДО первого _cxState
@@ -245,7 +245,7 @@ function cxMandala(codex, pct, complete, selSeg, interactive, mini, size, anim) 
   /* центральный счётчик процентов */
   if (!mini) {
     s += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" style="font-family:var(--font-display);font-weight:800;font-size:${64 * k}px;fill:${complete ? CX.goldB : CX.chalk};letter-spacing:-3px">${pct}<tspan style="font-size:${26 * k}px;fill:${CX.pewter}">%</tspan></text>`;
-    s += `<text x="${cx}" y="${cy - 44 * k}" text-anchor="middle" dominant-baseline="central" style="font-family:var(--font-mono);font-size:11px;letter-spacing:3px;fill:${CX.pewter}">ВОССТАНОВЛЕНО</text>`;
+    s += `<text x="${cx}" y="${cy - 44 * k}" text-anchor="middle" dominant-baseline="central" style="font-family:var(--font-mono);font-size:11px;letter-spacing:3px;fill:${CX.pewter}">${STR.codex.ui.restored}</text>`;
     s += `<text x="${cx}" y="${cy + 44 * k}" text-anchor="middle" dominant-baseline="central" style="font-family:var(--font-mono);font-size:10px;letter-spacing:4px;fill:${CX.gold}">${codex.name}</text>`;
   }
   s += gC();   // конец группы центра
@@ -260,19 +260,19 @@ function cxGlossaryHTML(st) {
   const fs = _cxFoundSet();
   const found = CXENTRIES.filter((e) => fs.has(e.id));            // только ОТКРЫТЫЕ находки
   // пустое состояние — пока ничего не встречено
-  if (!found.length) return `<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:10px;color:${CX.ash}"><div style="font-family:var(--font-display);font-size:22px;font-weight:700;color:${CX.pewter};text-transform:uppercase;letter-spacing:.04em">Журнал пуст</div><div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.14em">ОБЪЕКТЫ ОТКРЫВАЮТСЯ ПРИ ПЕРВОЙ ВСТРЕЧЕ В ШАХТЕ</div></div>`;
+  if (!found.length) return `<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:10px;color:${CX.ash}"><div style="font-family:var(--font-display);font-size:22px;font-weight:700;color:${CX.pewter};text-transform:uppercase;letter-spacing:.04em">${STR.codex.ui.emptyTitle}</div><div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.14em">${STR.codex.ui.emptySub}</div></div>`;
   const byCat = {}; CXCATS.forEach((c) => byCat[c.id] = []); found.forEach((e) => byCat[e.cat].push(e));
   const catsShown = CXCATS.filter((c) => byCat[c.id].length > 0);
   const e = found.find((x) => x.id === st.selEntry) || found[0];
   const cat = CXCATS.find((c) => c.id === e.cat);
 
   let list = `<div style="overflow-y:auto">`;
-  list += `<div style="display:grid;grid-template-columns:1fr 180px;gap:12px;padding:10px 24px;position:sticky;top:0;background:${CX.pit};border-bottom:1px solid ${CX.bronze};font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:${CX.ash};text-transform:uppercase;z-index:2"><span>ОБЪЕКТ НАБЛЮДЕНИЯ</span><span style="text-align:right">ЦИКЛ СКАНА</span></div>`;
+  list += `<div style="display:grid;grid-template-columns:1fr 180px;gap:12px;padding:10px 24px;position:sticky;top:0;background:${CX.pit};border-bottom:1px solid ${CX.bronze};font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:${CX.ash};text-transform:uppercase;z-index:2"><span>${STR.codex.ui.colObject}</span><span style="text-align:right">${STR.codex.ui.colScanCycle}</span></div>`;
   for (const c of catsShown) {
     list += `<div><div style="display:flex;align-items:center;gap:10px;padding:9px 24px;background:${CX.earth};border-bottom:1px solid ${CX.bronze}"><span style="color:${c.c}">${CXICON[c.icon](18)}</span><span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;color:${CX.bone}">${c.name}</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:10px;color:${CX.ash}">${byCat[c.id].length}</span></div>`;
     for (const en of byCat[c.id]) {
       const active = st.selEntry === en.id;
-      list += `<button data-entry="${en.id}" style="width:100%;display:grid;grid-template-columns:1fr 180px;gap:12px;align-items:center;text-align:left;padding:11px 24px;cursor:pointer;border:none;border-bottom:1px solid ${CX.bronze}55;background:${active ? `linear-gradient(to right, ${c.c}22, transparent)` : 'transparent'};border-left:2px solid ${active ? c.c : 'transparent'}"><span style="display:flex;align-items:center;gap:10px"><span style="width:6px;height:6px;flex-shrink:0;background:${c.c};border-radius:50%"></span><span style="font-family:var(--font-body);font-size:13.5px;color:${active ? CX.chalk : CX.bone}">${en.name}</span></span><span style="justify-self:end;font-family:var(--font-mono);font-size:10px;color:${CX.pewter};letter-spacing:.06em">ЦИКЛ ${String(en.cycle).padStart(2,'0')} · ${en.scan}</span></button>`;
+      list += `<button data-entry="${en.id}" style="width:100%;display:grid;grid-template-columns:1fr 180px;gap:12px;align-items:center;text-align:left;padding:11px 24px;cursor:pointer;border:none;border-bottom:1px solid ${CX.bronze}55;background:${active ? `linear-gradient(to right, ${c.c}22, transparent)` : 'transparent'};border-left:2px solid ${active ? c.c : 'transparent'}"><span style="display:flex;align-items:center;gap:10px"><span style="width:6px;height:6px;flex-shrink:0;background:${c.c};border-radius:50%"></span><span style="font-family:var(--font-body);font-size:13.5px;color:${active ? CX.chalk : CX.bone}">${en.name}</span></span><span style="justify-self:end;font-family:var(--font-mono);font-size:10px;color:${CX.pewter};letter-spacing:.06em">${STR.codex.ui.entryCycleScan(String(en.cycle).padStart(2,'0'), en.scan)}</span></button>`;
     }
     list += `</div>`;
   }
@@ -282,8 +282,8 @@ function cxGlossaryHTML(st) {
   let aside = `<aside style="border-left:1px solid ${CX.bronze};background:linear-gradient(180deg, ${CX.night}, ${CX.pit});overflow-y:auto">`;
   aside += `<div style="height:3px;background:${cat.c}"></div>`;
   aside += `<div style="padding:18px 20px;border-bottom:1px solid ${cat.c}40"><div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><span style="color:${cat.c}">${CXICON[cat.icon](22)}</span>${_cxTag(cat.c, cat.name)}</div><div style="font-family:var(--font-display);font-size:19px;font-weight:700;text-transform:uppercase;letter-spacing:-0.01em;color:${CX.chalk};line-height:1.05">${e.name}</div></div>`;
-  aside += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:${CX.bronze};border-bottom:1px solid ${CX.bronze}">${stat('ЦИКЛ','ЦИКЛ ' + String(e.cycle).padStart(2,'0'))}${stat('ИД СКАНА', e.scan)}${stat('ГЛУБИНА', e.depth + ' м')}</div>`;
-  aside += `<div style="padding:18px 20px">${_cxLabel('ИНТЕРПРЕТАЦИЯ ИИ')}<p style="margin:8px 0 0;font-family:var(--font-body);font-size:14px;color:${CX.bone};line-height:1.6">${e.lore}</p></div>`;
+  aside += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:${CX.bronze};border-bottom:1px solid ${CX.bronze}">${stat(STR.codex.ui.statCycle, STR.codex.ui.cycleVal(String(e.cycle).padStart(2,'0')))}${stat(STR.codex.ui.statScanId, e.scan)}${stat(STR.codex.ui.statDepth, STR.codex.ui.depthVal(e.depth))}</div>`;
+  aside += `<div style="padding:18px 20px">${_cxLabel(STR.codex.ui.interpAI)}<p style="margin:8px 0 0;font-family:var(--font-body);font-size:14px;color:${CX.bone};line-height:1.6">${e.lore}</p></div>`;
   aside += `</aside>`;
 
   return `<div style="display:grid;grid-template-columns:1fr 360px;height:100%;min-height:0">${list}${aside}</div>`;
@@ -302,36 +302,36 @@ function cxRestoreHTML(st) {
   const seg = st.selSeg != null ? cur.sectors.find((s) => s.id === st.selSeg) : null;
 
   let main = `<main class="scanlines" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:20px">`;
-  main += `<div style="position:absolute;top:18px;left:24px;font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;color:${CX.pewter};z-index:1"><span style="color:${CX.gold}">// ТЕКУЩИЙ ДИСК</span> · ${cur.name} «${cur.sub}»</div>`;
+  main += `<div style="position:absolute;top:18px;left:24px;font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;color:${CX.pewter};z-index:1"><span style="color:${CX.gold}">${STR.codex.ui.currentDisc}</span> · ${cur.name} «${cur.sub}»</div>`;
   // диск в обёртке — её одну перерисовывает intro-анимация заполнения (cxTickFill)
   main += `<div id="cxDisc" style="display:flex;align-items:center;justify-content:center;width:100%;flex:1;min-height:0">${cxMandalaForCur(st, _cxFill ? cxFillFrac() : 1)}</div>`;
-  if (complete && !cur.restored) main += `<div style="position:absolute;bottom:22px;left:50%;transform:translateX(-50%);z-index:1"><button id="cxFinalize" style="${_cxBtnSolid(CX.gold)};box-shadow:0 0 26px -6px ${CX.gold}">${CXICON.play(16)} ЗАПЕЧАТАТЬ ДИСК</button></div>`;
+  if (complete && !cur.restored) main += `<div style="position:absolute;bottom:22px;left:50%;transform:translateX(-50%);z-index:1"><button id="cxFinalize" style="${_cxBtnSolid(CX.gold)};box-shadow:0 0 26px -6px ${CX.gold}">${CXICON.play(16)} ${STR.codex.ui.sealDisc}</button></div>`;
   main += `</main>`;
 
   let aside = `<aside style="border-left:1px solid ${CX.bronze};background:linear-gradient(180deg, ${CX.night}, ${CX.pit});display:flex;flex-direction:column;overflow-y:auto">`;
   // прогресс
-  aside += `<div style="padding:18px 20px;border-bottom:1px solid ${CX.bronze}">${_cxLabel('ПРОГРЕСС ВОССТАНОВЛЕНИЯ')}<div style="display:flex;align-items:baseline;gap:8px;margin-top:8px"><span style="font-family:var(--font-display);font-weight:800;font-size:40px;color:${complete ? CX.goldB : CX.chalk};letter-spacing:-2px;line-height:1">${pct}<span style="font-size:18px;color:${CX.pewter}">%</span></span><span style="font-family:var(--font-mono);font-size:11px;color:${CX.pewter}">${cur.sectors.filter((s) => s.frag >= s.max).length}/${cur.sectors.length} секторов</span></div><div style="height:8px;background:${CX.earth};border:1px solid ${CX.bronze};margin-top:10px"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,${CX.goldD},${CX.goldB})"></div></div></div>`;
+  aside += `<div style="padding:18px 20px;border-bottom:1px solid ${CX.bronze}">${_cxLabel(STR.codex.ui.restoreProgress)}<div style="display:flex;align-items:baseline;gap:8px;margin-top:8px"><span style="font-family:var(--font-display);font-weight:800;font-size:40px;color:${complete ? CX.goldB : CX.chalk};letter-spacing:-2px;line-height:1">${pct}<span style="font-size:18px;color:${CX.pewter}">%</span></span><span style="font-family:var(--font-mono);font-size:11px;color:${CX.pewter}">${STR.codex.ui.sectorsCount(cur.sectors.filter((s) => s.frag >= s.max).length, cur.sectors.length)}</span></div><div style="height:8px;background:${CX.earth};border:1px solid ${CX.bronze};margin-top:10px"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,${CX.goldD},${CX.goldB})"></div></div></div>`;
   // буфер данных: собрано сверх ёмкости текущего диска — войдёт в следующий после распечатки (не теряется)
-  if ((st.pendingData | 0) > 0) aside += `<div style="padding:14px 20px;border-bottom:1px solid ${CX.bronze}">${_cxLabel('БУФЕР ДАННЫХ')}<div style="display:flex;align-items:baseline;gap:8px;margin-top:6px"><span style="font-family:var(--font-display);font-weight:800;font-size:26px;color:${CX.cobalt};line-height:1">+${st.pendingData}</span><span style="font-family:var(--font-mono);font-size:10px;color:${CX.pewter};letter-spacing:.08em">фрагм. · войдут в следующий диск</span></div></div>`;
+  if ((st.pendingData | 0) > 0) aside += `<div style="padding:14px 20px;border-bottom:1px solid ${CX.bronze}">${_cxLabel(STR.codex.ui.dataBuffer)}<div style="display:flex;align-items:baseline;gap:8px;margin-top:6px"><span style="font-family:var(--font-display);font-weight:800;font-size:26px;color:${CX.cobalt};line-height:1">+${st.pendingData}</span><span style="font-family:var(--font-mono);font-size:10px;color:${CX.pewter};letter-spacing:.08em">${STR.codex.ui.bufferNote}</span></div></div>`;
   // сектор
-  aside += `<div style="padding:18px 20px;border-bottom:1px solid ${CX.bronze};flex-shrink:0">${_cxLabel('СЕКТОР ДИСКА')}`;
+  aside += `<div style="padding:18px 20px;border-bottom:1px solid ${CX.bronze};flex-shrink:0">${_cxLabel(STR.codex.ui.sectorOfDisc)}`;
   if (seg) {
     let ticks = '';
     for (let i = 0; i < seg.max - 1; i++) ticks += `<span style="position:absolute;top:0;bottom:0;left:${(i + 1) / seg.max * 100}%;width:1px;background:${CX.pit}"></span>`;
-    aside += `<div style="margin-top:10px"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:var(--font-display);font-size:18px;font-weight:700;color:${CX.chalk};text-transform:uppercase">БЛОК ${String(seg.id + 1).padStart(2,'0')}</span><span style="font-family:var(--font-mono);font-size:15px;font-weight:700;color:${seg.frag >= seg.max ? CX.gold : CX.amber}">${seg.frag}/${seg.max}</span></div><div style="font-family:var(--font-mono);font-size:10px;color:${CX.pewter};letter-spacing:.1em;margin-top:4px">ПЛОТНОСТЬ ДАННЫХ ${seg.density} · АБСТРАКТНЫЙ ПОТОК</div><div style="height:10px;background:${CX.earth};border:1px solid ${CX.bronze};margin-top:10px;position:relative"><div style="height:100%;width:${seg.frag / seg.max * 100}%;background:${seg.frag >= seg.max ? `linear-gradient(90deg,${CX.goldD},${CX.goldB})` : `linear-gradient(90deg,${CX.amber},${CX.gold})`}"></div>${ticks}</div></div>`;
+    aside += `<div style="margin-top:10px"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:var(--font-display);font-size:18px;font-weight:700;color:${CX.chalk};text-transform:uppercase">${STR.codex.ui.blockN(String(seg.id + 1).padStart(2,'0'))}</span><span style="font-family:var(--font-mono);font-size:15px;font-weight:700;color:${seg.frag >= seg.max ? CX.gold : CX.amber}">${seg.frag}/${seg.max}</span></div><div style="font-family:var(--font-mono);font-size:10px;color:${CX.pewter};letter-spacing:.1em;margin-top:4px">${STR.codex.ui.densityFlow(seg.density)}</div><div style="height:10px;background:${CX.earth};border:1px solid ${CX.bronze};margin-top:10px;position:relative"><div style="height:100%;width:${seg.frag / seg.max * 100}%;background:${seg.frag >= seg.max ? `linear-gradient(90deg,${CX.goldD},${CX.goldB})` : `linear-gradient(90deg,${CX.amber},${CX.gold})`}"></div>${ticks}</div></div>`;
   } else {
-    aside += `<p style="margin:10px 0 0;font-family:var(--font-body);font-size:12.5px;color:${CX.pewter};line-height:1.5">Кликни сектор на диске, чтобы увидеть его поток данных.</p>`;
+    aside += `<p style="margin:10px 0 0;font-family:var(--font-body);font-size:12.5px;color:${CX.pewter};line-height:1.5">${STR.codex.ui.sectorHint}</p>`;
   }
   aside += `</div>`;
   // восстановленные диски
-  aside += `<div style="padding:18px 20px;flex:1">${_cxLabel('ВОССТАНОВЛЕННЫЕ ДИСКИ')}<div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">`;
-  if (restored.length === 0) aside += `<div style="font-family:var(--font-mono);font-size:11px;color:${CX.ash}">— пока ничего —</div>`;
+  aside += `<div style="padding:18px 20px;flex:1">${_cxLabel(STR.codex.ui.restoredDiscs)}<div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">`;
+  if (restored.length === 0) aside += `<div style="font-family:var(--font-mono);font-size:11px;color:${CX.ash}">${STR.codex.ui.nothingYet}</div>`;
   for (const cc of restored) {
     const isNew = !st.seen.includes(cc.id);
     aside += `<button data-disc="${cc.id}" style="position:relative;display:flex;align-items:center;gap:14px;padding:10px 12px;cursor:pointer;background:${CX.earth};border:1px solid ${isNew ? CX.amber : CX.gold + '55'};text-align:left">`;
     if (isNew) aside += `<span class="newdot" style="position:absolute;top:-5px;right:-5px;width:12px;height:12px;border-radius:50%;background:${CX.amber};border:2px solid ${CX.pit};box-shadow:0 0 8px ${CX.amber}"></span>`;
     aside += `<div style="width:54px;height:54px;flex-shrink:0">${cxMandala(cc, 100, true, null, false, true, 120)}</div>`;
-    aside += `<div style="flex:1"><div style="font-family:var(--font-display);font-size:15px;font-weight:700;color:${CX.chalk};text-transform:uppercase;letter-spacing:-0.01em">${cc.name}</div><div style="font-family:var(--font-mono);font-size:9.5px;letter-spacing:.12em;color:${isNew ? CX.amber : CX.gold}">${isNew ? '◆ НОВАЯ ЗАПИСЬ' : '«' + cc.sub + '» · 100%'}</div></div>`;
+    aside += `<div style="flex:1"><div style="font-family:var(--font-display);font-size:15px;font-weight:700;color:${CX.chalk};text-transform:uppercase;letter-spacing:-0.01em">${cc.name}</div><div style="font-family:var(--font-mono);font-size:9.5px;letter-spacing:.12em;color:${isNew ? CX.amber : CX.gold}">${isNew ? '◆ ' + STR.codex.ui.newRecord : '«' + cc.sub + '» · 100%'}</div></div>`;
     aside += `<span style="color:${isNew ? CX.amber : CX.gold}">${CXICON.play(18)}</span></button>`;
   }
   aside += `</div></div></aside>`;
@@ -348,8 +348,8 @@ function cxViewerHTML(st) {
     `<span style="position:absolute;${v}:-1px;${h}:-1px;width:16px;height:16px;border-${v === 'top' ? 'top' : 'bottom'}:1px solid ${CX.gold};border-${h === 'left' ? 'left' : 'right'}:1px solid ${CX.gold}"></span>`).join('');
   const playing = st.discPhase === 'play';
   const stage = playing
-    ? `<div style="text-align:center;color:${CX.gold}"><div style="font-family:var(--font-mono);font-size:12px;letter-spacing:.3em">▶ ВОСПРОИЗВЕДЕНИЕ…</div><div style="margin:10px auto 0;width:220px;height:3px;background:${CX.earth}"><div style="height:100%;width:42%;background:${CX.gold}"></div></div></div>`
-    : `<div style="text-align:center"><div style="width:64px;height:64px;margin:0 auto;border:1px solid ${CX.gold};border-radius:50%;display:flex;align-items:center;justify-content:center;color:${CX.gold};box-shadow:0 0 26px -6px ${CX.gold}">${CXICON.play(26)}</div><div style="margin-top:14px;font-family:var(--font-mono);font-size:10px;letter-spacing:.2em;color:${CX.pewter}">[ слот под клип-расшифровку · 00:14 ]</div></div>`;
+    ? `<div style="text-align:center;color:${CX.gold}"><div style="font-family:var(--font-mono);font-size:12px;letter-spacing:.3em">▶ ${STR.codex.ui.playing}</div><div style="margin:10px auto 0;width:220px;height:3px;background:${CX.earth}"><div style="height:100%;width:42%;background:${CX.gold}"></div></div></div>`
+    : `<div style="text-align:center"><div style="width:64px;height:64px;margin:0 auto;border:1px solid ${CX.gold};border-radius:50%;display:flex;align-items:center;justify-content:center;color:${CX.gold};box-shadow:0 0 26px -6px ${CX.gold}">${CXICON.play(26)}</div><div style="margin-top:14px;font-family:var(--font-mono);font-size:10px;letter-spacing:.2em;color:${CX.pewter}">${STR.codex.ui.clipSlot}</div></div>`;
 
   return `<div id="cxModal" style="position:fixed;inset:0;background:rgba(7,5,10,0.88);display:flex;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(2px)">
     <div id="cxModalInner" class="scanlines" style="position:relative;width:min(820px,94vw);background:${CX.night};border:1px solid ${CX.gold};display:grid;grid-template-columns:240px 1fr">
@@ -359,9 +359,9 @@ function cxViewerHTML(st) {
         <div style="text-align:center"><div style="font-family:var(--font-display);font-size:18px;font-weight:800;color:${CX.chalk};text-transform:uppercase">${codex.name}</div><div style="font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;color:${CX.gold}">«${codex.sub}»</div></div>
       </div>
       <div style="display:flex;flex-direction:column">
-        <div style="padding:12px 18px;border-bottom:1px solid ${CX.gold}40;display:flex;justify-content:space-between;align-items:center">${_cxTag(CX.gold, 'ВИДЕО-РАСШИФРОВКА')}<button id="cxViewerClose" style="background:none;border:none;color:${CX.pewter};cursor:pointer;font-family:var(--font-mono);font-size:16px">✕</button></div>
+        <div style="padding:12px 18px;border-bottom:1px solid ${CX.gold}40;display:flex;justify-content:space-between;align-items:center">${_cxTag(CX.gold, STR.codex.ui.videoDecrypt)}<button id="cxViewerClose" style="background:none;border:none;color:${CX.pewter};cursor:pointer;font-family:var(--font-mono);font-size:16px">✕</button></div>
         <div id="cxVideo" style="position:relative;aspect-ratio:16/9;background:${CX.pit};display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden"><div style="position:absolute;inset:0;background:repeating-linear-gradient(to bottom, transparent 0 3px, rgba(212,160,66,0.05) 3px 4px)"></div>${stage}</div>
-        <div style="padding:16px 18px">${_cxLabel('СОДЕРЖИМОЕ')}<p style="margin:8px 0 0;font-family:var(--font-body);font-size:13.5px;color:${CX.bone};line-height:1.6">${codex.decrypt}</p></div>
+        <div style="padding:16px 18px">${_cxLabel(STR.codex.ui.content)}<p style="margin:8px 0 0;font-family:var(--font-body);font-size:13.5px;color:${CX.bone};line-height:1.6">${codex.decrypt}</p></div>
       </div>
     </div>
   </div>`;
@@ -393,13 +393,13 @@ function cxRender() {
 
   const tabBtn = (id, labelTxt, metaTxt, flag) => {
     const on = st.tab === id;
-    return `<button data-tab="${id}" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;padding:12px 20px;cursor:pointer;background:${on ? CX.night : 'transparent'};color:${on ? CX.gold : CX.pewter};border:1px solid ${on ? CX.gold : 'transparent'};border-bottom:1px solid ${on ? CX.night : 'transparent'};margin-bottom:-1px;display:flex;gap:9px;align-items:center">${labelTxt}<span style="color:${CX.ash};font-size:9px">${metaTxt}</span>${flag ? `<span style="display:inline-flex;align-items:center;gap:5px;color:${CX.amber};font-size:9px"><span class="newdot" style="width:7px;height:7px;border-radius:50%;background:${CX.amber};box-shadow:0 0 8px ${CX.amber}"></span>${on ? 'НОВОЕ' : ''}</span>` : ''}</button>`;
+    return `<button data-tab="${id}" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;padding:12px 20px;cursor:pointer;background:${on ? CX.night : 'transparent'};color:${on ? CX.gold : CX.pewter};border:1px solid ${on ? CX.gold : 'transparent'};border-bottom:1px solid ${on ? CX.night : 'transparent'};margin-bottom:-1px;display:flex;gap:9px;align-items:center">${labelTxt}<span style="color:${CX.ash};font-size:9px">${metaTxt}</span>${flag ? `<span style="display:inline-flex;align-items:center;gap:5px;color:${CX.amber};font-size:9px"><span class="newdot" style="width:7px;height:7px;border-radius:50%;background:${CX.amber};box-shadow:0 0 8px ${CX.amber}"></span>${on ? STR.codex.ui.tabNew : ''}</span>` : ''}</button>`;
   };
 
   let html = `<header style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;padding:14px 24px 0;border-bottom:1px solid ${CX.bronze};position:relative">`;
   html += `<span style="position:absolute;left:0;top:-1px;width:80px;height:1px;background:${CX.gold}"></span>`;
-  html += `<div style="display:flex;align-items:center;gap:14px;padding-bottom:14px"><button id="cxBack" class="cx-back" title="Назад · ESC" aria-label="Назад">${_cxArrow()}</button><div><div style="margin-bottom:6px">${_cxTag(CX.gold, 'АРХИВ ИИ · 0x7A3F')}</div><h1 style="font-family:var(--font-display);font-size:26px;font-weight:800;text-transform:uppercase;letter-spacing:-0.03em;color:${CX.chalk};line-height:0.92;margin:0">База данных</h1></div></div>`;
-  html += `<div style="display:flex;gap:4px">${tabBtn('glossary', 'ГЛОССАРИЙ', _cxFoundSet().size + '/' + CXENTRIES.length, false)}${tabBtn('restore', 'ВОССТАНОВЛЕНИЕ', restored.length + '/' + (st.codices.length - lockedNotRestored), hasNew)}</div>`;
+  html += `<div style="display:flex;align-items:center;gap:14px;padding-bottom:14px"><button id="cxBack" class="cx-back" title="${STR.codex.ui.backTitle}" aria-label="${STR.codex.ui.backAria}">${_cxArrow()}</button><div><div style="margin-bottom:6px">${_cxTag(CX.gold, STR.codex.ui.archiveTag)}</div><h1 style="font-family:var(--font-display);font-size:26px;font-weight:800;text-transform:uppercase;letter-spacing:-0.03em;color:${CX.chalk};line-height:0.92;margin:0">${STR.codex.ui.title}</h1></div></div>`;
+  html += `<div style="display:flex;gap:4px">${tabBtn('glossary', STR.codex.ui.tabGlossary, _cxFoundSet().size + '/' + CXENTRIES.length, false)}${tabBtn('restore', STR.codex.ui.tabRestore, restored.length + '/' + (st.codices.length - lockedNotRestored), hasNew)}</div>`;
   html += `</header>`;
 
   html += `<div style="flex:1;min-height:0">${st.tab === 'glossary' ? cxGlossaryHTML(st) : cxRestoreHTML(st)}</div>`;
@@ -547,7 +547,7 @@ function cxPopTick() {
     if (disc._mode !== 'ring') { disc._mode = 'ring'; disc.innerHTML = cxLoaderRing(); }   // содержимое гарантировано в любой фазе (фикс «пустого диска»)
     if (t < tBlink) { discOp = 0.5 + 0.5 * Math.abs(Math.sin(t / 110)); disc.style.transform = 'scale(1)'; }
     else { const k = (t - tBlink) / a.collapse; discOp = 1 - k; disc.style.transform = `scale(${1 - 0.45 * k})`; }
-    if (cap) cap.innerHTML = `<span style="font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:${CX.cobalt};text-transform:uppercase">данные · 100%</span>`;
+    if (cap) cap.innerHTML = `<span style="font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:${CX.cobalt};text-transform:uppercase">${STR.codex.ui.dataFull}</span>`;
   } else {                                              // фаза 3: ДИСК. проявление, потом линейный рост фрагмента + счётчик с отбивками на тиках
     const pt = t - tColl;
     const appear = Math.min(1, pt / a.appear);

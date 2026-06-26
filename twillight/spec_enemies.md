@@ -126,8 +126,8 @@
 
 Летающий: `_baseStep` ВЛЕЗАЕТ В ПЕЩЕРУ базы (`_inBaseCave`, как рейдер — не под фундамент), встаёт (`e.draining`) и ВЗЛАМЫВАЕТ (`e.hacking`).
 `hackerBrain` (ai.js). **Файрволл** (`firewall.js` `Firewall`, инстанс `game.firewall`, ресет в `startSession`):
-- `update(dt, active, defended, slow)` — `active`=число `e.hacking`; `hack += active×FIREWALL_HACK_RATE(0.06)×(slow?FIREWALL_FW_SLOW(0.5):1)×dt`;
-  юнит НА БАЗЕ (`defended`) откатывает `−FIREWALL_DEFEND_RATE(0.12)/с`; `hack ≥ FIREWALL_SEGMENTS(3)` → `breached`.
+- `update(dt, active, slow)` — `active`=число `e.hacking`; есть хакеры → `hack += active×FIREWALL_HACK_RATE(0.06)×(slow?FIREWALL_FW_SLOW(0.5):1)×dt`;
+  ⚠️ НЕТ хакеров → `hack −= FIREWALL_DECAY(0.04)/с` (САМОВОССТАНОВЛЕНИЕ; **ЮНИТ на взлом НЕ влияет** — защита = убить хакеров); `hack ≥ FIREWALL_SEGMENTS(3)` → `breached`.
 - `slow` = `metaHas('amb_fw')` (узел ГОРОД·Firewall — раньше заглушка, ТЕПЕРЬ замедляет взлом вдвое).
 - game.js playing-цикл: считает `hackers`, `firewall.update`, лог при `justSeg`; **`firewall.breached` → `overReason='hack'`,
   `mode='gameover'`** (drawGameOver: «ГОРОД ВЗЛОМАН»). Кап `FIREWALL_HACKER_CAP`=3 (больше хакеров — быстрее).
