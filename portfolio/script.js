@@ -56,7 +56,7 @@ const projects = [
     featured: true,
     size: 'featured',
     href: 'case-run-and-change.html',
-    cover: 'images/Run&Change/Cover.webp'
+    cover: 'images/run-and-change/Cover.webp'
   },
   {
     id: 'avito-digital-lesson',
@@ -73,7 +73,7 @@ const projects = [
     featured: true,
     size: 'featured',
     href: 'case-avito.html',
-    cover: 'images/Урок Цифры/cover.webp'
+    cover: 'images/digital-lesson/cover.webp'
   },
   {
     id: 'teplocentral',
@@ -90,7 +90,7 @@ const projects = [
     featured: true,
     size: 'wide',
     href: 'case-teplocentral.html',
-    cover: 'images/Теплоцентраль/cover.webp'
+    cover: 'images/teplocentral/cover.webp'
   },
   {
     id: 'endowment',
@@ -107,7 +107,7 @@ const projects = [
     featured: true,
     size: 'featured',
     href: 'case-endowment.html',
-    cover: 'images/МФТИ Endowment/cover.webp'
+    cover: 'images/mipt-endowment/cover.webp'
   },
 
   /* ----- STRONG NAMED CLIENTS WITH METRICS ----- */
@@ -125,7 +125,7 @@ const projects = [
     color: 'indigo',
     size: 'wide',
     href: 'case-ancor.html',
-    cover: 'images/ДНК Лидера/cover.webp'
+    cover: 'images/dnk-lidera/cover.webp'
   },
   {
     id: 'project-confession',
@@ -141,7 +141,7 @@ const projects = [
     color: 'crimson',
     size: 'featured',
     href: 'case-project-confession.html',
-    cover: 'images/Проектная Исповедь/cover.webp'
+    cover: 'images/project-confession/cover.webp'
   },
 
   /* ----- NAMED CLIENTS, NO STRONG NUMBER ----- */
@@ -159,7 +159,7 @@ const projects = [
     color: 'forest',
     size: 'featured',
     href: 'case-forty-islands.html',
-    cover: 'images/Сорок островов/cover.webp'
+    cover: 'images/forty-islands/cover.webp'
   },
   {
     id: 'city-of-systems',
@@ -175,7 +175,7 @@ const projects = [
     color: 'teal',
     size: 'default',
     href: 'case-city-of-systems.html',
-    cover: 'images/Город систем/cover.webp'
+    cover: 'images/city-of-systems/cover.webp'
   },
   {
     id: 'apocalypse-now',
@@ -191,7 +191,7 @@ const projects = [
     color: 'crimson',
     size: 'wide',
     href: 'case-apocalypse-now.html',
-    cover: 'images/Апокалипсис сегодня/cover.webp'
+    cover: 'images/apocalypse-now/cover.webp'
   },
   {
     id: 'fighting-disaster',
@@ -207,7 +207,7 @@ const projects = [
     color: 'forest',
     size: 'default',
     href: 'case-fighting-disaster.html',
-    cover: 'images/Борьба со стихией/cover.webp'
+    cover: 'images/fighting-disaster/cover.webp'
   },
   {
     id: 'last-order',
@@ -223,7 +223,7 @@ const projects = [
     color: 'crimson',
     size: 'default',
     href: 'case-last-order.html',
-    cover: 'images/Последний приказ/cover.webp'
+    cover: 'images/last-order/cover.webp'
   },
   {
     id: 'space-business',
@@ -239,7 +239,7 @@ const projects = [
     color: 'indigo',
     size: 'default',
     href: 'case-space-business.html',
-    cover: 'images/Космический бизнес/cover.webp'
+    cover: 'images/space-business/cover.webp'
   },
   {
     id: 'knights-medieval',
@@ -255,7 +255,7 @@ const projects = [
     color: 'crimson',
     size: 'default',
     href: 'case-knights-medieval.html',
-    cover: 'images/Рыцари Средневековья/cover.webp'
+    cover: 'images/knights-medieval/cover.webp'
   },
   {
     id: 'cruiser-federation',
@@ -271,7 +271,7 @@ const projects = [
     color: 'magenta',
     size: 'default',
     href: 'case-cruiser-federation.html',
-    cover: 'images/Крейсер Федерация/cover.webp'
+    cover: 'images/cruiser-federation/cover.webp'
   },
   {
     id: 'allies',
@@ -287,7 +287,7 @@ const projects = [
     color: 'amber',
     size: 'default',
     href: 'case-allies.html',
-    cover: 'images/Союзники/cover.webp'
+    cover: 'images/allies/cover.webp'
   },
   {
     id: 'future-supply-chain',
@@ -303,7 +303,7 @@ const projects = [
     color: 'teal',
     size: 'default',
     href: 'case-future-supply-chain.html',
-    cover: 'images/Future Supply Chain/cover.webp'
+    cover: 'images/future-supply-chain/cover.webp'
   },
   {
     id: 'guardians',
@@ -319,7 +319,7 @@ const projects = [
     color: 'indigo',
     size: 'default',
     href: 'case-guardians.html',
-    cover: 'images/Хранители/cover.webp'
+    cover: 'images/guardians/cover.webp'
   },
   {
     id: 'onboarding-platform',
@@ -353,7 +353,7 @@ const projects = [
     color: 'gold',
     size: 'wide',
     href: 'case-mobile-minigames.html',
-    cover: 'images/Начальник Гавани/cover.webp'
+    cover: 'images/harbor-master/cover.webp'
   },
   {
     id: 'network-telecom',
@@ -369,7 +369,7 @@ const projects = [
     color: 'indigo',
     size: 'default',
     href: 'case-network-telecom.html',
-    cover: 'images/Сеть/cover.webp'
+    cover: 'images/network/cover.webp'
   },
   {
     id: 'off-grid',
@@ -385,7 +385,7 @@ const projects = [
     color: 'magenta',
     size: 'default',
     href: 'case-off-grid.html',
-    cover: 'images/Вне Сети/cover.webp'
+    cover: 'images/off-grid/cover.webp'
   },
   {
     id: 'city-sim',
@@ -401,7 +401,7 @@ const projects = [
     color: 'magenta',
     size: 'default',
     href: 'case-city-sim.html',
-    cover: 'images/Симулятор управления городом/cover.webp'
+    cover: 'images/city-sim/cover.webp'
   },
   {
     id: 'netone-lean',
@@ -433,7 +433,7 @@ const projects = [
     color: 'gold',
     size: 'default',
     href: 'case-seekers.html',
-    cover: 'images/Искатели/cover.webp'
+    cover: 'images/seekers/cover.webp'
   },
   {
     id: 'corporate-legends',
@@ -449,7 +449,7 @@ const projects = [
     color: 'forest',
     size: 'featured',
     href: 'case-corporate-legends.html',
-    cover: 'images/Корпоративные Легенды/cover.webp'
+    cover: 'images/corporate-legends/cover.webp'
   }
 ];
 
