@@ -18,9 +18,10 @@ const COLLECTOR_CAP = 6;   // потолок собирателей
 // уносит заряд домой. Полностью опустошённый контур не возобновляется (как гибернация).
 const RAIDER_SPEED = 5;    // быстрее копателя/собирателя (тайла/сек)
 const RAIDER_CAP = 3;      // потолок разведчиков
-const RAID_DRAIN = 50;     // сколько энергии высасывает за набег (≈10/сек × RAID_DRAIN_TIME): сначала таймер, переполнение — HP кольца
+const RAID_DRAIN = 100;    // сколько энергии высасывает за набег (≈20/сек × RAID_DRAIN_TIME): сначала таймер, переполнение — HP кольца. ×2 — рейдер ощутимо бьёт по таймеру
 const RAID_DRAIN_TIME = 5; // сек: разведчик стоит у города и «заполняется» перед кражей — долго и заметно (окно на перехват)
 const RAID_REACH_R = 5;    // тайлов — «достиг базы» (упирается в неразрушимый фундамент снизу)
+const BASE_ACT_R = 2;      // тайлов от ЯДРА базы — рейдер/взломщик ДЕЙСТВУЮТ (дренаж/взлом) только ВПЛОТНУЮ, не с края каверны
 // ОХОТНИК (hunter) — летающий боец: гонится за юнитом по тоннелям, таранит с разгона.
 const HUNTER_SPEED = 4;          // тайла/сек на сближении (быстрее копателя — догоняет юнит)
 const HUNTER_CHARGE_SPEED = 16;  // тайла/сек рывок-таран (по px, прямой разгон к зафиксированной позиции юнита)
@@ -40,13 +41,13 @@ const SNIPER_GUARD_R = 8;        // тайлов: держится в этом �
 const SNIPER_COOLDOWN = 1.6;     // сек между выстрелами
 const SNIPER_CAP = 2;            // потолок снайперов
 // Летающие типы: по воздуху-тоннелям, без гравитации/клинга, НЕ копают (как рейдер). hacker/sniper — заделы (ниже).
-const ENEMY_FLYERS = { raider: 1, hunter: 1, hacker: 1, sniper: 1 };
+const ENEMY_FLYERS = { raider: 1, hunter: 1, hacker: 1, sniper: 1, swarm_midge: 1, mender: 1, siege_ram: 1, siege_mortar: 1 };   // mine_planter/lurker/blight_sower — НАЗЕМНЫЕ (копают/сидят в породе)
 
 class Enemy {
   constructor(x, y, type, homeX, homeY, homeR) {
     this.tileX = x; this.tileY = y;
     this.px = x * TILE + TILE / 2; this.py = y * TILE + TILE / 2;
-    this.type = type;                 // 'digger' | 'collector' | 'raider' | 'hunter' | 'hacker' | 'sniper'
+    this.type = type;                 // digger|collector|raider|hunter|hacker|sniper | mine_planter|lurker|swarm_midge|mender|siege_ram|siege_mortar|blight_sower
     this.maxHp = ENEMY_HP_BY_TYPE[type] || ENEMY_HP; this.hp = this.maxHp;   // прочность по роли (задел под перехват/бой)
     this.speed = type === 'raider' ? RAIDER_SPEED : ENEMY_SPEED;
     this.homeX = homeX; this.homeY = homeY;

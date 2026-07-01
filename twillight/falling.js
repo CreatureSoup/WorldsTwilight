@@ -76,7 +76,7 @@ class FallingRocks {
         const dxp = wrapDeltaPx(unit.px, (b.tx + 0.5) * TILE);
         if (Math.abs(dxp) < TILE * ROCKFALL_HIT_W && b.py < unit.py + TILE * ROCKFALL_HIT_H && b.py + TILE > unit.py - TILE * ROCKFALL_HIT_H) {
           const dmin = b.boulder ? BOULDER_DAMAGE_MIN : UNSTABLE_DAMAGE_MIN, dmax = b.boulder ? BOULDER_DAMAGE_MAX : UNSTABLE_DAMAGE_MAX;
-          unit.hp -= dmin + Math.floor(Math.random() * (dmax - dmin + 1));   // случайный урон в диапазоне (валун бьёт сильнее)
+          unit.hurt(dmin + Math.floor(Math.random() * (dmax - dmin + 1)));   // случайный урон в диапазоне (валун бьёт сильнее) — через hurt (реликты защиты)
           b.hit = true;
           if (b.boulder && unit.shove) {   // ВАЛУН отталкивает юнита на соседний свободный тайл
             const ux = unit.tileX, uy = unit.tileY, fx = unit.faceX || 1;

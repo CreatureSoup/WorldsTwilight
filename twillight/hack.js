@@ -36,7 +36,7 @@ Object.assign(Game.prototype, {
       const d = Math.hypot(wrapDeltaPx(u.px, h.hx), u.py - h.hy) / TILE;
       if (d <= HACK_RADIUS && d < best) { best = d; target = wd; mode = 'breach'; thx = h.hx; thy = h.hy; }
     }
-    const keys = moduleActionKeys('aux', u.modules && u.modules.aux);
+    const keys = this.actionKeys('hack');   // цифра назначена менеджером действий (actionbar.js)
     const held = !!(this.input && this.input.keys && keys.some((k) => this.input.keys.has(k)));
     if (target && held) {
       u.frozenHack = true;

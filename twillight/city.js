@@ -21,6 +21,22 @@ class City {
     this.repairRestore = false;   // узел РЕКОНСТРУКЦИЯ (amb_recon): автопочинка ВОЗВРАЩАЕТ утерянные контуры (в охвате repairLvl)
     // Анимация меняющейся надписи фазы виджета (slide+fade): шагается в _stepBarText, ЧИТАЕТСЯ в render_city._drawBarText.
     this._barPhase = null; this._barPrev = null; this._barText = ''; this._barT0 = 0;
+    // ЩИТ ГОРОДА (артефакт city_shield): поглощающий буфер ПЕРЕД кольцами. shieldMax ставит game._applyArtifacts.
+    this.shield = 0; this.shieldMax = 0; this._shieldRegenT = 0; this._shieldFlash = 0;
+  }
+
+  // Щит поглощает урон волн ПЕРЕД кольцами; переполнение возвращается (идёт в кольца/таймер). Сброс задержки регена + вспышка.
+  _shieldAbsorb(amount) {
+    if (this.shieldMax <= 0 || amount <= 0) return amount;
+    const take = Math.min(this.shield, amount);
+    if (take > 0) { this.shield -= take; this._shieldRegenT = CITY_SHIELD_DELAY; this._shieldFlash = 0.25; }
+    return amount - take;
+  }
+  _updateShield(dt) {
+    if (this.shieldMax <= 0) { this.shield = 0; return; }
+    if (this._shieldRegenT > 0) this._shieldRegenT = Math.max(0, this._shieldRegenT - dt);
+    else if (this.shield < this.shieldMax) this.shield = Math.min(this.shieldMax, this.shield + CITY_SHIELD_REGEN * dt);
+    if (this._shieldFlash > 0) this._shieldFlash = Math.max(0, this._shieldFlash - dt);
   }
 
   totalHp() { return this.rings.reduce((s, r) => s + r.hp, 0); }
@@ -58,7 +74,8 @@ class City {
 
   damage(amount) {
     if (this.dead) return;
-    let dmg = amount;
+    let dmg = this._shieldAbsorb(amount);   // ЩИТ гасит урон волн ПЕРЕД кольцами
+    if (dmg <= 0) return;
     while (dmg > 0) {
       const i = this.activeRing();
       if (i < 0) { this.dead = true; return; }
@@ -76,6 +93,7 @@ class City {
     if (this.dead) return;
     const fromTimer = Math.min(this.timer, amount);
     this.timer -= fromTimer; amount -= fromTimer;
+    amount = this._shieldAbsorb(amount);   // переполнение в кольца сперва гасит ЩИТ
     while (amount > 0) {
       const i = this.activeRing();
       if (i < 0) { this.dead = true; return; }
@@ -88,6 +106,7 @@ class City {
   }
 
   update(dt, atBase, siphoned, powered) {
+    this._updateShield(dt);   // ЩИТ ГОРОДА: реген после задержки без урона + спад вспышки
     this._updateState(dt, atBase, siphoned, powered);
     this._stepBarText();   // шаг анимации надписи фазы — состояние шагаем В ЛОГИКЕ (после смены charging/full/dying/timer), не в рендере
   }
@@ -122,7 +141,10 @@ class City {
     this._autoRepair(dt);   // вне базы контуры медленно чинятся сами (по уровню охвата)
     this.powered = !!powered;   // print_cable: юнит в зоне питания → таймер ДЕРЖИТСЯ (не тикает, но и не дозаряжается)
     if (powered) return;
-    if (this.timer > 0) { this.timer = Math.max(0, this.timer - dt); return; }
+    // даунсайд ЩИТА: таймер вне базы тикает быстрее ТОЛЬКО пока купол ВОССТАНАВЛИВАЕТСЯ (тратит энергию на рекавери) —
+    // цена видна ИМЕННО после поглощённой волны (а не как постоянный невидимый налог).
+    const shieldRebuilding = this.shieldMax > 0 && this.shield < this.shieldMax;
+    if (this.timer > 0) { this.timer = Math.max(0, this.timer - dt * (shieldRebuilding ? CITY_SHIELD_TIMER_MULT : 1)); return; }
 
     // таймер истёк — город гибнет: текущее кольцо теряет HP
     this.dying = true;

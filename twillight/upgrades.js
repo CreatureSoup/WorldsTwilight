@@ -16,82 +16,118 @@
 // metaNeed — id узла СЕТИ ПАМЯТИ, без которого трек вообще не появляется в забеге
 // (напр. трек ПРИВОД ← `print_speed`, ПРОЖЕКТОР ← `mast_sens`, городские ← `amb_*`).
 const UPG_TRACKS = [
-  { id: 'drill',   cat: 'unit', label: STR.upgrades.tracks.drill.label,  sub: STR.upgrades.tracks.drill.sub, accent: '#f08a2a', icon: 'drill', cap: 3, metaCap: { node: 'mast_drill', cap: UPG_MAX },
+  { id: 'drill',   cat: 'unit', label: STR.upgrades.tracks.drill.label,  sub: STR.upgrades.tracks.drill.sub, accent: PAL.amber, icon: 'drill', cap: 3, metaCap: { node: 'mast_drill', cap: UPG_MAX },
     need: (s) => s.canDig && !s.altDrill, step: 0.2, base: (s) => s.digMult, fmt: (v) => '×' + v.toFixed(1) },
   // СИЛА УДАРА — для ИМПУЛЬСНОГО бура (вместо СИЛЫ БУРА): бюджет пробоя волны (Σ твёрдости) + пропорц. урон врагам.
-  { id: 'impforce', cat: 'unit', label: STR.upgrades.tracks.impforce.label, sub: STR.upgrades.tracks.impforce.sub, accent: '#ff8f3a', icon: 'drill', cap: 3,
+  { id: 'impforce', cat: 'unit', label: STR.upgrades.tracks.impforce.label, sub: STR.upgrades.tracks.impforce.sub, accent: PAL.amber, icon: 'drill', cap: 3,
     need: (s) => !!s.impulse, step: 2, base: () => IMPULSE_FORCE, fmt: STR.upgrades.tracks.impforce.fmt },
   // КИНЕТИКА — для КИНЕТИЧЕСКОГО бура (вместо СИЛЫ БУРА): +общая сила (сдвигает всю кривую разгона вверх).
-  { id: 'kinpower', cat: 'unit', label: STR.upgrades.tracks.kinpower.label, sub: STR.upgrades.tracks.kinpower.sub, accent: '#c8924a', icon: 'drill', cap: 2, metaCap: { node: 'mast_dk_max', cap: 3 },
+  { id: 'kinpower', cat: 'unit', label: STR.upgrades.tracks.kinpower.label, sub: STR.upgrades.tracks.kinpower.sub, accent: PAL.amber, icon: 'drill', cap: 2, metaCap: { node: 'mast_dk_max', cap: 3 },
     need: (s) => !!s.kinetic, step: KIN_POWER_STEP, base: () => KIN_BASE_MULT, fmt: STR.upgrades.tracks.kinpower.fmt },
+  // РАЗГОН ПРОБОЯ — шанс взрывного пробоя кинетики; ДОСТУПЕН при узле `mast_dk_burst` (+10%/ур, cap 2 → +20% к базовым 10%).
+  { id: 'kinburst', cat: 'unit', label: STR.upgrades.tracks.kinburst.label, sub: STR.upgrades.tracks.kinburst.sub, accent: PAL.amber, icon: 'drill', metaNeed: 'mast_dk_burst', cap: 2,
+    need: (s) => !!s.kinetic, step: KIN_BURST_STEP, base: () => KIN_BURST_CHANCE, fmt: STR.upgrades.tracks.kinburst.fmt },
   // СКОРОСТЬ ПРОХОДКИ — для ВИНТОВОГО бура: быстрее автономные щиты прокапывают породу (3 ур.).
-  { id: 'screwspeed', cat: 'unit', label: STR.upgrades.tracks.screwspeed.label, sub: STR.upgrades.tracks.screwspeed.sub, accent: '#9ad0a0', icon: 'drill', cap: 3,
+  { id: 'screwspeed', cat: 'unit', label: STR.upgrades.tracks.screwspeed.label, sub: STR.upgrades.tracks.screwspeed.sub, accent: PAL.amber, icon: 'drill', cap: 3,
     need: (s) => !!s.screw, step: SCREW_SPEED_STEP, base: () => SCREW_DIG_BASE, fmt: STR.upgrades.tracks.screwspeed.fmt },
+  // (апгрейд «ВРЕМЯ РАБОТЫ» щита — НЕ трек, а узел меты `mast_ds_life` на ветке бура; см. borers.js `borerLife()`)
   // ОХЛАЖДЕНИЕ РАДАРА — для РАДАР-сканера: короче кулдаун между развёртками. step ОТРИЦАТЕЛЬНЫЙ (кулдаун падает).
-  { id: 'radarcd', cat: 'unit', label: STR.upgrades.tracks.radarcd.label, sub: STR.upgrades.tracks.radarcd.sub, accent: '#7fb0e0', icon: 'scanner', cap: 3,
+  { id: 'radarcd', cat: 'unit', label: STR.upgrades.tracks.radarcd.label, sub: STR.upgrades.tracks.radarcd.sub, accent: PAL.cobalt, icon: 'scanner', cap: 3,
     need: (s) => !!s.radar, step: -RADAR_CD_STEP, base: () => RADAR_CD_BASE, fmt: STR.upgrades.tracks.radarcd.fmt },
   // ВСПЫШКА ЭХО — для ЭХО-сканера: короче кулдаун волны. step ОТРИЦАТЕЛЬНЫЙ.
-  { id: 'echocd', cat: 'unit', label: STR.upgrades.tracks.echocd.label, sub: STR.upgrades.tracks.echocd.sub, accent: '#b58cf0', icon: 'scanner', cap: 3,
+  { id: 'echocd', cat: 'unit', label: STR.upgrades.tracks.echocd.label, sub: STR.upgrades.tracks.echocd.sub, accent: PAL.cobalt, icon: 'scanner', cap: 3,
     need: (s) => !!s.echoScan, step: -ECHO_CD_STEP, base: () => ECHO_CD_BASE, fmt: STR.upgrades.tracks.echocd.fmt },
   // ПРИВОД — скорость хода; открывается КРАСНЫМ узлом `print_speed` «Оптимизация привода» (узел сам скорость не даёт — пускает тюнинг ресурсом).
-  { id: 'engine',  cat: 'unit', label: STR.upgrades.tracks.engine.label,     sub: STR.upgrades.tracks.engine.sub,          accent: '#3a7ec8', icon: 'engine', metaNeed: 'print_speed', cap: 3,
+  { id: 'engine',  cat: 'unit', label: STR.upgrades.tracks.engine.label,     sub: STR.upgrades.tracks.engine.sub,          accent: PAL.cobalt, icon: 'engine', metaNeed: 'print_speed', cap: 3,
     need: (s) => s.canMove, step: 0.4, base: (s) => s.moveSpeed, fmt: STR.upgrades.tracks.engine.fmt },
-  { id: 'scanner', cat: 'unit', label: STR.upgrades.tracks.scanner.label,     sub: STR.upgrades.tracks.scanner.sub,  accent: '#d4a042', icon: 'scanner', cap: 2, costMul: 1.6,
+  { id: 'scanner', cat: 'unit', label: STR.upgrades.tracks.scanner.label,     sub: STR.upgrades.tracks.scanner.sub,  accent: PAL.cobalt, icon: 'scanner', cap: 2, costMul: 1.6,
     need: (s) => s.scanR > 0 && !s.radar && !s.echoScan, step: 1, base: (s) => s.scanR, fmt: STR.upgrades.tracks.scanner.fmt },   // только СТАНДАРТНЫЙ сканер (радар/эхо — фикс. радиус 1, у них трек кулдауна)
-  { id: 'cargo',   cat: 'unit', label: STR.upgrades.tracks.cargo.label,    sub: STR.upgrades.tracks.cargo.sub,      accent: '#c8e25a', icon: 'cargo', cap: 2, metaCap: { node: 'mast_cargo', cap: 4 },
-    need: (s) => s.capacity > 0 && !(s.healRate > 0), step: 2, base: (s) => s.capacity, fmt: (v) => v + '' },
-  // РЕМОНТНЫЙ ТРЮМ — трек варианта-трюма (когда он установлен, `s.healRate>0`): каждый уровень
-  // +1 HP/10с И +1 ёмкость. База от модуля (1 HP / 3 ёмк), 4 уровня → 5 HP / 7 ёмк. apply — два стата.
-  { id: 'repair',  cat: 'unit', label: STR.upgrades.tracks.repair.label, sub: STR.upgrades.tracks.repair.sub, accent: '#ff3a22', icon: 'cargo', cap: 4,
-    need: (s) => s.healRate > 0, step: 1, base: (s) => s.healRate, fmt: STR.upgrades.tracks.repair.fmt,
-    apply: (s, lvl) => { s.healRate = (s.healRate || 0) + lvl; s.capacity = (s.capacity || 0) + lvl; } },
-  { id: 'hull',    cat: 'unit', label: STR.upgrades.tracks.hull.label,  sub: STR.upgrades.tracks.hull.sub,    accent: '#ff3a22', icon: null, cap: 2, metaCap: { node: 'mast_hull', cap: 4 },
+  { id: 'cargo',   cat: 'unit', label: STR.upgrades.tracks.cargo.label,    sub: STR.upgrades.tracks.cargo.sub,      accent: PAL.toxic, icon: 'cargo', cap: 2, metaCap: { node: 'mast_cargo', cap: 4 },
+    need: (s) => s.capacity > 0, step: 2, base: (s) => s.capacity, fmt: (v) => v + '' },   // груз больше не несёт healRate → исключение по healRate снято (трек работает и для вместительного трюма)
+  // РЕМОНТ — трек РЕМОНТНОГО МОДУЛЯ (доп-слот, когда установлен `s.healRate>0`): +1 HP/10с за уровень.
+  // База от модуля (1 HP/10с), 4 уровня → 5 HP/10с. Ёмкости не касается (модуль груз не хранит) → применяется через UPG_STAT_MAP (repair→healRate), без apply.
+  { id: 'repair',  cat: 'unit', label: STR.upgrades.tracks.repair.label, sub: STR.upgrades.tracks.repair.sub, accent: PAL.toxic, icon: null, cap: 4,
+    need: (s) => s.healRate > 0, step: 1, base: (s) => s.healRate, fmt: STR.upgrades.tracks.repair.fmt },
+  { id: 'hull',    cat: 'unit', label: STR.upgrades.tracks.hull.label,  sub: STR.upgrades.tracks.hull.sub,    accent: PAL.gold, icon: null, cap: 2, metaCap: { node: 'mast_hull', cap: 4 },
     need: () => true, step: 20, base: (s) => s.maxHp, fmt: (v) => v + ' HP' },
   // ПРОЖЕКТОР — дальность луча; открывается узлом «Сенсорный цех» (`mast_sens`). Эффект — render_light.
-  { id: 'proj',    cat: 'unit', label: STR.upgrades.tracks.proj.label,  sub: STR.upgrades.tracks.proj.sub,   accent: '#f2c878', icon: null, metaNeed: 'mast_sens', cap: 3,
+  { id: 'proj',    cat: 'unit', label: STR.upgrades.tracks.proj.label,  sub: STR.upgrades.tracks.proj.sub,   accent: PAL.cobalt, icon: null, metaNeed: 'mast_sens', cap: 3,
     need: () => true, step: 1, base: () => 0, fmt: STR.upgrades.tracks.proj.fmt },
   // ЭКРАН ПОМЕХ — докручивает гашение помех; трек ДОСТУПЕН, когда установлен МОДУЛЬ «Экран помех»
   // (доп-слот, `s.noiseResist>0`) — как ремонтный трюм. База — от модуля, эффект — game.drawScene.
-  { id: 'noise',   cat: 'unit', label: STR.upgrades.tracks.noise.label, sub: STR.upgrades.tracks.noise.sub, accent: '#3a7ec8', icon: null, cap: 3,
+  { id: 'noise',   cat: 'unit', label: STR.upgrades.tracks.noise.label, sub: STR.upgrades.tracks.noise.sub, accent: PAL.cobalt, icon: null, cap: 3,
     need: (s) => (s.noiseResist || 0) > 0, step: 0.15, base: (s) => s.noiseResist || 0, fmt: (v) => Math.round(v * 100) + '%' },
   // РАДИУС ПЕЧАТИ — на каком расстоянии можно ставить структуры; трек доступен при установленном МОДУЛЕ ПЕЧАТИ.
-  { id: 'printreach', cat: 'unit', label: STR.upgrades.tracks.printreach.label, sub: STR.upgrades.tracks.printreach.sub, accent: '#ff8f3a', icon: null, cap: 2,
+  { id: 'printreach', cat: 'unit', label: STR.upgrades.tracks.printreach.label, sub: STR.upgrades.tracks.printreach.sub, accent: PAL.amber, icon: null, cap: 2,
     need: (s) => (s.printer || 0) > 0, step: 1, base: (s) => s.printReach || 0, fmt: STR.upgrades.tracks.printreach.fmt },
   // ── ГОРОД (жёлтая ветка `amb`): батареи/контуры — ранние узлы; чарджер/нанорой/док — глубже.
-  { id: 'battery', cat: 'city', label: STR.upgrades.tracks.battery.label, sub: STR.upgrades.tracks.battery.sub, accent: '#f08a2a', icon: null, metaNeed: 'amb_batt',
+  { id: 'battery', cat: 'city', label: STR.upgrades.tracks.battery.label, sub: STR.upgrades.tracks.battery.sub, accent: PAL.amber, icon: null, metaNeed: 'amb_batt',
     need: () => true, step: 15, base: () => CITY_TIMER_MAX, fmt: STR.upgrades.tracks.battery.fmt },
   // СУПЕР-ЧАРДЖЕР — `amb_charge`: быстрее дозарядка таймера на базе (эффект — city.recharge).
-  { id: 'charge', cat: 'city', label: STR.upgrades.tracks.charge.label, sub: STR.upgrades.tracks.charge.sub, accent: '#f08a2a', icon: null, metaNeed: 'amb_charge',
+  { id: 'charge', cat: 'city', label: STR.upgrades.tracks.charge.label, sub: STR.upgrades.tracks.charge.sub, accent: PAL.amber, icon: null, metaNeed: 'amb_charge',
     need: () => true, cap: 3, step: 8, base: () => CITY_TIMER_RECHARGE, fmt: STR.upgrades.tracks.charge.fmt },
   // КОНТУРЫ 3-в-1 — `amb_cont`: ОДИН трек усиливает кольца ПО ОЧЕРЕДИ внеш→внутр→ядро (+CITY_CONTOUR_HP
   // тому кольцу, чья очередь на этом уровне). Распределение по кольцам — `cityRingBonuses`.
-  { id: 'contours', cat: 'city', label: STR.upgrades.tracks.contours.label, sub: STR.upgrades.tracks.contours.sub, accent: '#ff3a22', icon: null, metaNeed: 'amb_cont',
+  { id: 'contours', cat: 'city', label: STR.upgrades.tracks.contours.label, sub: STR.upgrades.tracks.contours.sub, accent: PAL.gold, icon: null, metaNeed: 'amb_cont',
     need: () => true, cap: 3, step: 1, base: () => 0, fmt: STR.upgrades.tracks.contours.fmt },
   // АВТО-ПОЧИНКА — `amb_regen`: уровень = ОХВАТ колец (ядро→+внутр→+внешний), эффект — city.repairLvl.
-  { id: 'cityrepair', cat: 'city', label: STR.upgrades.tracks.cityrepair.label, sub: STR.upgrades.tracks.cityrepair.sub, accent: '#c8e25a', icon: null, metaNeed: 'amb_regen',
+  { id: 'cityrepair', cat: 'city', label: STR.upgrades.tracks.cityrepair.label, sub: STR.upgrades.tracks.cityrepair.sub, accent: PAL.toxic, icon: null, metaNeed: 'amb_regen',
     need: () => true, cap: 3, step: 1, base: () => 0, fmt: STR.upgrades.tracks.cityrepair.fmt },
   // РЕМОНТНЫЙ ДОК — `amb_dock`: на базе юнит лечит HP (эффект — game playing-цикл, `cityDockRate`).
-  { id: 'dock', cat: 'city', label: STR.upgrades.tracks.dock.label, sub: STR.upgrades.tracks.dock.sub, accent: '#c8e25a', icon: null, metaNeed: 'amb_dock',
+  { id: 'dock', cat: 'city', label: STR.upgrades.tracks.dock.label, sub: STR.upgrades.tracks.dock.sub, accent: PAL.toxic, icon: null, metaNeed: 'amb_dock',
     need: () => true, cap: 4, step: CITY_DOCK_HP, base: () => 0, fmt: STR.upgrades.tracks.dock.fmt },
   // ДЛИНА ШЛЕЙФА — `print_cable` (КРАСНАЯ ветка): длина физического энергошлейфа в тайлах ПУТИ (эффект — game._cableUpdate / cableLen).
-  { id: 'cable', cat: 'city', label: STR.upgrades.tracks.cable.label, sub: STR.upgrades.tracks.cable.sub, accent: '#f0a050', icon: null, metaNeed: 'print_cable', cap: 3, metaCap: { node: 'print_cable2', cap: 5 },
+  { id: 'cable', cat: 'city', label: STR.upgrades.tracks.cable.label, sub: STR.upgrades.tracks.cable.sub, accent: PAL.amber, icon: null, metaNeed: 'print_cable', cap: 3, metaCap: { node: 'print_cable2', cap: 5 },
     need: () => true, step: CABLE_LEN_STEP, base: () => CABLE_LEN_BASE, fmt: STR.upgrades.tracks.cable.fmt },
 ];
 // потолок уровней трека: БЕЗ узла «Верстак ИИ» (`mast_hub`) каждый трек капается 1 уровнем; с ним — штатные
 // потолки (базовый `cap`/UPG_MAX — бур 3, сканер/груз/прочность 2 …), узлы `metaCap` поднимают дальше.
+// Апгрейды РЕЛИКТОВ (Батч 6): формат значения по виду стата + акцент. cap/step/base — из ARTIFACT_UP (constants.js, единый источник).
+// Трек добавляется ДИНАМИЧЕСКИ при установке артефакта (syncArtifactTracks), т.к. реликты находят СЕРЕДИ забега (init фиксирует только модульные треки).
+const ART_UPG_FMT = {
+  pct:   (v) => Math.round(v * 100) + '%',
+  num:   (v) => '' + Math.round(v),
+  tiles: (v) => Math.round(v) + STR.upgrades.artUnit.tiles,
+  sec:   (v) => (Math.round(v * 10) / 10) + STR.upgrades.artUnit.sec,
+};
+const ART_UPG_META = {
+  armor:        { fmt: 'pct',   accent: PAL.gold },
+  overshield:   { fmt: 'num',   accent: PAL.gold },
+  absorb:       { fmt: 'num',   accent: PAL.gold },
+  thorns:       { fmt: 'num',   accent: PAL.gold },
+  echo_drill:   { fmt: 'pct',   accent: PAL.amber },
+  combat_drill: { fmt: 'num',   accent: PAL.amber },
+  jets:         { fmt: 'sec',   accent: PAL.cobalt },
+  city_shield:  { fmt: 'num',   accent: PAL.gold },
+  stun_pulse:   { fmt: 'tiles', accent: PAL.cobalt },
+  blast_charge: { fmt: 'num',   accent: PAL.amber },
+  nano_repair:  { fmt: 'num',   accent: PAL.toxic },
+  drill_overdrive: { fmt: 'pct', accent: PAL.amber },
+  drive_dash:   { fmt: 'tiles', accent: PAL.cobalt },
+  harpoon:      { fmt: 'tiles', accent: PAL.cobalt },
+  xray:         { fmt: 'sec',   accent: PAL.cobalt },
+  data_detector:{ fmt: 'tiles', accent: PAL.cobalt },
+  drone_collector: { fmt: 'tiles', accent: PAL.cobalt },
+  drone_courier:   { fmt: 'num', accent: PAL.cobalt },
+  drone_battery:   { fmt: 'sec', accent: PAL.amber },
+  drone_scout:     { fmt: 'tiles', accent: PAL.cobalt },
+  drone_hacker:    { fmt: 'sec', accent: PAL.cobalt },
+};
+
 const trCap = (tr) => {
+  if (tr.cat === 'artifact') return tr.cap || 3;   // апгрейды реликтов — независимы от «Верстака ИИ» (mast_hub), свой потолок ≤3
   if (typeof metaHas === 'function' && !metaHas('mast_hub')) return 1;
   let c = tr.cap || UPG_MAX;
   if (tr.metaCap && typeof metaHas === 'function' && metaHas(tr.metaCap.node)) c = tr.metaCap.cap;
   return c;
 };
 // Соответствие трека → поле stats юнита (для applyToStats).
-const UPG_STAT_MAP = { drill: 'digMult', impforce: 'impForce', kinpower: 'kinPower', screwspeed: 'screwSpeed', radarcd: 'radarCdD', echocd: 'echoCdD', engine: 'moveSpeed', scanner: 'scanR', cargo: 'capacity', hull: 'maxHp', proj: 'projLvl', noise: 'noiseResist', printreach: 'printReach' };
+const UPG_STAT_MAP = { drill: 'digMult', impforce: 'impForce', kinpower: 'kinPower', kinburst: 'kinBurstBonus', screwspeed: 'screwSpeed', radarcd: 'radarCdD', echocd: 'echoCdD', engine: 'moveSpeed', scanner: 'scanR', cargo: 'capacity', repair: 'healRate', hull: 'maxHp', proj: 'projLvl', noise: 'noiseResist', printreach: 'printReach' };
 
 const UPG_GADGETS = [
-  { id: 'magnet', label: STR.upgrades.gadgets.magnet.label, sub: STR.upgrades.gadgets.magnet.sub, accent: '#d4a042', cost: { iron: 18, organic: 8 } },
-  { id: 'repair', label: STR.upgrades.gadgets.repair.label,  sub: STR.upgrades.gadgets.repair.sub, accent: '#ff3a22', cost: { iron: 20, organic: 12 } },
-  { id: 'ping',   label: STR.upgrades.gadgets.ping.label,   sub: STR.upgrades.gadgets.ping.sub, accent: '#3a7ec8', cost: { crystal: 8 } },
+  { id: 'magnet', label: STR.upgrades.gadgets.magnet.label, sub: STR.upgrades.gadgets.magnet.sub, accent: PAL.gold, cost: { iron: 18, organic: 8 } },
+  { id: 'repair', label: STR.upgrades.gadgets.repair.label,  sub: STR.upgrades.gadgets.repair.sub, accent: PAL.toxic, cost: { iron: 20, organic: 12 } },
+  { id: 'ping',   label: STR.upgrades.gadgets.ping.label,   sub: STR.upgrades.gadgets.ping.sub, accent: PAL.cobalt, cost: { crystal: 8 } },
 ];
 
 class Upgrades {
@@ -117,6 +153,23 @@ class Upgrades {
     this.tracks = UPG_TRACKS.filter((tr) => tr.need(this.base) && (!tr.metaNeed || (typeof metaHas === 'function' && metaHas(tr.metaNeed))));
     for (const tr of this.tracks) this.levels[tr.id] = 0;
     this.scrollY = 0; this.sel = 0; this.warnT = -1e9;
+  }
+
+  // БАТЧ 6: синхронизация треков апгрейда РЕЛИКТОВ с установленными артефактами (зовётся из game._applyArtifacts).
+  // Реликты находят СЕРЕДИ забега → трек добавляем ДИНАМИЧЕСКИ (init фиксирует только модульные). Уровни купленного сохраняются.
+  syncArtifactTracks(ids) {
+    ids = ids || [];
+    this.tracks = this.tracks.filter((t) => t.cat !== 'artifact' || ids.includes(t.art));   // снят артефакт → убрать его трек
+    for (const id of ids) {
+      if (this.tracks.some((t) => t.art === id)) continue;                                   // уже есть
+      const up = (typeof ARTIFACT_UP !== 'undefined') && ARTIFACT_UP[id];
+      const meta = ART_UPG_META[id], def = (typeof ARTIFACT_BY_ID !== 'undefined') && ARTIFACT_BY_ID[id];
+      if (!up || !meta || !def) continue;
+      const fmt = ART_UPG_FMT[meta.fmt] || ART_UPG_FMT.num;
+      const tr = { id: 'art_' + id, art: id, cat: 'artifact', label: def.name, sub: STR.upgrades.artSub[id] || '', accent: meta.accent, icon: null, cap: up.cap, step: up.step, base: () => up.base, fmt };
+      this.tracks.push(tr);
+      if (this.levels[tr.id] == null) this.levels[tr.id] = 0;
+    }
   }
 
   addBank(type, n) { this.bank[type] = (this.bank[type] || 0) + (n || 1); }

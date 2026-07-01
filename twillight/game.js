@@ -219,6 +219,12 @@ class Game {
     this.firewall.reset();   // новый забег — файрволл базы чист
     this.shots.clear();
     this.structures.clear();   // новый забег — печатных структур нет
+    this.couriers = [];        // новый забег — курьер-дронов в полёте нет (vault_courier)
+    this.drone = null;         // дрон-компаньон (реликт дрон-слота) — пересоздаётся _syncDrone из _applyArtifacts
+    this.blightBeacons = [];   // новый забег — маяков скверны нет (скверносей расставляет в забеге)
+    this.acidClouds = []; this.seismicWaves = [];   // ловушки: активные эффекты (кислотные облака / сейсмо-волны) — чисто на старте
+    this.scanJamT = 0;   // дебафф глушилки сканера (останок-робот) — чисто на старте (паутина/прыгун на unit, сбрасываются с новым телом)
+    this._fxUnitHp = null; this.shakeT = 0; this.shakeMag = 0;   // удар-фидбэк: сброс детектора урона/тряски
     this.printSel = null; this.printMode = null; this.printStruct = null; this.printGhost = null; this.printFace = 0;   // печать: чистое состояние
     this.imp = { charge: 0, cd: 0, dir: [1, 0], held: false, wave: null };   // импульсный бур: чистое состояние
     this.borers = [];   // винтовой бур: автономные щиты (пусто на старте)
@@ -228,7 +234,8 @@ class Game {
     this._winTimer = null; this._winCut = null;   // победа через взлом: большой таймер перехвата → кат-сцена (kart_hackcity)
     this._lifeUsed = false;   // print_life: резервное тело ещё не использовано
     if (this._cableInit) this._cableInit();   // print_cable: трейлинг-кабель чист на старте забега
-    this.pendingArtifact = null; this.artifactSel = 0; this.artifactTechs = [];   // артефакты: модалка/выбор/извлечённые технологии (забег)
+    this.pendingArtifact = null; this.artifactSel = 0;   // артефакты: модалка/выбор
+    this.artifactSlots = { city: [], unit: [], drone: [] };   // установленные техно по слотам (ЗАЛОЧЕНО на забег); сброс на старте
     this.hoardCargo = false;   // тумблер ГРУЗ: по умолчанию отдаём ресурс городу
     this.loot = new Loot();
     this.falling = new FallingRocks();   // нестабильная порода → падающие валуны
@@ -263,6 +270,7 @@ class Game {
       // ЕДИНЫЙ путь: пересобрали эффективные статы (база сборки + апгрейды) → в unit.stats.
       // Все потребители (движение/бур/сканер/HP/ГРУЗ) читают unit.stats — отдельных кэшей нет.
       this.unit.setStats(this.upgrades.applyToStats());
+      this._applyArtifacts();   // АРТЕФАКТЫ: пересборка статов апгрейдом стирает флаги — возвращаем их поверх (jets/lootMagnet/combatDrill/щит)
       this.city.applyUpgrades(this.upgrades.cityTimerBonus(), this.upgrades.cityRingBonuses(), this.upgrades.cityRepairLevel(), this.upgrades.cityRecharge(), (typeof metaHas === 'function' && metaHas('amb_recon')));
       if (id === 'ping') this.world.reveal(this.unit.tileX, this.unit.tileY, 9);  // орбит-пинг: вскрыть участок
     };
@@ -408,20 +416,60 @@ class Game {
     if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) { this.radarCycleType(); return true; }
     return false;
   }
+  _addShake(mag) { this.shakeMag = Math.min(SHAKE_MAX, Math.max(this.shakeMag || 0, mag)); this.shakeT = SHAKE_TIME; }
+  // Направление искр «ОТ источника урона» (вывод по БЛИЖАЙШЕЙ угрозе в момент удара — игра не хранит откуда прилетело).
+  // Дёшево: один проход по `list` (+ опц. юнит) ТОЛЬКО в кадр удара (удары редки). Вектор = жертва − ближайший источник.
+  _hitAwayDir(px, py, list, includeUnit) {
+    let bx = null, by = null, bd = Infinity;
+    if (list) for (const s of list) { if (!s || s.dying || s.dead || s.friendly) continue; const dx = wrapDeltaPx(s.px, px), dy = s.py - py, d = dx * dx + dy * dy; if (d < bd) { bd = d; bx = s.px; by = s.py; } }
+    if (includeUnit && this.unit) { const dx = wrapDeltaPx(this.unit.px, px), dy = this.unit.py - py, d = dx * dx + dy * dy; if (d < bd) { bd = d; bx = this.unit.px; by = this.unit.py; } }
+    if (bx == null || bd < 1) return null;
+    const dx = wrapDeltaPx(px, bx), dy = py - by, d = Math.hypot(dx, dy) || 1;
+    return { x: dx / d, y: dy / d };
+  }
+  // Хаб удар-фидбэка: ЛОВИТ ПАДЕНИЕ hp у юнита/врагов/структур (детект по кадру — без правок их damage()) →
+  // искры (game.fx) + флэш-таймер `hitT` (читает рендер) + тряска экрана (только за ранение ЮНИТА). Тикает hitT/shake.
+  _hitFxPass(dt) {
+    const fx = this.fx, u = this.unit;
+    if (u) {
+      if (this._fxUnitHp != null && u.hp < this._fxUnitHp - 0.001) {
+        if (fx) fx.hit(u.px, u.py, '#ff5040', HIT_SPARK_UNIT, this._hitAwayDir(u.px, u.py, this.enemies, false));   // искры от ближайшего врага
+        u.hitT = HIT_FLASH_TIME; /* ТРЯСКА ОТКЛЮЧЕНА (вкл — раскомментировать): this._addShake(Math.min(SHAKE_MAX, SHAKE_HIT + (this._fxUnitHp - u.hp) * SHAKE_PER_DMG)); */
+      }
+      this._fxUnitHp = u.hp; if (u.hitT > 0) u.hitT = Math.max(0, u.hitT - dt);
+    }
+    for (const e of this.enemies) {
+      if (e._fxHp != null && e.hp < e._fxHp - 0.001 && !e.dying) { if (fx) fx.hit(e.px, e.py, '#ffd070', HIT_SPARK_ENEMY, this._hitAwayDir(e.px, e.py, null, true)); e.hitT = HIT_FLASH_TIME; }   // искры от юнита (бур/импульс/осада)
+      e._fxHp = e.hp; if (e.hitT > 0) e.hitT = Math.max(0, e.hitT - dt);
+    }
+    if (this.structures) for (const s of this.structures.list) {
+      if (s._fxHp != null && s.hp < s._fxHp - 0.001 && !s.dying) { if (fx) fx.hit(s.px, s.py, '#ff9a4a', HIT_SPARK_STRUCT, this._hitAwayDir(s.px, s.py, this.enemies, false)); s.hitT = HIT_FLASH_TIME; }   // искры от ближайшего врага
+      s._fxHp = s.hp; if (s.hitT > 0) s.hitT = Math.max(0, s.hitT - dt);
+    }
+    if (this.shakeT > 0) this.shakeT = Math.max(0, this.shakeT - dt);
+  }
   drawScene() {
     const ctx = this.ctx;
     ctx.fillStyle = PAL.pit; ctx.fillRect(0, 0, this.designW, this.designH);
+    // ТРЯСКА ЭКРАНА (удар-фидбэк): мировой слой смещается на затухающий мелкий офсет; HUD/CRT — без тряски (restore до них).
+    let _shx = 0, _shy = 0;
+    // ТРЯСКА ЭКРАНА ВРЕМЕННО ОТКЛЮЧЕНА (вкл — раскомментировать строку ниже + вызов _addShake в _hitFxPass):
+    // if (this.shakeT > 0 && this.shakeMag) { const f = this.shakeT / SHAKE_TIME, t = performance.now() / 1000; _shx = Math.round(Math.cos(t * 97) * this.shakeMag * f); _shy = Math.round(Math.sin(t * 83) * this.shakeMag * f); }
+    ctx.save(); ctx.translate(_shx, _shy);
     drawWorld(ctx, this.world, this.unit, this.camera, this.debug);
     if (typeof drawScrewTrail === 'function') drawScrewTrail(ctx, this.world, this.camera);   // винтовой бур: «резьба» на укреплённых ходах (текстура тайла)
     if (typeof drawServers === 'function') drawServers(ctx, this.world, this.camera, this.debug);   // серверы/хлам (туман приглушит невидимые; в дебаге — все)
     if (typeof drawArtifacts === 'function') drawArtifacts(ctx, this.world, this.camera);   // артефакты-реликты в породе (под туманом, как серверы)
     if (typeof drawRobots === 'function') drawRobots(ctx, this, this.camera);   // останки роботов (погребённые под туманом; активные — поверх)
     if (typeof drawMines === 'function') drawMines(ctx, this, this.camera);     // старые мины (мигают перед взрывом)
+    if (typeof drawBlightBeacons === 'function') drawBlightBeacons(ctx, this.blightBeacons, this.camera);   // маяки скверны (под туманом, до врагов/структур)
     drawEnemies(ctx, this.enemies, this.camera);
     if (typeof drawStructures === 'function') drawStructures(ctx, this.structures, this.camera);   // печатные структуры (в мире, под туманом)
+    if (typeof drawCityShield === 'function') drawCityShield(ctx, this, this.camera);   // ЩИТ ГОРОДА (артефакт city_shield): купол над базой
     if (typeof drawShots === 'function') drawShots(ctx, this.shots, this.camera);   // трассеры выстрелов врагов (снайпер)
     drawLoot(ctx, this.loot, this.camera);
     if (typeof drawDust === 'function') drawDust(ctx, this.dust, this.camera);   // пыль — В мире, ПОД туманом/светом (гаснет в незримом)
+    if (typeof drawFalling === 'function' && this.falling) drawFalling(ctx, this.falling, this.camera);   // обвалы/валуны — В МИРЕ, ПОД туманом (видны только в зримом/освещённом; раньше рисовались поверх тумана)
     if (!this.debug) {
       drawFog(ctx, this.world, this.unit, this.camera, this.designW, this.designH);
       drawHeadlight(ctx, this.world, this.unit, this.camera, this.designW, this.designH, this.radLevel);   // прожектор-конус у бура (тьма вокруг), с тенями от породы; пыль зеленеет от радиации
@@ -435,9 +483,12 @@ class Game {
     }
     if (!this.debug) this._drawNavPath(ctx);   // НАВИГАЦИЯ к городу: поверх тумана (видно в темноте), но ПОД валунами/юнитом — опасность важнее путеводной линии
     if (!this.debug) this._drawCityBeacon(ctx);   // МАЯЧОК ГОРОДА: янтарная стрелка-указатель к базе вокруг юнита
-    if (typeof drawFalling === 'function' && this.falling) drawFalling(ctx, this.falling, this.camera);   // летящие валуны — ПОВЕРХ тумана (опасность всегда видна)
     if (typeof drawBorers === 'function') drawBorers(ctx, this, this.camera);   // винтовой бур: щиты ПОВЕРХ тумана (игрок видит/отзывает их в темноте)
-    if (typeof drawCable === 'function') drawCable(ctx, this, this.camera);   // энергошлейф (print_cable/print_batt): тетер база/батарея→юнит ПОВЕРХ тумана (лайфлайн)
+    if (typeof drawEnergyCable === 'function') drawEnergyCable(ctx, this, this.camera);   // энергошлейф (print_cable/print_batt): тетер база/батарея→юнит ПОВЕРХ тумана (лайфлайн)
+    if (typeof drawCouriers === 'function') drawCouriers(ctx, this, this.camera);   // курьер-дроны (vault_courier): летят к базе ПОВЕРХ тумана (видно маршрут)
+    if (typeof drawDrones === 'function') drawDrones(ctx, this, this.camera);   // дрон-компаньон (реликт дрон-слота): ПОВЕРХ тумана
+    if (typeof drawTraps === 'function') drawTraps(ctx, this, this.camera);   // ловушки: кислотное облако-шиммер + сейсмо-волна-линза (поверх тумана — опасность видна)
+    if (typeof drawJets === 'function') drawJets(ctx, this, this.camera);   // ПРЫЖКОВЫЕ ДВИЖКИ (артефакт): выхлоп из-под юнита в полёте
     if (typeof drawCarriedBorer === 'function') drawCarriedBorer(ctx, this, this.camera);   // несомый «следующий» щит торчит из юнита (рисуется ДО юнита → задняя половина уходит под корпус)
     if (this.printMode === 'place' && typeof drawPrintGhost === 'function') drawPrintGhost(ctx, this, this.camera);   // голограмма размещения печати (поверх тумана — это UI)
     if (typeof partsHull === 'function' && this.unit) partsHull(this.unit.hull);   // спрайты по типу корпуса (ноги+кольцо+детали)
@@ -455,6 +506,15 @@ class Game {
         ctx.save(); clipVisibleAir(ctx, this.world, this.camera); drawTentacles(ctx, this.camera); ctx.restore();
       }
     }
+    if (this.unit && this.unit.hitT > 0) {   // удар-флэш ЮНИТА: красная аддитивная вспышка поверх корпуса
+      const f = this.unit.hitT / HIT_FLASH_TIME, ux = this.camera.screenX(this.unit.px), uy = this.unit.py - this.camera.y;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.4 * f; ctx.fillStyle = '#ff5040';
+      ctx.beginPath(); ctx.arc(ux, uy, TILE * 0.72, 0, 6.283); ctx.fill(); ctx.restore();
+    }
+    if (typeof drawUnitDebuffFx === 'function' && !this.debug) drawUnitDebuffFx(ctx, this, this.camera);   // дебаффы останков на юните: паутина-нити / прыгун на буре
+    if (typeof drawDrillHeat === 'function' && !this.debug) drawDrillHeat(ctx, this, this.camera);   // ФОРСАЖ БУРА (реликт): термометр нагрева над юнитом
+    if (typeof drawDashFx === 'function' && !this.debug) drawDashFx(ctx, this, this.camera);   // РЫВОК (реликт): стрики-послесвечение во время рывка
+    if (typeof drawHarpoonFx === 'function' && !this.debug) drawHarpoonFx(ctx, this, this.camera);   // ГАРПУН (реликт): трос юнит→якорь
     if (typeof drawBorerArrows === 'function' && !this.debug && typeof metaHas === 'function' && metaHas('mast_ds_nav')) drawBorerArrows(ctx, this, this.camera);   // узел: стрелки-указатели на запущенные щиты вокруг юнита
     if (typeof drawScanFx === 'function' && !this.debug) drawScanFx(ctx, this, this.camera);   // лучи сканера к серверу-хламу (поверх юнита)
     if (typeof drawHackFx === 'function' && !this.debug) drawHackFx(ctx, this, this.camera);   // канал взлома города (лиловый тетер + кольцо-прогресс, поверх юнита)
@@ -463,6 +523,8 @@ class Game {
     drawFx(ctx, this.fx, this.camera);
     if (typeof drawImpulseWave === 'function' && !this.debug) { drawImpulseWave(ctx, this, this.camera); drawImpulseCharge(ctx, this, this.camera); }   // импульсный бур: волна-выстрел + дуга заряда (поверх юнита/света)
     if (typeof drawSiegeBeam === 'function' && !this.debug) { drawSiegeBeam(ctx, this, this.camera); drawSiegeCharge(ctx, this, this.camera); }   // осадный модуль: луч-копьё + сходящийся фокус-заряд
+    if (typeof drawStealthFx === 'function' && !this.debug) drawStealthFx(ctx, this, this.camera);   // стелс-модуль: маскировка-шиммер поверх юнита, пока невидим
+    if (typeof drawJamFx === 'function' && !this.debug) drawJamFx(ctx, this, this.camera);   // взлом юнитов: расходящееся кольцо-помеха на импульсе
     if (typeof drawKineticHeat === 'function' && !this.debug) drawKineticHeat(ctx, this, this.camera);   // кинетический бур: глоу контакта + пипы разгона
     // ОБНАРУЖЕНИЕ УГРОЗ: голо-маркеры врагов/нестабильностей поверх мира/тумана, ПОД CRT/HUD (только в игре, при владении узлом и включённом тумблере)
     if (this.mode === 'playing' && !this.debug && this.alertView && this._alertActive() && typeof drawAlertOverlay === 'function')
@@ -472,9 +534,12 @@ class Game {
       if (typeof drawEchoWave === 'function') drawEchoWave(ctx, this, this.camera);
     }
     if (this.debug && typeof drawHazardDebug === 'function') drawHazardDebug(ctx, this, this.camera);   // ДЕБАГ: маркеры артефактов/роботов/мин (туман выкл)
+    ctx.restore();   // конец смещённого тряской мирового слоя — HUD/CRT рисуются без тряски
+    if (this._cinematic) return;   // КИНОРЕЖИМ (tools/teaser.js — тизер): рисуем ТОЛЬКО мир, без HUD/CRT-рамки/виджетов
     drawCrtOverlay(ctx, this.designW, this.designH);   // виньетка + скан-лайны поверх мира (HUD крупнее)
     drawHUD(ctx, this.world, this.unit, this.inventory, { fps: this.fps, delivered: this.deliveredTotal, cycle: this.cycle, cycleNum: this.cycleLabel(), scan: this.activeScan || (this.scanEnemy ? { data: this.scanEnemy.scan } : null), scanDoneT: this._scanDoneT, scanMsg: this._scanMsg, log: this.eventLog, bank: (typeof metaHas === 'function' && metaHas('amb_hub')) ? this.upgrades.bank : null, hoard: this.hoardCargo }, this.designW, this.designH);
     if (typeof drawWavePredict === 'function') drawWavePredict(ctx, this, 580, 24);   // ПРОГНОЗ ВОЛН (узел amb_predict): графический таймер + глиф угрозы, под «ЦИКЛ N»
+    if (this.mode === 'playing' && !this.debug && typeof drawDebuffBadge === 'function') drawDebuffBadge(ctx, this, this.designW, this.designH);   // мигающая плашка активных дебаффов (паутина/прыгун/глушилка)
     if (this.mode === 'playing' && !this.debug && this._alertActive() && typeof drawAlertToggle === 'function')
       drawAlertToggle(ctx, this.alertView, this._alertThreats(), performance.now() / 1000);   // HUD-тумблер (виден при владении узлом)
     if (this.mode === 'playing' && !this.debug && typeof drawPrintHud === 'function') drawPrintHud(ctx, this, this.designW, this.designH);   // панель печати структур / подсказка режима
@@ -491,6 +556,10 @@ class Game {
     // if (typeof drawScanCooldown === 'function') drawScanCooldown(ctx, this, this.designW);
     if (this.mode === 'playing' && !this.debug && this.radar && this._contamActive() && typeof drawRadarCompass === 'function')
       drawRadarCompass(ctx, this.radar, 10, (typeof hudLeftBottom === 'function' ? hudLeftBottom(typeof metaHas === 'function' && metaHas('amb_hub')) : 118) + 6);   // под левым стеком HUD (ГРУЗ/БАНК)
+    if (this.mode === 'playing' && !this.debug && this.dataCompass && this.artifactHas('data_detector') && typeof drawDataCompass === 'function') {   // ДЕТЕКТОР ДАННЫХ (реликт города) — стек ПОД детектором загрязнения
+      const baseY = (typeof hudLeftBottom === 'function' ? hudLeftBottom(typeof metaHas === 'function' && metaHas('amb_hub')) : 118) + 6;
+      drawDataCompass(ctx, this.dataCompass, 10, baseY + (this._contamActive() ? RADAR_H + 6 : 0));
+    }
     drawCity(ctx, this.city, this.designW);
     if (this.mode === 'playing' && !this.debug && this.atBase()) {   // подсказка действия под капсулой таймера (в зоне города)
       const ctx2 = ctx; ctx2.save(); ctx2.font = `8px ${FONT_MONO}`; ctx2.textBaseline = 'top'; ctx2.textAlign = 'left';
@@ -589,20 +658,45 @@ class Game {
       this.updateBorers(dt);    // ВИНТОВОЙ БУР: автономные щиты-проходчики (запуск/возврат по Пробелу)
       this.updateHack(dt);      // ВЗЛОМ ГОРОДА: канал взлома у сердца спящей каверны (до unit.update — кадр уважит frozenHack)
       this.updateSiege(dt);     // ОСАДНЫЙ МОДУЛЬ: заряд цифрой 3 → пробойный луч по дикому гнезду (до unit.update — кадр уважит frozenSiege)
+      this.updateStealth(dt);   // СТЕЛС-МОДУЛЬ: разовая активация невидимости (доп-действие) → unit.stealthT для ai.js
+      this.updateJam(dt);       // ВЗЛОМ ЮНИТОВ: импульс-глушение (доп-действие) → e.slowT врагам в радиусе
+      this.updateJets(dt);      // ПРЫЖКОВЫЕ ДВИЖКИ (артефакт): удержание доп-действия → unit.flying (до unit.update — полёт через воздух)
+      this.updateDash(dt);      // РЫВОК (артефакт): доп-действие → unit.dashing (до unit.update — авто-проходка по воздуху)
+      this.updateHarpoon(dt);   // ГАРПУН (артефакт): доп-действие → притяг к стене через dash-машинерию (до unit.update)
       this.unit.update(dt, this.input, this.world);
       if (this.debugTentacles) updateTentacles(dt, this.unit, this.world);
       if (typeof updateRingAim === 'function' && UNIT_DEFS[this.unit.hull] && UNIT_DEFS[this.unit.hull].kind === 'ring') updateRingAim(dt, this.unit);   // доворот кластера кольца к направлению бурения
       if (this.unit.dug) {
-        const d = this.unit.dug; this.loot.spawn(wrapX(d.x), d.y, d.type);
-        // print_ore «Анализ породы»: глубже читает структуру → шанс выжать из той же залежи лишнюю единицу
+        const d = this.unit.dug, n = d.amount || 1;
+        for (let i = 0; i < n; i++) this.loot.spawn(wrapX(d.x + (n > 1 ? Math.round((Math.random() - 0.5) * 2.2) : 0)), d.y, d.type);   // богатый тайл (1..3) → несколько дропов
+        // print_ore «Анализ породы»: глубже читает структуру → шанс выжать из той же залежи лишнюю единицу СВЕРХУ
         if (typeof metaHas === 'function' && metaHas('print_ore') && Math.random() < PRINT_ORE_CHANCE) this.loot.spawn(wrapX(d.x), d.y, d.type);
         this.unit.dug = null;
       }
-      if (this.unit.broke) { this.dugTiles++; this.unit.broke = false; }   // проходка: считаем прокопанные тайлы
+      if (this.unit.broke) {   // проходка: считаем прокопанные тайлы; ДЕБАФФ прыгуна сбрасывается по проходке (не по таймеру)
+        this.dugTiles++;
+        if (this.unit.latchTiles > 0) { this.unit.latchTiles--; if (this.unit.latchTiles <= 0 && !this.debug) this.logEvent(STR.log.robotLatchOff); }
+        this.unit.broke = false;
+      }
+      if (this.unit.kinBurstFx) {   // ВЗРЫВНОЙ ПРОБОЙ кинетики (mast_dk_burst): FX на мгновенно пробитом тайле (лут/проходка идут обычным путём dug/broke)
+        const d = this.unit.kinBurstFx, px = (wrapX(d.x) + 0.5) * TILE, py = (d.y + 0.5) * TILE;
+        if (this.dust && this.dust.burst) this.dust.burst(px, py);
+        if (this.fx) this.fx.hit(px, py, '#ffb060', 7);   // тёплая вспышка-разряд кинетики (сопровождает сам пробой — заряд незаметен)
+        this.unit.kinBurstFx = null;
+      }
+      if (this.unit.echoBreak) {   // ЭХО-БУР (реликт): соседний тайл пробит — лут + проходка + FX
+        const d = this.unit.echoBreak, n = d.amount || 1, px = (wrapX(d.x) + 0.5) * TILE, py = (d.y + 0.5) * TILE;
+        if (d.type) for (let i = 0; i < n; i++) this.loot.spawn(wrapX(d.x), d.y, d.type);
+        this.dugTiles++;
+        if (this.dust && this.dust.burst) this.dust.burst(px, py);
+        this.unit.echoBreak = null;
+      }
       this.updateServers(dt);   // авто-скан выкопанных серверов → данные + лог
       this.updateEnemyScan(dt);  // скан вражеских юнитов в радиусе сканера → данные кодекса
       this.updateScanners(dt);   // РАДАР-развёртка (блипы залежей/врагов) + ЭХО-волна (метки залежей по X)
       this.updateHazards(dt);    // погребённые опасности: останки роботов (стрельба) + старые мины (взрыв); откоп → срабатывание
+      this.updateBlight(dt);     // маяки скверны (скверносей): добивание бурением → снятие очага помех
+      this.updateTraps(dt);      // ловушки: срабатывание свежевыкопанных + тик активных (кислота DoT / сейсмо-волна / рассеивание)
       this.falling.update(dt, this.world, this.unit);   // нестабильная порода: срыв валунов + урон
       if (this.visions) this.visions.update(dt, this.unit, this.designW, this.designH);   // видения в темноте
       if (this.hints) this.hints.update(dt);
@@ -613,13 +707,14 @@ class Game {
       this.radLevel += (this.world.radAt(this.unit.tileX, this.unit.tileY) - this.radLevel) * Math.min(1, dt * 2.5);
       if (this.radar && this._contamActive()) this.radar.update(dt, this.world, this.unit);   // детектор загрязнения (свойство сканера)
 
-      this.loot.update(dt, this.world, this.unit, this.inventory, this.upgrades.pickupBonus());
+      this.loot.update(dt, this.world, this.unit, this.inventory, this.upgrades.pickupBonus() + ((this.unit.stats && this.unit.stats.lootMagnet) || 0));   // +лут-магнит (артефакт)
       this.fx.update(dt);
       this.camera.follow(this.unit, dt);
       this.dust.drill(dt, this.unit);                         // пыль бурения (от блока к юниту)
       this.dust.ambient(dt, this.world, this.camera);         // редкая фоновая пыль/камушки с потолка (после follow — камера актуальна)
       this.dust.update(dt);
-      this.world.reveal(this.unit.tileX, this.unit.tileY, Math.max(1, Math.round(this.unit.stats.scanR || SCANNER_R)));   // ЧЕСТНЫЕ целые тайлы (1/2/3)
+      if (this.scanJamT > 0) { this.scanJamT = Math.max(0, this.scanJamT - dt); if (this.scanJamT <= 0 && !this.debug) this.logEvent(STR.log.robotJamOff); }   // ДЕБАФФ глушилка: спад → восстановление сканера
+      if (this.scanJamT <= 0) this.world.reveal(this.unit.tileX, this.unit.tileY, Math.max(1, Math.round(this.unit.stats.scanR || SCANNER_R)));   // ЧЕСТНЫЕ целые тайлы (1/2/3); при глушении — туман НЕ снимается
       this._updateNavPath(dt);   // НАВИГАЦИЯ: пересчёт реального пути A* к базе (троттлинг внутри)
       const atBase = this.atBase();
       if (atBase && !this.hoardCargo && this.inventory.cargoUsed()) {   // режим «копить» — на базе НЕ сдаём ресурс
@@ -638,12 +733,21 @@ class Game {
       if (this._lastHpFloor != null && fh > this._lastHpFloor) this.fx.heal(this.unit.px, this.unit.py - TILE * 0.4);
       this._lastHpFloor = fh;
       const siphoned = this.enemies.some((e) => e.type === 'raider' && e.draining && !e.dead);   // рейдер сосёт реактор → дозарядка на базе на паузе
-      this._cableUpdate();   // print_cable/print_batt: трейлинг-кабель за юнитом (прокладка/сматывание/длина) → this.cable
+      this._cableUpdate(dt);   // print_cable/print_batt: трейлинг-кабель за юнитом (прокладка/сматывание/длина/обрушение/якоря) → this.cable
+      if (this._cableAnchorInput) this._cableAnchorInput();   // Энергорелеи: доп-действие якоря шлейфа на батарею
       this.city.update(dt, atBase, siphoned, !!(this.cable && this.cable.powered));
       this.cycle.update(dt * this._waveSlowFactor());   // макро-таймер эскалации (взлом-саботаж гнёзд ЗАМЕДЛЯЕТ — wildcity.js)
       this.updateEnemies(dt);  // волны диких гнёзд
       this.updateWilds(dt);    // дикие гнёзда как цель: спад вспышки попадания; победа при подавлении всех (wildcity.js)
+      this._combatDrillTick(dt);   // БОЙ-БУР (артефакт): контактный урон врагам у юнита
+      this.updateArtifactsActive(dt);   // активные реликты (ЭМИ-импульс/подрыв-заряд/нано-ремонт): доп-действия по цифрам
+      this.updateDrillOverdrive(dt);    // ФОРСАЖ БУРА (реликт, пассив): нагрев от бурения → множитель силы; перегрев → лок (после unit.update/updateBorers)
+      this.updateXray(dt);              // РЕНТГЕН (реликт): доп-действие → временное снятие тумана с затуханием (unit.xrayR → render_light.drawFog)
+      this.updateDataDetector(dt);      // ДЕТЕКТОР ДАННЫХ (реликт города): пеленг к ближайшему серверу с данными (game.dataCompass → drawDataCompass)
+      this.updateDrones(dt);            // ДРОН-КОМПАНЬОН (реликт дрон-слота): collector/courier/battery/scout/hacker (game.drone)
       this.structures.update(dt, this);   // печатные структуры: турели бьют врагов, подзарядка от юнита, гибель
+      this.updateCouriers(dt);            // курьер-дроны (vault_courier): полёт к базе, перехват врагами, сдача груза
+      this._hitFxPass(dt);   // удар-фидбэк: детект урона по юниту/врагам/структурам ЗА КАДР → искры + флэш + тряска
       // ФАЙРВОЛЛ: активные взломщики у базы заполняют сегменты; узел amb_fw замедляет; ЮНИТ на взлом НЕ влияет (защита — убить хакеров)
       const hackers = this.enemies.reduce((n, e) => n + (e.hacking ? 1 : 0), 0);
       this.firewall.update(dt, hackers, typeof metaHas === 'function' && metaHas('amb_fw'));

@@ -27,7 +27,7 @@ Object.assign(Game.prototype, {
 
     const ctx = this.mode === 'playing' && !this.atBase() && !this.printMode;   // не на базе/не в печати
     const canCharge = ctx && s.cd <= 0 && u.state === IDLE;
-    const keys = moduleActionKeys('aux', u.modules && u.modules.aux);           // цифра 3 (act:3)
+    const keys = this.actionKeys('siege');           // цифра назначена менеджером действий (actionbar.js)
     const held = !!(this.input && this.input.keys && keys.some((k) => this.input.keys.has(k)));
 
     if (canCharge && held) {

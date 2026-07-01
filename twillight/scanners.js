@@ -20,11 +20,12 @@ Object.assign(Game.prototype, {
     this.echo = { cd: 0, cdMax: ECHO_CD_BASE, wave: null, marks: [] };
     this._ridN = 0;
   },
-  // Сканер — ДОПОЛНИТЕЛЬНОЕ действие: клавиши БЕРЁМ ИЗ раскладки модуля (`moduleActionKeys` → цифра 1), а не
-  // хардкодим. Главное действие (Пробел) занято буром/взаимодействием → конфликта нет при любой сборке.
+  // Сканер — ДОПОЛНИТЕЛЬНОЕ действие: клавишу берём у МЕНЕДЖЕРА действий (actionbar.js `actionKeys`) по активному
+  // варианту (радар/эхо), а не хардкодим. Главное действие (Пробел) занято буром/взаимодействием → конфликта нет.
   _scanWantFire() {
-    const keys = moduleActionKeys('scanner', this.unit && this.unit.modules && this.unit.modules.scanner);
-    return this.input.pressed(...keys) && !this.printMode;
+    const s = this.unit && this.unit.stats;
+    const keys = this.actionKeys(s && s.radar ? 'radar' : 'echoScan');
+    return keys.length > 0 && this.input.pressed(...keys) && !this.printMode;
   },
 
   // Залежи (по фильтру типа) в радиусе R тайлов вокруг юнита. tileX — «развёрнутый» (cx+dx), экран через screenX.

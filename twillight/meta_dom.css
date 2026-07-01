@@ -19,6 +19,12 @@
 #metaScreen .pcb-flow { stroke-dasharray:3 8; animation:mt-pcbflow .8s linear infinite; }
 #metaScreen .pcb-flow-slow { stroke-dasharray:4 9; animation:mt-pcbflow 1.8s linear infinite; }
 @keyframes mt-pcbflow { to { stroke-dashoffset:-22; } }
+/* ЗАПИТЫВАНИЕ узла: ток «прорисовывается» родитель→узел (pathLength=1 → дашоффсет нормирован к длине ребра) */
+#metaScreen .mt-surge { stroke-dasharray:1 1; stroke-dashoffset:1; animation:mt-surge .56s ease-out forwards; }
+@keyframes mt-surge { to { stroke-dashoffset:0; } }
+/* вспышка-кольцо в момент загорания узла (один проход, элемент сам удаляется по animationend) */
+#metaScreen .mt-ignite { animation:mt-ignite .5s ease-out forwards; }
+@keyframes mt-ignite { from { opacity:.85; transform:rotate(45deg) scale(.45); } to { opacity:0; transform:rotate(45deg) scale(1.5); } }
 /* окно не в фокусе/скрыто (класс ставит game._syncIdle) — гасим бесконечный «ток по проводам»: компоновщик GPU грел впустую */
 html.bg-idle #metaScreen * { animation-play-state:paused !important; }
 #metaScreen button { font-family:var(--font-mono); }

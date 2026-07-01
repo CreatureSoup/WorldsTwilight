@@ -14,12 +14,24 @@ function drawEnemies(ctx, enemies, camera) {
       ctx.beginPath(); ctx.arc(cx, cy, r + 3, 0, 6.283); ctx.stroke();
       ctx.restore();
     }
+    if (e.hitT > 0 && !e.dying) {   // удар-флэш: аддитивная вспышка-ореол при получении урона (за силуэтом → светящийся кант)
+      const f = e.hitT / HIT_FLASH_TIME;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55 * f;
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(cx, cy, r * (1.05 + (1 - f) * 0.6), 0, 6.283); ctx.fill(); ctx.restore();
+    }
     if (e.dying) { drawEnemyDeath(ctx, e, cx, cy, r); continue; }   // уничтожен: затухающий обломок + искры
     if (e.type === 'raider') { drawRaider(ctx, e, cx, cy, r); continue; }
     if (e.type === 'collector') { drawCollector(ctx, e, cx, cy, r); continue; }
     if (e.type === 'hunter') { drawHunter(ctx, e, cx, cy, r); continue; }
     if (e.type === 'hacker') { drawHacker(ctx, e, cx, cy, r); continue; }
     if (e.type === 'sniper') { drawSniper(ctx, e, cx, cy, r); continue; }
+    if (e.type === 'swarm_midge') { drawMidge(ctx, e, cx, cy, r); continue; }
+    if (e.type === 'mender') { drawMender(ctx, e, cx, cy, r); continue; }
+    if (e.type === 'siege_mortar') { drawMortar(ctx, e, cx, cy, r); continue; }
+    if (e.type === 'siege_ram') { drawSiegeRam(ctx, e, cx, cy, r); continue; }
+    if (e.type === 'mine_planter') { drawMinePlanter(ctx, e, cx, cy, r); continue; }
+    if (e.type === 'lurker') { drawLurker(ctx, e, cx, cy, r); continue; }
+    if (e.type === 'blight_sower') { drawBlightSower(ctx, e, cx, cy, r); continue; }
     ctx.fillStyle = '#3a2730';
     ctx.beginPath(); ctx.ellipse(cx, cy, r, r * 0.8, 0, 0, 6.283); ctx.fill();
     ctx.strokeStyle = '#7a2030'; ctx.lineWidth = 2; ctx.stroke();
@@ -52,6 +64,173 @@ function drawEnemyDeath(ctx, e, cx, cy, r) {
   ctx.save(); ctx.globalAlpha = 1 - p; ctx.strokeStyle = '#ff8a3a'; ctx.lineWidth = 1.5;   // искры
   for (let i = 0; i < 5; i++) { const a = (i / 5) * 6.283 + e.seed, l = r * (0.5 + p * 1.6); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * l, cy + Math.sin(a) * l); ctx.stroke(); }
   ctx.restore();
+}
+
+// Мошкара — рой-мелочь: крошечная тёмная блоха с дрожащими крылышками и красной точкой-глазом.
+// Намеренно НЕ читается как «дрон» — это гнус, мусор-облако. Дёшев (рисуется много).
+function drawMidge(ctx, e, cx, cy, r) {
+  const t = performance.now() / 1000, ph = e.seed || 0, rr = r * 0.5;
+  ctx.fillStyle = '#241a22';
+  ctx.beginPath(); ctx.ellipse(cx, cy, rr, rr * 0.85, 0, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,90,110,0.5)'; ctx.lineWidth = 1;
+  const w = Math.sin(t * 30 + ph) * rr * 0.6;
+  ctx.beginPath(); ctx.moveTo(cx - rr, cy); ctx.lineTo(cx - rr - 2, cy + w); ctx.moveTo(cx + rr, cy); ctx.lineTo(cx + rr + 2, cy - w); ctx.stroke();
+  ctx.fillStyle = '#ff5a4a';
+  ctx.beginPath(); ctx.arc(cx, cy, rr * 0.34, 0, 6.283); ctx.fill();
+}
+
+// Латальщик — саппорт-дрон: тёмное тело-капля, ЗЕЛЁНЫЙ дорсальный эмиттер (инструмент = зелёный, как у
+// игрока), красный глаз (всё же диких). При активном лечении — мягкий зелёный пульс-ореол (фидбэк).
+function drawMender(ctx, e, cx, cy, r) {
+  const t = performance.now() / 1000, fx = e.dx || ((e.lastDir && e.lastDir.x) || 1);
+  const healing = e._healTgt && !e._healTgt.dead && e.target === null;
+  if (healing) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.35 + 0.25 * Math.abs(Math.sin(t * 6));
+    ctx.strokeStyle = '#5fd29a'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.3, 0, 6.283); ctx.stroke(); ctx.restore();
+  }
+  ctx.fillStyle = '#23302a';
+  ctx.beginPath(); ctx.ellipse(cx, cy, r * 0.9, r * 0.7, 0, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = '#3f8f6a'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.strokeStyle = '#5fd29a'; ctx.lineWidth = 2;   // эмиттер-крест
+  ctx.beginPath(); ctx.moveTo(cx, cy - r * 0.95); ctx.lineTo(cx, cy - r * 0.35); ctx.moveTo(cx - r * 0.28, cy - r * 0.65); ctx.lineTo(cx + r * 0.28, cy - r * 0.65); ctx.stroke();
+  ctx.fillStyle = '#d0402f';
+  ctx.beginPath(); ctx.arc(cx + fx * r * 0.45, cy, r * 0.22, 0, 6.283); ctx.fill();
+}
+
+// Мортира — дальний структуролом: приземистый короб с толстым задранным стволом (по aimAng), дульная
+// вспышка на залпе. Силуэт «артиллерия», лиловая чрома (осадная родня тарана). Красный глаз.
+function drawMortar(ctx, e, cx, cy, r) {
+  const ang = e.aimAng || 0;
+  ctx.fillStyle = '#332433';
+  ctx.beginPath(); ctx.ellipse(cx, cy, r * 0.95, r * 0.8, 0, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = '#7a3a6a'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang);
+  ctx.fillStyle = '#4a3550'; ctx.fillRect(r * 0.2, -r * 0.32, r * 0.95, r * 0.64);
+  ctx.strokeStyle = '#8a5a9a'; ctx.lineWidth = 1.5; ctx.strokeRect(r * 0.2, -r * 0.32, r * 0.95, r * 0.64);
+  if (e.firing > 0) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,160,90,0.8)'; ctx.beginPath(); ctx.arc(r * 1.2, 0, r * 0.32, 0, 6.283); ctx.fill(); ctx.restore(); }
+  ctx.restore();
+  ctx.fillStyle = e.firing > 0 ? '#ff9a4a' : '#d0402f';
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.24, 0, 6.283); ctx.fill();
+}
+
+// Таран — наземный структуролом-мили: бронекорпус-клин с серой таран-плитой спереди, ориентирован по
+// рывку/ходу. Телеграф замаха (пульс-кольцо) и след-разгон — как у охотника, но массивнее. Красный глаз.
+function drawSiegeRam(ctx, e, cx, cy, r) {
+  const t = performance.now() / 1000;
+  let ax, ay;
+  if (e.cstate === 'charge' || e.cstate === 'recover') { ax = e.cvx; ay = e.cvy; } else { ax = e.dx; ay = e.dy; }
+  if (!ax && !ay) ax = 1;
+  const ang = Math.atan2(ay, ax), charging = e.cstate === 'charge';
+  if (e.cstate === 'wind') { const f = Math.min(1, (e.cT || 0) / RAM_WIND);
+    ctx.save(); ctx.globalAlpha = 0.5 * (0.4 + 0.6 * Math.abs(Math.sin(t * 22)));
+    ctx.strokeStyle = '#ff7a3a'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(cx, cy, r * (1.7 - 0.7 * f), 0, 6.283); ctx.stroke(); ctx.restore();
+  }
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang);
+  if (charging) { ctx.strokeStyle = 'rgba(255,120,60,0.3)'; ctx.lineWidth = 2;
+    for (const o of [-0.4, 0.4]) { ctx.beginPath(); ctx.moveTo(-r * 1.1, o * r); ctx.lineTo(-r * 2.4, o * r); ctx.stroke(); } }
+  ctx.fillStyle = '#352a2a';
+  ctx.beginPath(); ctx.moveTo(r * 1.15, 0); ctx.lineTo(-r * 0.7, -r * 0.85); ctx.lineTo(-r * 0.9, 0); ctx.lineTo(-r * 0.7, r * 0.85); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#9a5a3a'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = '#7a8088';   // таран-плита
+  ctx.beginPath(); ctx.moveTo(r * 1.15, -r * 0.5); ctx.lineTo(r * 1.5, 0); ctx.lineTo(r * 1.15, r * 0.5); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = charging ? '#ff6a4a' : '#d0402f';
+  ctx.beginPath(); ctx.arc(cx + Math.cos(ang) * r * 0.2, cy + Math.sin(ang) * r * 0.2, r * 0.26, 0, 6.283); ctx.fill();
+}
+
+// Закладка — копатель-смертник: тёмный корпус с буром (роет к базе) + круглый ЗАРЯД на спине. В режиме
+// «armed» (зарыт у базы) — заряд мигает красным при приближении юнита (телеграф взрыва, как у мины).
+function drawMinePlanter(ctx, e, cx, cy, r) {
+  const t = performance.now() / 1000, dx = e.dx || 1, dy = e.dy;
+  ctx.fillStyle = '#2c2a22';
+  ctx.beginPath(); ctx.ellipse(cx, cy, r * 0.9, r * 0.72, 0, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = '#7a6a30'; ctx.lineWidth = 2; ctx.stroke();
+  if (e.mpState !== 'armed') {   // в пути — малый бур по ходу
+    const bx = cx + dx * r * 0.95, by = cy + dy * r * 0.5;
+    ctx.fillStyle = '#9098a0';
+    ctx.beginPath(); ctx.moveTo(bx + dx * r * 0.3, by + dy * r * 0.3); ctx.lineTo(bx + dy * r * 0.25, by - dx * r * 0.25); ctx.lineTo(bx - dy * r * 0.25, by + dx * r * 0.25); ctx.closePath(); ctx.fill();
+  }
+  // заряд на спине — круг с чекой
+  ctx.fillStyle = '#3a2018';
+  ctx.beginPath(); ctx.arc(cx, cy - r * 0.55, r * 0.42, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = '#b06030'; ctx.lineWidth = 1.5; ctx.stroke();
+  // огонёк: спокойный тускло-красный; при «armed» рядом с юнитом (mpT>0) — учащённое мигание
+  const armedBlink = e.mpState === 'armed' && (e.mpT || 0) > 0;
+  const lit = armedBlink ? (Math.sin(t * 30) > 0 ? 1 : 0.15) : 0.5 + 0.3 * Math.sin(t * 3);
+  ctx.save(); if (armedBlink) ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = lit; ctx.fillStyle = armedBlink ? '#ff5030' : '#d0402f';
+  ctx.beginPath(); ctx.arc(cx, cy - r * 0.55, r * 0.18, 0, 6.283); ctx.fill(); ctx.restore();
+}
+
+// Залежень — засадник в породе: низкий горб, почти утопленный (виден только бугор + красный сенсор). Замах —
+// сенсор разгорается + пульс-кольцо; выпад (charge) — вытянутый рывок по вектору cv. Силуэт «капкан», не дрон.
+function drawLurker(ctx, e, cx, cy, r) {
+  const t = performance.now() / 1000;
+  const lunging = e.cstate === 'charge' || e.cstate === 'recover';
+  let ax = e.cvx, ay = e.cvy; if (!ax && !ay) { ax = e.dx || 1; ay = e.dy; }
+  const ang = Math.atan2(ay, ax);
+  if (e.lurkState === 'wind') {   // телеграф замаха
+    const f = Math.min(1, (e.lurkT || 0) / LURKER_WIND);
+    ctx.save(); ctx.globalAlpha = 0.5 * (0.4 + 0.6 * Math.abs(Math.sin(t * 28)));
+    ctx.strokeStyle = '#ff6a3a'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, r * (1.5 - 0.6 * f), 0, 6.283); ctx.stroke(); ctx.restore();
+  }
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang);
+  ctx.fillStyle = '#27201c';
+  if (lunging) { ctx.beginPath(); ctx.moveTo(r * 1.0, 0); ctx.lineTo(-r * 0.8, -r * 0.55); ctx.lineTo(-r * 0.8, r * 0.55); ctx.closePath(); ctx.fill(); }   // вытянутый рывок
+  else { ctx.beginPath(); ctx.ellipse(0, r * 0.25, r * 0.95, r * 0.5, 0, Math.PI, 2 * Math.PI); ctx.fill(); }   // низкий горб (низ срезан — утоплен)
+  ctx.strokeStyle = '#6a4a3a'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.restore();
+  // красный сенсор (ярче в замахе/выпаде)
+  const hot = e.lurkState === 'wind' || lunging;
+  ctx.fillStyle = hot ? '#ff6a4a' : '#a83a2f';
+  ctx.beginPath(); ctx.arc(cx + Math.cos(ang) * r * 0.3, cy + Math.sin(ang) * r * 0.1, r * 0.22, 0, 6.283); ctx.fill();
+}
+
+// Скверносей — наземный краулер-сеятель: низкий сегментный корпус на ножках + ДОРСАЛЬНЫЙ ЭМИТТЕР
+// (лиловый «улей»-сопло), сочащийся скверной. Красный глаз (диких). Лиловая чрома роднит с маяками.
+function drawBlightSower(ctx, e, cx, cy, r) {
+  const t = performance.now() / 1000, ph = e.seed || 0, fx = e.dx || ((e.lastDir && e.lastDir.x) || 1);
+  const moving = e.state2 === MOVING;
+  ctx.strokeStyle = '#4a3a52'; ctx.lineWidth = 2;   // ножки семенят
+  for (let i = 0; i < 4; i++) { const lx = cx + (i - 1.5) * r * 0.5, sw = moving ? Math.sin(t * 14 + ph + i * 2) * 2 : 0; ctx.beginPath(); ctx.moveTo(lx, cy + r * 0.3); ctx.lineTo(lx + sw, cy + r * 0.8); ctx.stroke(); }
+  ctx.fillStyle = '#2c2433';   // сегментный корпус
+  ctx.beginPath(); ctx.ellipse(cx, cy + r * 0.1, r * 1.0, r * 0.5, 0, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = '#7a4a8a'; ctx.lineWidth = 2; ctx.stroke();
+  // дорсальный эмиттер — сопло-улей, сочится
+  ctx.fillStyle = '#3a2a44';
+  ctx.beginPath(); ctx.moveTo(cx - r * 0.4, cy - r * 0.2); ctx.lineTo(cx + r * 0.4, cy - r * 0.2); ctx.lineTo(cx + r * 0.22, cy - r * 0.95); ctx.lineTo(cx - r * 0.22, cy - r * 0.95); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#9a6aae'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.3 + 0.3 * Math.abs(Math.sin(t * 4 + ph));   // сочение скверны
+  ctx.fillStyle = '#b07ad0'; ctx.beginPath(); ctx.arc(cx, cy - r * 0.95, r * 0.2, 0, 6.283); ctx.fill(); ctx.restore();
+  ctx.fillStyle = '#d0402f';   // красный глаз
+  ctx.beginPath(); ctx.arc(cx + fx * r * 0.55, cy + r * 0.05, r * 0.16, 0, 6.283); ctx.fill();
+}
+
+// Маяки скверны (game.blightBeacons) — стационарные сущности с HP, поднимают помехи (≤50%) в радиусе. Рисуются
+// в мире (под туманом): тёмный кол-эмиттер + пульсирующее лиловое кольцо-помеха + узкая HP-полоса (мигает при ударе).
+// Вызывается из game.draw отдельно от drawEnemies (это не враг-дрон, а объект). ⚠️ перф: 'lighter', без filter/shadowBlur.
+function drawBlightBeacons(ctx, beacons, camera) {
+  if (!beacons || !beacons.length) return;
+  const t = performance.now() / 1000;
+  for (const b of beacons) {
+    const cx = Math.round(camera.screenX(b.px)), cy = Math.round(b.py - camera.y);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';   // кольцо-помеха (радиус влияния, дышит)
+    const pulse = 0.5 + 0.5 * Math.sin(t * 2.2);
+    ctx.globalAlpha = 0.12 + 0.1 * pulse; ctx.strokeStyle = '#b07ad0'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, BLIGHT_BEACON_R * TILE * (0.5 + 0.06 * pulse), 0, 6.283); ctx.stroke();
+    ctx.restore();
+    // кол-эмиттер
+    ctx.fillStyle = b.hit > 0 ? '#5a3a6a' : '#2c2030';
+    ctx.fillRect(cx - 3, cy - 8, 6, 16);
+    ctx.strokeStyle = '#9a6aae'; ctx.lineWidth = 1.5; ctx.strokeRect(cx - 3, cy - 8, 6, 16);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5 + 0.4 * Math.abs(Math.sin(t * 5));
+    ctx.fillStyle = '#c08ae0'; ctx.beginPath(); ctx.arc(cx, cy - 8, 3, 0, 6.283); ctx.fill(); ctx.restore();
+    // HP-полоса (если бит)
+    if (b.hp < b.maxHp) { const w = 16, h = 2.5, x = cx - w / 2, y = cy - 16; ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x, y, w, h); ctx.fillStyle = b.hit > 0 ? '#ff6a4a' : '#b07ad0'; ctx.fillRect(x, y, w * Math.max(0, b.hp / b.maxHp), h); }
+  }
 }
 
 // Собиратель — «жук-носильщик», конкурент за добычу (НЕ боец и НЕ проходчик): приземистый

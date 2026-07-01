@@ -71,6 +71,7 @@ class Structures {
         case 'repair': this._repairTick(s, dt); break;
         case 'battery': this._batteryTick(s, dt); break;
         case 'siege': this._siegeTick(s, dt, game); break;
+        case 'courier': this._courierTick(s, dt, game); break;
       }
     }
     this.list = this.list.filter((s) => !(s.dying && s.deathT <= 0));
@@ -135,6 +136,25 @@ class Structures {
       s.fireCd = s.def.fireCd; s.energy -= s.def.eShot; s.flash = 0.1; s.pulse = 0.001;   // ударная волна-резонанс
       game.damageWild(best, s.def.dmg);
     }
+  }
+
+  // КУРЬЕР-ТЕРМИНАЛ — ЛОГИСТИКА (не боевая, энергии не требует). Юнит ВНЕ базы рядом ссыпает груз в склад по единице;
+  // контейнер полон (def.store) → game отлепляет ДРОН (courier.js). active2 — идёт ссыпка (рендер: индикатор приёма).
+  _courierTick(s, dt, game) {
+    if (s.store == null) { s.store = { iron: 0, organic: 0, crystal: 0 }; s.stored = 0; s.depCd = 0; }
+    s.active2 = false;
+    const u = game.unit, inv = game.inventory;
+    if (u && inv && !game.atBase() && inv.cargoUsed() > 0 && s.stored < s.def.store) {
+      const d = Math.hypot(wrapDeltaPx(s.px, u.px), s.py - u.py) / TILE;
+      if (d <= COURIER_DEPOSIT_R) {
+        s.active2 = true; s.depCd -= dt;
+        if (s.depCd <= 0) {
+          const t = inv.deliverOneCargo();
+          if (t) { s.store[t]++; s.stored++; s.depCd = COURIER_DEPOSIT_INT; if (game.fx) game.fx.burst(s.px, s.py - TILE * 0.3, [t]); }
+        }
+      }
+    }
+    if (s.stored >= s.def.store && game._launchCourier) game._launchCourier(s);   // контейнер полон → дрон в путь
   }
 
   // СВЧ — непрерывный КОНУС урона/с по всем врагам в секторе перед турелью (тратит энергию, пока бьёт).

@@ -82,8 +82,9 @@ Game.prototype.discover = function (cat) {
   if (typeof codexDiscoverCat !== 'function') return false;
   const e = codexDiscoverCat(cat); if (!e) return false;
   this.logEvent(STR.log.detected(e.name.toUpperCase()));
-  const HT = STR.log.findHint;
-  if (this.hints) this.hints.show(HT[cat] || STR.log.findFallback);
+  // КРУПНАЯ подсказка-находка — РАЗОВО НА КАТЕГОРИЮ НАВСЕГДА (персист save.hintsSeen): не повторяем каждую сессию/доп. запись
+  const HT = STR.log.findHint, seen = (this.save.hintsSeen || (this.save.hintsSeen = {}));
+  if (this.hints && !seen[cat]) { this.hints.show(HT[cat] || STR.log.findFallback); seen[cat] = 1; if (typeof writeSave === 'function') writeSave(this.save); }
   return true;
 };
 // Персист «уже опознанных» типов объектов (скан): первый скан типа даёт данные/глоссарий, повтор — только лог.
@@ -116,13 +117,20 @@ Game.prototype.checkDiscoveries = function (dt) {
 Game.prototype.updateBackdrops = function (dt) {
   const w = this.world, u = this.unit; if (!w || !w.backdrops || !u) return;
   for (const b of w.backdrops) {
+    if (b._rejT > 0) b._rejT = Math.max(0, b._rejT - dt);   // спад красной «отказной» вспышки (скан без метода извлечения)
     if (b.scanned) { b.reveal = 1; continue; }
     if (b.scanning) {
-      b.sweepT = Math.min(1, b.sweepT + dt / this._scanT(BACKDROP_SWEEP)); b.reveal = b.sweepT;
-      if (b.sweepT >= 1) { b.scanning = false; b.scanned = true; b.reveal = 1; this._backdropDone(b); }
-    } else if (w.inEllipseList(u.tileX, u.tileY, [b])) {
-      if (typeof metaHas !== 'function' || metaHas('kart_ruins')) { b.scanning = true; b.sweepT = 0; this.logEvent(STR.log.caveScan); }   // узел kart_ruins открывает извлечение данных из руин
-      else if (!b._noMethod) { b._noMethod = true; this.logEvent(STR.log.ruinsNoMethod); }   // без узла — скан невозможен
+      b.sweepT = Math.min(1, b.sweepT + dt / this._scanT(b._hasMethod ? BACKDROP_SWEEP : BACKDROP_SWEEP_NODATA)); b.reveal = b.sweepT;
+      if (b.sweepT >= 1) {
+        b.scanning = false; b.reveal = 1;
+        if (b._hasMethod) { b.scanned = true; this._backdropDone(b); }                                  // узел kart_ruins → проявлен + данные/глоссарий
+        else { b._attempted = true; b._rejT = BACKDROP_REJ_T; this.logEvent(STR.log.ruinsNoMethod); }   // без узла → ассет ПРОЯВЛЕН (виден), но данных нет → красный «отказ»
+      }
+    } else if (w.inEllipseList(u.tileX, u.tileY, [b]) && !b._attempted) {
+      // КОРОТКИЙ свип ВСЕГДА при входе (ассет проявляется — раньше без узла скан не запускался и руины были невидимы);
+      // данные извлекаются только при узле kart_ruins (иначе — короткий проход + «отказ»).
+      b.scanning = true; b.sweepT = 0; b._hasMethod = (typeof metaHas !== 'function') || metaHas('kart_ruins');
+      this.logEvent(STR.log.caveScan);
     }
   }
 };

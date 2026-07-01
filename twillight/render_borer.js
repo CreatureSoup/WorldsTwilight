@@ -64,9 +64,28 @@ function drawBorers(ctx, game, camera) {
   ctx.save(); ctx.lineCap = 'round';
   for (const b of game.borers) {
     const cx = camera.screenX(b.px), cy = b.py - camera.y;
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.atan2(b.dy, b.dx));   // ось щита = направление проходки
+    ctx.save(); ctx.globalAlpha = b.depleted ? 0.5 : 1;   // РАЗРЯЖЕН → корпус тусклее (неактивен)
+    ctx.translate(cx, cy); ctx.rotate(Math.atan2(b.dy, b.dx));   // ось щита = направление проходки
     _shieldBody(ctx, TILE * 0.15, TILE * 0.3, b.spin, b.drilling);
     ctx.restore();
+    if (b.recharging) {   // ПОДЗАРЯДКА: аддитивное пульс-кольцо (анимация «юнит заряжает щит»)
+      const t = performance.now() / 1000;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.4 + 0.3 * Math.sin(t * 12);
+      ctx.strokeStyle = '#9ad0a0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, TILE * 0.46, 0, 6.283); ctx.stroke(); ctx.restore();
+    }
+    if (b.maxCharge) {   // ИНДИКАТОР ЗАРЯДА: тонкая полоска над щитом (зелёный→янтарь→красный), мигающий «!» при разряде
+      const f = Math.max(0, Math.min(1, (b.charge || 0) / b.maxCharge));
+      const gy = cy - TILE * 0.52, gw = TILE * 0.5;
+      ctx.globalAlpha = 1; ctx.lineWidth = 2.4; ctx.lineCap = 'butt';
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.beginPath(); ctx.moveTo(cx - gw / 2, gy); ctx.lineTo(cx + gw / 2, gy); ctx.stroke();
+      ctx.strokeStyle = b.depleted ? '#d0402f' : (f < 0.3 ? '#e0a040' : '#9ad0a0');
+      if (f > 0) { ctx.beginPath(); ctx.moveTo(cx - gw / 2, gy); ctx.lineTo(cx - gw / 2 + gw * f, gy); ctx.stroke(); }
+      ctx.lineCap = 'round';
+      if (b.depleted && !b.recharging && Math.sin(performance.now() / 140) > 0) {   // зов о подзарядке
+        ctx.fillStyle = '#ff6a4a'; ctx.font = `bold 9px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText('!', cx, gy - 2);
+      }
+    }
   }
   ctx.restore();
 }

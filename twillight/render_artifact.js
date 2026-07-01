@@ -41,6 +41,72 @@ function drawArtifacts(ctx, world, camera) {
   }
 }
 
+// ЩИТ ГОРОДА (артефакт city_shield) — купол-полусфера над базой (центр — принтер). Яркость ∝ заряд щита + вспышка
+// на попадании. ПОВЕРХ мира (виден над базой). ⚠️ перф: 'lighter', без ctx.filter/shadowBlur.
+function drawCityShield(ctx, game, camera) {
+  const c = game.city; if (!c || c.shieldMax <= 0 || c.shield <= 0) return;
+  const cx = Math.round(camera.screenX(wrapPx((PRINTER.x + PRINTER.w / 2) * TILE)));
+  const cy = Math.round(CAVE_FLOOR_Y * TILE - camera.y);
+  const R = TILE * 6, f = c.shield / c.shieldMax, flash = c._shieldFlash > 0 ? c._shieldFlash / 0.25 : 0;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.1 * f + 0.16 * flash;                     // лёгкая заливка купола
+  ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI, 2 * Math.PI); ctx.closePath(); ctx.fillStyle = '#5fd0e0'; ctx.fill();
+  ctx.globalAlpha = 0.32 * f + 0.6 * flash;                     // ободок купола
+  ctx.strokeStyle = '#7fe0ee'; ctx.lineWidth = 2 + 2 * flash;
+  ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI, 2 * Math.PI); ctx.stroke();
+  ctx.restore();
+}
+
+// ФОРСАЖ БУРА (реликт drill_overdrive): термометр нагрева над юнитом. Холодный — скрыт; греется — зелёный→янтарь→жар;
+// перегрев — красный МИГАЮЩИЙ бар остатка охлаждения (лок). Перф: только fillRect/strokeRect, без filter/shadow.
+function drawDrillHeat(ctx, game, camera) {
+  const u = game.unit, s = u && u.stats; if (!s || !s.drillOverdrive) return;
+  const over = u.drillOverheatT > 0;
+  if (!over && u.drillHeat <= 0.02) return;                       // холодный покой → не загромождаем экран
+  const w = Math.round(TILE * 1.7), h = 4;
+  const x = Math.round(camera.screenX(u.px)) - w / 2, y = Math.round(u.py - camera.y) - Math.round(TILE * 1.5);
+  ctx.fillStyle = 'rgba(8,10,14,0.72)'; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);   // фон-плита
+  if (over) {
+    const blink = 0.55 + 0.45 * Math.sin(performance.now() / 1000 * 14);
+    const frac = Math.max(0, u.drillOverheatT / OVERDRIVE_CD);
+    ctx.globalAlpha = blink; ctx.fillStyle = '#ff4030'; ctx.fillRect(x, y, Math.round(w * frac), h); ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#ff4030'; ctx.lineWidth = 1; ctx.strokeRect(x - 0.5, y - 0.5, w + 1, h + 1);
+  } else {
+    const heat = Math.max(0, Math.min(1, u.drillHeat));
+    ctx.fillStyle = heat > 0.85 ? '#ff7a3a' : heat > 0.6 ? '#f0c84a' : '#9ad0a0';
+    ctx.fillRect(x, y, Math.round(w * heat), h);
+    ctx.strokeStyle = 'rgba(180,200,210,0.4)'; ctx.lineWidth = 1; ctx.strokeRect(x - 0.5, y - 0.5, w + 1, h + 1);
+    if (heat > 0.8) { ctx.fillStyle = '#ff4030'; ctx.fillRect(x + w - 2, y - 1, 2, h + 2); }   // красная риска «у предела»
+  }
+}
+
+// РЫВОК (реликт drive_dash): стрики-послесвечение позади юнита, пока game.unit.dashing. Перф: 'lighter', только fillRect.
+function drawDashFx(ctx, game, camera) {
+  const u = game.unit; if (!u || !u.dashing) return;
+  const ux = Math.round(camera.screenX(u.px)), uy = Math.round(u.py - camera.y);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = '#7fd0e0';
+  for (let i = 1; i <= 4; i++) {
+    ctx.globalAlpha = 0.26 / i;
+    const off = -u.dashDir * i * TILE * 0.55;
+    ctx.fillRect(ux + off - TILE * 0.28, uy - TILE * 0.34, TILE * 0.56, TILE * 0.68);
+  }
+  ctx.globalAlpha = 1; ctx.restore();
+}
+
+// ГАРПУН (реликт harpoon): трос юнит→якорь, пока game.harpoon.t>0. Зацеп — натянутый трос + крюк; холостой — гаснущий пунктир. Перф: только line/arc.
+function drawHarpoonFx(ctx, game, camera) {
+  const h = game.harpoon, u = game.unit; if (!h || h.t <= 0 || !u || h.ax == null) return;
+  const ux = Math.round(camera.screenX(u.px)), uy = Math.round(u.py - camera.y);
+  const ax = Math.round(camera.screenX(h.ax)), ay = Math.round((h.ay != null ? h.ay : u.py) - camera.y);
+  const f = h.t / HARPOON_FX_TIME;
+  ctx.save(); ctx.lineCap = 'round';
+  ctx.strokeStyle = h.dry ? 'rgba(224,176,112,0.5)' : '#e0b070';
+  ctx.lineWidth = h.dry ? 1 : 2; ctx.globalAlpha = h.dry ? f * 0.7 : 0.85;
+  ctx.beginPath(); ctx.moveTo(ux, uy); ctx.lineTo(ax, ay); ctx.stroke();
+  if (!h.dry) { ctx.globalAlpha = 0.9; ctx.fillStyle = '#f0c890'; ctx.beginPath(); ctx.arc(ax, ay, 3, 0, 6.283); ctx.fill(); }
+  ctx.globalAlpha = 1; ctx.restore();
+}
+
 function _artRoundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
@@ -70,8 +136,9 @@ function drawArtifactModal(ctx, game, W, H) {
   ctx.fillStyle = PAL.ash; ctx.font = `9px ${FONT_MONO}`;
   ctx.fillText(STR.world.artifact.hint, W / 2, cy + 42);
 
+  const def = a.tech, locked = !game.artifactSlotFree(def.slot);   // слот занят → техно недоступна (DK: без смены)
   const choices = [
-    { label: STR.world.artifact.tech.label, sub: a.tech.name, desc: a.tech.desc, accent: ART_ACCENT, icon: 'tech' },
+    { label: STR.world.artifact.tech.label, sub: def.name, desc: def.desc, accent: ART_ACCENT, icon: 'tech', slot: def.slot, locked },
     { label: STR.world.artifact.data.label, sub: STR.world.artifact.data.sub, desc: STR.world.artifact.data.desc, accent: PAL.cobalt || '#5a8fd6', icon: 'data' },
     { label: STR.world.artifact.scrap.label, sub: STR.world.artifact.scrap.sub, desc: STR.world.artifact.scrap.desc, accent: PAL.toxic || '#c8e25a', icon: 'scrap' },
   ];
@@ -80,19 +147,25 @@ function drawArtifactModal(ctx, game, W, H) {
   for (let i = 0; i < choices.length; i++) {
     const c = choices[i], cx = x0 + i * (cardW + gap), sel = game.artifactSel === i;
     rects.push({ x: cx, y: cardY, w: cardW, h: cardH });
+    ctx.save();
+    if (c.locked) ctx.globalAlpha = 0.4;                          // слот занят — карта приглушена (выбор недоступен)
     _artRoundRect(ctx, cx, cardY, cardW, cardH, 8);
     ctx.fillStyle = sel ? 'rgba(255,255,255,0.05)' : 'rgba(13,12,10,0.6)'; ctx.fill();
-    ctx.strokeStyle = sel ? c.accent : 'var(--bronze)'; ctx.strokeStyle = sel ? c.accent : 'rgba(122,112,94,0.6)'; ctx.lineWidth = sel ? 2.5 : 1.2; ctx.stroke();
-    _artIcon(ctx, c.icon, cx + cardW / 2, cardY + 46, c.accent);
+    ctx.strokeStyle = sel && !c.locked ? c.accent : 'rgba(122,112,94,0.6)'; ctx.lineWidth = sel && !c.locked ? 2.5 : 1.2; ctx.stroke();
+    _artIcon(ctx, c.icon, cx + cardW / 2, cardY + 42, c.accent);
     ctx.textAlign = 'center';
     ctx.fillStyle = sel ? PAL.chalk : PAL.bone; ctx.font = `700 15px ${FONT_DISPLAY}`;
-    ctx.fillText(c.label, cx + cardW / 2, cardY + 96);
+    ctx.fillText(c.label, cx + cardW / 2, cardY + 90);
     ctx.fillStyle = c.accent; ctx.font = `bold 11px ${FONT_MONO}`;
-    ctx.fillText(c.sub, cx + cardW / 2, cardY + 116);
+    ctx.fillText(c.sub, cx + cardW / 2, cardY + 109);
+    if (c.slot) { ctx.fillStyle = PAL.pewter; ctx.font = `9px ${FONT_MONO}`; ctx.fillText(STR.artifact.slotTag(STR.artifact.slot[c.slot]), cx + cardW / 2, cardY + 124); }   // слот-тег техно
     ctx.fillStyle = PAL.pewter; ctx.font = `11px ${FONT_MONO}`; ctx.textAlign = 'left';
     const lines = _artWrap(ctx, c.desc, cardW - 26);
     lines.forEach((ln, k) => ctx.fillText(ln, cx + 13, cardY + 142 + k * 15));
-    if (sel) { ctx.textAlign = 'center'; ctx.fillStyle = c.accent; ctx.font = `bold 10px ${FONT_MONO}`; ctx.fillText('▸ ' + STR.world.artifact.select, cx + cardW / 2, cardY + cardH - 14); }
+    ctx.textAlign = 'center';
+    if (c.locked) { ctx.fillStyle = PAL.rust || '#c0402f'; ctx.font = `bold 10px ${FONT_MONO}`; ctx.fillText('✕ ' + STR.artifact.slotFull, cx + cardW / 2, cardY + cardH - 14); }
+    else if (sel) { ctx.fillStyle = c.accent; ctx.font = `bold 10px ${FONT_MONO}`; ctx.fillText('▸ ' + STR.world.artifact.select, cx + cardW / 2, cardY + cardH - 14); }
+    ctx.restore();
   }
   game._artifactRects = rects;
   ctx.restore();

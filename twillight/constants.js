@@ -42,6 +42,14 @@ const SIEGE_RANGE = 6;            // тайлов: длина луча-копь�
 const SIEGE_DMG_CITY = 55;        // урон по hp дикого гнезда при ПОЛНОМ заряде (WILD_HP=200 → ~4 прямых разряда на гнездо)
 const SIEGE_DMG_ENEMY = 70;       // урон врагу на линии луча при полном заряде
 const SIEGE_BEAM_TTL = 0.22;      // сек жизни визуала луча (вспышка-копьё, быстро гаснет)
+// ── СТЕЛС-МОДУЛЬ (stealth.js, доп-слот `stealth`) — разовая активация → юнит НЕВИДИМ для боевых врагов ──
+const STEALTH_DUR = 6;            // сек невидимости (охотник/снайпер теряют цель, новые не наводятся)
+const STEALTH_CD = 14;            // сек кулдаун после активации (заливка иконки в панели действий)
+// ── ВЗЛОМ ЮНИТОВ (jam.js, доп-слот `jam`) — импульс-ГЛУШЕНИЕ: по кнопке замедляет всех врагов в радиусе (как глушилка) ──
+const JAM_PULSE_R = 5;            // тайлов: радиус импульса глушения вокруг юнита
+const JAM_PULSE_DUR = 4;          // сек: насколько затронутые враги остаются замедлены (переиспользует e.slowT → ×JAM_SLOW)
+const JAM_PULSE_CD = 10;          // сек кулдаун между импульсами
+const JAM_FX_TTL = 0.5;           // сек визуала расходящегося кольца импульса (render_jam.js)
 // ── КИНЕТИЧЕСКИЙ БУР (unit.js, ramp в drill-блоке) — разгоняющийся «молот», разгон ПО ВРЕМЕНИ ──
 const KIN_BASE_MULT = 0.5;        // стартовая мощность (×0.5 = вдвое медленнее стандартного бура)
 const KIN_MAX_MULT = 2.5;         // мощность на ПОЛНОМ разгоне (×2.5 стандартного)
@@ -49,6 +57,9 @@ const KIN_MAX_MULT_NODE = 3.0;    // потолок разгона при узл
 const KIN_RAMP_TIME = 5.0;        // сек НЕПРЕРЫВНОГО бурения В ОДНУ СТОРОНУ до полного разгона (по ВРЕМЕНИ, не по тайлам)
 const KIN_GRACE = 0.8;            // сек без бурения породы до СБРОСА (покрывает паузу между тайлами; дольше — стоп/пустота)
 const KIN_POWER_STEP = 0.3;       // +к мощности за уровень трека КИНЕТИКА (город)
+const KIN_BURST_CHANCE = 0.10;    // ВЗРЫВНОЙ ПРОБОЙ (узел mast_dk_burst): БАЗОВЫЙ шанс суперзаряда (мгновенная следующая тычка). +трек «РАЗГОН ПРОБОЯ»
+const KIN_BURST_STEP = 0.10;      // +шанс за уровень трека (город), cap 2 → макс 0.10 + 0.20 = 0.30
+const KIN_BURST_MIN_RAMP = 0.5;   // нужен накопленный разгон ≥ этого (суперзаряд набирается от пробива предыдущего тайла)
 // ── ВИНТОВОЙ БУР-ПРОХОДКА (borers.js) — юнит-станция автономных буров-щитов ──
 const SCREW_BORERS_BASE = 2;      // автономных буров у юнита по умолчанию (+1 за узел mast_ds_b1, +1 за mast_ds_b2 → макс 4)
 const SCREW_DIG_BASE = 0.275;     // базовая скорость проходки щита (dig/с) — медленный/слабый по умолчанию; +город (трек СКОРОСТЬ ПРОХОДКИ, 3 ур.)
@@ -57,6 +68,12 @@ const SCREW_RECALL_R = 1.4;       // тайлов: на этом расстоя�
 const SCREW_GLIDE = 12;           // плавность скольжения щита к центру тайла (лерп-коэф)
 const SCREW_AIR_SPEED = 4;        // тайла/с: ход щита по ОТКРЫТОМУ воздуху (не мгновенно тайл/кадр)
 const SCREW_FALL_SPEED = 9;       // тайла/с: гравитация щита в пустоте (падает до опоры, потом продолжает ход)
+// АПКИП: автономный заряд щита (время работы). Иссяк → щит ВСТАЁТ (depleted); юнит подходит вплотную → анимация
+// подзарядки → щит продолжает. Трек «ВРЕМЯ РАБОТЫ» (borerlife → stats.borerLife) увеличивает заряд без подзарядки.
+const SCREW_CHARGE_MAX = 16;      // сек автономной работы щита по умолчанию (стартовое значение под тюнинг)
+const SCREW_LIFE_BONUS = 16;      // +сек заряда от узла меты `mast_ds_life` (16→32с) — апгрейд апкипа (ветка бура)
+const SCREW_RECHARGE_R = 1.6;     // тайлов: на этой дистанции юнит подзаряжает РАЗРЯЖЕННЫЙ щит (чуть больше recall 1.4)
+const SCREW_RECHARGE_TIME = 1.2;  // сек: длительность анимации полной подзарядки
 // ── РАДАР-СКАНЕР / ЭХО-СКАНЕР (scanners.js) — варианты слота СКАНЕР, ищут залежи, туман НЕ снимают ──
 const RADAR_R = 17;               // тайлов: радиус развёртки радара (покрывает экран); блипы залежей/врагов
 const RADAR_SWEEP_PERIOD = 6.8;   // сек на ОДИН оборот развёртки (в 2× медленнее прежнего); НЕ непрерывно — по активации
@@ -88,23 +105,148 @@ const DELIVER_INTERVAL = 0.35; // сек между сдачей одной ед
 
 // Старые серверы — источники данных в породе. Откопал → «хлам»; в радиусе SCAN_RADIUS сканер
 // качает данные SCAN_TIME сек (прерывается уходом, прогресс сохраняется); по концу — лог-событие.
-const SERVER_COUNT = 10;     // серверов в породе за сессию
+const SERVER_COUNT = 9;      // серверов в ГЛУБОКОЙ породе (ниже города) за сессию
+const SERVER_UP = 5;         // + серверов в ВЕРХНЕЙ страте (погребённая цивилизация над городом — архивы данных, тематично)
+const SERVER_MIN_DIST = 12;  // мин. 2D-дистанция (тайлов) между серверами — чтобы не кучковались
 const SCAN_RADIUS = 2.5;     // тайла — радиус автосканирования у выкопанного сервера
 const SCAN_TIME = 4.0;       // сек полной выкачки данных
 // Артефакты — БОЛЬШИЕ погребённые объекты (ARTIFACT_W×ARTIFACT_H тайлов, порода с маркером `t.artifact`).
 // Откопал рядом → модалка выбора: ТЕХНОЛОГИЯ (особое свойство — абилки позже) / ДАННЫЕ городу / ПЕРЕРАБОТКА.
-const ARTIFACT_COUNT = 3;        // артефактов в породе за сессию (+ тест-артефакт у базы)
 const ARTIFACT_LONG = 2;         // длинная сторона объекта в тайлах; ориентация (2×1 / 1×2) случайна на артефакт
 const ARTIFACT_TRIGGER_R = 3;    // тайла: юнит так близко к откопанному артефакту → открыть модалку (не enemy/borer издали)
 const ARTIFACT_DATA = 3;         // фрагментов данных кодекса за «отдать городу» (+1 к dataCount забега)
 const ARTIFACT_SCRAP = 4;        // дропов ресурса за «переработать»
-const ARTIFACT_TECHS = [         // пул технологий (ЭФФЕКТЫ — позже; пока имя+описание для осмысленного выбора)
-  { id: 'grav_dampen', name: STR.tech.grav_dampen.name, desc: STR.tech.grav_dampen.desc },
-  { id: 'echo_drill',  name: STR.tech.echo_drill.name,  desc: STR.tech.echo_drill.desc },
-  { id: 'ablative',    name: STR.tech.ablative.name,    desc: STR.tech.ablative.desc },
-  { id: 'data_leech',  name: STR.tech.data_leech.name,  desc: STR.tech.data_leech.desc },
-  { id: 'core_surge',  name: STR.tech.core_surge.name,  desc: STR.tech.core_surge.desc },
+const ARTIFACT_SEED_COUNT = 4;   // артефактов в ГЛУБОКОЙ породе за сессию (шаффл пула без повторов — вариативность набора растёт с пулом)
+const ARTIFACT_SEED_UP = 2;      // + артефактов в ВЕРХНЕЙ страте (человеческое техно-реликты; их очаги радиации делают верх опасно-интересным)
+const ARTIFACT_MIN_DIST = 40;    // мин. 2D-дистанция между артефактами = 2×RAD_SOURCE_R (=2×20) → очаги радиации НЕ перекрываются (литерал: RAD_SOURCE_R объявлен НИЖЕ, const не хойстится → TDZ)
+// СЛОТЫ артефактов: 3 типа (по 1 — расширяемо метой позже). ЗАЛОЧЕНО при установке (DK-модель): слот занят → только Данные/Переработка.
+const ARTIFACT_SLOT_CAP = { city: 1, unit: 1, drone: 1 };
+// ПУЛ артефактов: id · slot(куда ставится техно) · tier(редкость/глубина посева) · cls(класс ощущения) · имя/описание.
+// Эффекты подключены через game.artifactHas(id) / флаги в unit.stats (см. artifact.js _applyArtifacts). Доращивается итерациями.
+const ARTIFACT_POOL = [
+  // { id: 'loot_magnet',  slot: 'unit', tier: 'common', cls: 'info',    name: STR.artifact.pool.loot_magnet.name,  desc: STR.artifact.pool.loot_magnet.desc },   // ОТКЛЮЧЁН: сам по себе не интересен; эффект-проводка (lootMagnet) спит. Вернуть — раскомментировать + найти ему пару/связку.
+  { id: 'combat_drill', slot: 'unit', tier: 'rare',   cls: 'passive', name: STR.artifact.pool.combat_drill.name, desc: STR.artifact.pool.combat_drill.desc, gloss: 'a1' },   // gloss → запись глоссария (artifact.js открывает при находке)
+  { id: 'jets',         slot: 'unit', tier: 'rare',   cls: 'active',  name: STR.artifact.pool.jets.name,         desc: STR.artifact.pool.jets.desc,         gloss: 'a2' },
+  { id: 'city_shield',  slot: 'city', tier: 'rare',   cls: 'auto',    name: STR.artifact.pool.city_shield.name,  desc: STR.artifact.pool.city_shield.desc,  gloss: 'a3' },
+  // БАТЧ 1 — защита/бур (UNIT, пассивы; tier='common' — редкости по тирам нет, набор не повторяется за забег через шаффл без замены)
+  { id: 'armor',        slot: 'unit', tier: 'common', cls: 'passive', name: STR.artifact.pool.armor.name,        desc: STR.artifact.pool.armor.desc,        gloss: 'a4' },
+  { id: 'overshield',   slot: 'unit', tier: 'common', cls: 'passive', name: STR.artifact.pool.overshield.name,   desc: STR.artifact.pool.overshield.desc,   gloss: 'a5' },
+  { id: 'absorb',       slot: 'unit', tier: 'common', cls: 'passive', name: STR.artifact.pool.absorb.name,       desc: STR.artifact.pool.absorb.desc,       gloss: 'a6' },
+  { id: 'thorns',       slot: 'unit', tier: 'common', cls: 'passive', name: STR.artifact.pool.thorns.name,       desc: STR.artifact.pool.thorns.desc,       gloss: 'a7' },
+  { id: 'echo_drill',   slot: 'unit', tier: 'common', cls: 'passive', name: STR.artifact.pool.echo_drill.name,   desc: STR.artifact.pool.echo_drill.desc,   gloss: 'a8' },
+  // БАТЧ 2 — активные доп-действия (UNIT; cls='active' — кнопка в панели действий; логика — artifacts_active.js)
+  { id: 'stun_pulse',   slot: 'unit', tier: 'common', cls: 'active',  name: STR.artifact.pool.stun_pulse.name,   desc: STR.artifact.pool.stun_pulse.desc,   gloss: 'a9' },
+  { id: 'blast_charge', slot: 'unit', tier: 'common', cls: 'active',  name: STR.artifact.pool.blast_charge.name, desc: STR.artifact.pool.blast_charge.desc, gloss: 'a10' },
+  { id: 'nano_repair',  slot: 'unit', tier: 'common', cls: 'active',  name: STR.artifact.pool.nano_repair.name,  desc: STR.artifact.pool.nano_repair.desc,  gloss: 'a11' },
+  // БАТЧ 3 — сложные (UNIT). drill_overdrive — ПАССИВ (нагрев, без кнопки); needsDrill — не предлагать импульс-/винт-несовместимым (гейт позже)
+  { id: 'drill_overdrive', slot: 'unit', tier: 'common', cls: 'passive', name: STR.artifact.pool.drill_overdrive.name, desc: STR.artifact.pool.drill_overdrive.desc, gloss: 'a12' },
+  { id: 'drive_dash',   slot: 'unit', tier: 'common', cls: 'active',  name: STR.artifact.pool.drive_dash.name,   desc: STR.artifact.pool.drive_dash.desc,   gloss: 'a13' },
+  { id: 'harpoon',      slot: 'unit', tier: 'common', cls: 'active',  name: STR.artifact.pool.harpoon.name,      desc: STR.artifact.pool.harpoon.desc,      gloss: 'a14' },
+  { id: 'xray',         slot: 'unit', tier: 'common', cls: 'active',  name: STR.artifact.pool.xray.name,         desc: STR.artifact.pool.xray.desc,         gloss: 'a15' },
+  // БАТЧ 4 — реликт ГОРОДА (пассивный HUD-детектор; эффект — компас, не unit-стат)
+  { id: 'data_detector', slot: 'city', tier: 'common', cls: 'info',   name: STR.artifact.pool.data_detector.name, desc: STR.artifact.pool.data_detector.desc, gloss: 'a16' },
+  // БАТЧ 5 — ДРОНЫ-КОМПАНЬОНЫ (слот drone; логика drones.js). courier/battery/collector/scout — пассивы; hacker — деплой по кнопке.
+  { id: 'drone_collector', slot: 'drone', tier: 'common', cls: 'auto',   name: STR.artifact.pool.drone_collector.name, desc: STR.artifact.pool.drone_collector.desc, gloss: 'a17' },
+  { id: 'drone_courier',   slot: 'drone', tier: 'common', cls: 'auto',   name: STR.artifact.pool.drone_courier.name,   desc: STR.artifact.pool.drone_courier.desc,   gloss: 'a18' },
+  { id: 'drone_battery',   slot: 'drone', tier: 'common', cls: 'auto',   name: STR.artifact.pool.drone_battery.name,   desc: STR.artifact.pool.drone_battery.desc,   gloss: 'a19' },
+  { id: 'drone_scout',     slot: 'drone', tier: 'common', cls: 'auto',   name: STR.artifact.pool.drone_scout.name,     desc: STR.artifact.pool.drone_scout.desc,     gloss: 'a20' },
+  { id: 'drone_hacker',    slot: 'drone', tier: 'common', cls: 'active', name: STR.artifact.pool.drone_hacker.name,    desc: STR.artifact.pool.drone_hacker.desc,    gloss: 'a21' },
 ];
+const ARTIFACT_BY_ID = Object.fromEntries(ARTIFACT_POOL.map((d) => [d.id, d]));
+// — тюнинг эффектов стартовой четвёрки —
+const ARTIFACT_MAGNET_R = 2;          // лут-магнит: радиус подхвата лута (тайлов; база PICKUP_R=1 → дропы зипают, но не тривиализуют добычу)
+const COMBAT_DRILL_R = 1.2;           // бой-бур: радиус контактного урона врагу (тайлов)
+const COMBAT_DRILL_DPS = 26;          // бой-бур: урон/с врагу в контакте (собиратель ~70hp гибнет за ~2.7с — ощутимая угроза)
+const CITY_SHIELD_HP = 80;            // щит города: ёмкость поглощающего буфера (держит ~полный дренаж рейдера)
+// — реликты БАТЧА 1 (защита/бур; эффекты через unit.hurt() + флаги в stats) —
+const ARTIFACT_ARMOR = 0.25;          // БРОНЕПЛАСТИНЫ: доля снижения входящего урона (−25%)
+const OVERSHIELD_HP = 30;             // ЭНЕРГОЩИТ: ёмкость буфера-овершилда юнита (поглощает до hp)
+const OVERSHIELD_REGEN = 8;           // HP/с восстановления овершилда
+const OVERSHIELD_REGEN_DELAY = 5;     // сек без урона до старта регена овершилда
+const ABSORB_CHARGES = 1;             // ПОГЛОЩЕНИЕ: сколько первых ударов поглощается целиком (база 1, +узлы города)
+const ABSORB_CD = 14;                 // сек на восстановление заряда(ов) поглощения после расхода
+const THORNS_DMG = 18;                // ШИПЫ: урон врагу, ударившему юнита в контакте (разово за удар)
+const ECHO_DRILL_CHANCE = 0.22;       // ЭХО-БУР: шанс при пробитии тайла пробить «эхом» соседний (плохо с кинетикой — сброс разгона, это норма)
+// — реликты БАТЧА 2 (UNIT активки: кнопка-цифра + кулдаун; логика artifacts_active.js) —
+const STUN_PULSE_R = 4;               // ЭМИ-ИМПУЛЬС: радиус стана (тайлов)
+const STUN_PULSE_DUR = 1.6;           // сек полного стана врагам (e.stunT — фриз)
+const STUN_PULSE_CD = 9;              // кулдаун (сек)
+const BLAST_CHARGE_R = 3;             // ПОДРЫВ-ЗАРЯД: радиус взрыва (тайлов) — урон врагам + воронка; ЮНИТА не задевает (свой заряд)
+const BLAST_CHARGE_DMG = 45;          // урон в эпицентре (спад к краю)
+const BLAST_CHARGE_CD = 8;            // кулдаун (сек)
+const NANO_REPAIR_HP = 35;            // НАНО-РЕМОНТ: сколько HP восстанавливает за цикл
+const NANO_REPAIR_TIME = 3;           // сек на восстановление (НЕ мгновенно — хил во времени)
+const NANO_REPAIR_CD = 12;            // кулдаун после завершения (сек)
+// — реликты БАТЧА 3 (UNIT сложные активки/пассивы) —
+// ФОРСАЖ БУРА (drill_overdrive, ПАССИВ): нагрев от бурения → множитель силы (чем горячее, тем сильнее); перегрев → лок-кулдаун, бур не копает.
+const OVERDRIVE_HEAT_RISE = 0.42;     // нагрев/сек при бурении (полный за ~2.4с непрерывной копки) — стартовое; тест: тоннель ощутимо ускоряется, перегрев достижим, но не мгновенен
+const OVERDRIVE_HEAT_COOL = 0.30;     // остывание/сек, когда бур не работает
+const OVERDRIVE_MAX_BONUS = 0.6;      // +60% к силе бура при полном нагреве (множитель = 1 + heat·BONUS)
+const OVERDRIVE_CD = 6.5;             // лок-кулдаун перегрева (бур не копает), сек (≥6 по дизайну)
+const OVERDRIVE_COOL_GRACE = 0.4;     // сек простоя ДО начала остывания — чтобы микро-паузы проходки (копка↔продвижение) не сбивали нагрев; перегрев достижим при сплошном тоннелировании
+// РЫВОК (drive_dash): доп-действие — быстрый рывок по взгляду ЧЕРЕЗ ВОЗДУХ (породу НЕ пробивает), стоп о породу, зацеп/гравитация в обычном апдейте.
+const DASH_DIST = 6;                  // макс тайлов рывка
+const DASH_SPEED = 30;                // тайлов/сек during рывка (6 тайлов за ~0.2с — снапи)
+const DASH_CD = 11;                   // кулдаун, сек (≥10 по дизайну)
+// ГАРПУН (harpoon): доп-действие — выстрел по взгляду, цепляется за ПЕРВУЮ стену в радиусе и ПРИТЯГИВАЕТ юнита к ней (через _dashStep). Нет стены в радиусе → ХОЛОСТОЙ выстрел (трата кулдауна). Улучшение в городе — длина.
+const HARPOON_RANGE = 10;             // базовая дальность гарпуна (тайлов); город-апгрейд harpoonRange добавляет
+const HARPOON_SPEED = 40;             // скорость притяга (тайлов/сек) — резче рывка (рывок-яма)
+const HARPOON_CD = 8;                 // кулдаун, сек
+const HARPOON_FX_TIME = 0.3;          // длительность FX троса (выстрел+ретракт)
+// РЕНТГЕН (xray): доп-действие — ПОЛНОЕ снятие тумана (вскрытие в большом радиусе), затем за XRAY_TIME радиус СТЯГИВАЕТСЯ обратно к радиусу видимости сканера. ВРЕМЕННО (seen не трогаем). Кулдаун XRAY_CD.
+const XRAY_TIME = 15;                 // сек затухания вскрытия (полный экран → радиус сканера)
+const XRAY_MAX_R = 50;                // стартовый радиус вскрытия (тайлов) — перекрывает экран ⇒ «туман убран полностью»
+const XRAY_CD = 15;                   // кулдаун, сек (стартует с активацией ⇒ готов к концу затухания)
+// ДЕТЕКТОР ДАННЫХ (data_detector, реликт ГОРОДА): пассивный HUD-компас — пеленг+дистанция к БЛИЖАЙШЕМУ серверу с неизвлечёнными данными в радиусе. Город-апгрейд — радиус.
+const DATA_DETECT_R = 28;             // радиус детекта источников данных (тайлов)
+// ДРОНЫ-КОМПАНЬОНЫ (реликты ДРОН-слота, 1 за забег): автономные летуны. collector/courier/battery/scout — пассивные; hacker — деплой по кнопке.
+const DRONE_SPEED = 9;                // скорость компаньона (тайлов/сек)
+const DRONE_COLLECT_R = 14;           // СБОРЩИК: радиус детекта дропа (тайлов)
+const DRONE_COURIER_MIN = 4;          // КУРЬЕР: порог груза в трюме для рейса
+const DRONE_COURIER_BATCH = 6;        // КУРЬЕР: единиц за рейс
+const DRONE_BATTERY_INTERVAL = 8;     // БАТАРЕЯ: сек между рейсами питания
+const DRONE_BATTERY_TOP = 6;          // БАТАРЕЯ: сек таймера города за рейс (только город, НЕ структуры)
+const DRONE_SCOUT_SPEED = 11;         // СКАУТ: скорость разведки (быстрее обычного)
+const DRONE_SCOUT_REVEAL = 3;         // СКАУТ: радиус снятия тумана по пути (тайлов)
+const DRONE_SCOUT_RANGE = 60;         // СКАУТ: до какой дистанции ищет неразведанное гнездо (тайлов)
+const DRONE_SCOUT_PATROL_R = 8;       // СКАУТ: радиус патруля вокруг юнита, когда цели кончились
+const DRONE_HACK_RANGE = 30;          // ХАКЕР: радиус поиска гнезда для деплоя (тайлов)
+const DRONE_HACK_TIME = 4;            // ХАКЕР: сек канала взлома на гнезде
+const DRONE_HACK_CD = 14;             // ХАКЕР: кулдаун после смерти дрона до нового деплоя
+const DRONE_KIND = { drone_courier: 'courier', drone_battery: 'battery', drone_collector: 'collector', drone_scout: 'scout', drone_hacker: 'hacker' };
+const CITY_SHIELD_REGEN = 5;          // щит города: регена/с (после задержки без урона)
+const CITY_SHIELD_DELAY = 3;          // щит города: сек без урона до начала регена
+const CITY_SHIELD_TIMER_MULT = 1.15;  // щит города (даунсайд): таймер вне базы тикает ×эту долю быстрее ТОЛЬКО пока щит ВОССТАНАВЛИВАЕТСЯ (тратит энергию на рекавери — даунсайд привязан к выгоде, не невидимый налог)
+const JETS_FUEL_MAX = 2.4;            // прыжковые движки: запас топлива (сек полёта)
+const JETS_REFILL = 0.3;              // движки: дозаправка топлива/с (вне полёта; ~8с до полного → топливо ощутимо ценно)
+const JETS_CD = 1.6;                  // движки: лок после ПОЛНОГО расхода топлива (сек), пока копится заряд заново
+const FLY_SPEED = 5.5;                // движки: скорость полёта через воздух (тайлов/с)
+// ГОРОДСКИЕ АПГРЕЙДЫ АРТЕФАКТОВ (Батч 6): на каждый реликт — трек улучшения (≤3 ур., НЕ супер-сильный). base = эффект без апгрейда;
+// step = прибавка за уровень (отрицательная = убывает, напр. кулдаун хакера); cap = потолок уровней. Единый источник: и трек-карточка (upgrades.js),
+// и read-site эффекта читают _artScaled(id) = base + lvl·step. Появляются ТОЛЬКО при установленном артефакте (Upgrades.syncArtifactTracks).
+const ARTIFACT_UP = {
+  armor:           { base: ARTIFACT_ARMOR,       step: 0.05, cap: 2 },   // −% урона
+  overshield:      { base: OVERSHIELD_HP,        step: 10,   cap: 3 },   // ёмкость буфера
+  absorb:          { base: ABSORB_CHARGES,       step: 1,    cap: 2 },   // зарядов поглощения (1→3)
+  thorns:          { base: THORNS_DMG,           step: 6,    cap: 3 },   // урон ответки
+  echo_drill:      { base: ECHO_DRILL_CHANCE,    step: 0.06, cap: 3 },   // шанс эха
+  combat_drill:    { base: COMBAT_DRILL_DPS,     step: 8,    cap: 3 },   // контактный урон/с
+  jets:            { base: JETS_FUEL_MAX,        step: 0.7,  cap: 3 },   // запас топлива (сек)
+  city_shield:     { base: CITY_SHIELD_HP,       step: 25,   cap: 3 },   // ёмкость купола
+  stun_pulse:      { base: STUN_PULSE_R,         step: 1,    cap: 3 },   // радиус стана
+  blast_charge:    { base: BLAST_CHARGE_DMG,     step: 12,   cap: 3 },   // урон взрыва
+  nano_repair:     { base: NANO_REPAIR_HP,       step: 12,   cap: 3 },   // объём хила
+  drill_overdrive: { base: OVERDRIVE_MAX_BONUS,  step: 0.15, cap: 3 },   // прибавка силы на пике нагрева
+  drive_dash:      { base: DASH_DIST,            step: 2,    cap: 3 },   // дистанция рывка
+  harpoon:         { base: HARPOON_RANGE,        step: 5,    cap: 3 },   // длина гарпуна
+  xray:            { base: XRAY_TIME,            step: 5,    cap: 3 },   // время затухания вскрытия
+  data_detector:   { base: DATA_DETECT_R,        step: 10,   cap: 3 },   // радиус детекта данных
+  drone_collector: { base: DRONE_COLLECT_R,      step: 6,    cap: 3 },   // радиус сбора
+  drone_courier:   { base: DRONE_COURIER_BATCH,  step: 3,    cap: 3 },   // груз за рейс
+  drone_battery:   { base: DRONE_BATTERY_TOP,    step: 3,    cap: 3 },   // заряд таймера за рейс
+  drone_scout:     { base: DRONE_SCOUT_REVEAL,   step: 1,    cap: 3 },   // радиус снятия тумана
+  drone_hacker:    { base: DRONE_HACK_CD,        step: -3,   cap: 3 },   // ↓кулдаун редеплоя
+};
 // Геометрия HUD-виджета извлечения (design-координаты): отступ центра от правого/нижнего края
 // и радиус кольца. Тот же якорь использует внутриигровой попап кодекса (codex_dom) — диск
 // появляется РОВНО на месте кольца скана, того же размера.
@@ -142,10 +284,13 @@ const HINT_DEPTHS = [
 // процедурным паралакс-backdrop. Вход юнита включает ОБЪЁМНЫЙ сканер (свип по всей пещере) →
 // извлечение данных в кодекс + открытие глоссария. Backdrop клипится по ВОЗДУХУ пещеры
 // (вписывается в любую форму), паралакс — по смещению юнита от центра полости.
-const BACKDROP_COUNT = 3;        // больших пещер-сцен за сессию
+const BACKDROP_COUNT = 5;        // больших пещер-сцен в ГЛУБИНЕ за сессию
+const BACKDROP_UP = 2;           // + пещер-сцен в ВЕРХНЕЙ страте (руины-сцены погребённой цивилизации)
 const BACKDROP_RX = [5, 8];      // полу-ширина эллипса (тайлы) — уменьшено вдвое
 const BACKDROP_RY = [3, 5];      // полу-высота — уменьшено вдвое
 const BACKDROP_SWEEP = 4.5;      // сек объёмного скана при входе
+const BACKDROP_SWEEP_NODATA = 1.6;  // сек КОРОТКОГО скана без узла извлечения (kart_ruins): ассет проявляется, данных нет
+const BACKDROP_REJ_T = 1.3;      // сек красной «отказной» вспышки после скана без метода извлечения
 const BACKDROP_DATA = 2;         // фрагментов данных за объект
 // ── Ветвь МИР: тюнинг извлечения данных (узлы kart_*) ──
 const KART_SCAN_MULT = 0.7;      // узел `kart_hub` Дешифратор: ×время скана ВСЕХ источников (−30% → быстрее)
@@ -188,8 +333,10 @@ const HULL_DEFS = {
 // Модули — снаряжение юнита. Категория = тип слота корпуса. У каждой категории
 // один или несколько вариантов (МВП: по одному, тюним позже). Стат каждого модуля
 // напрямую идёт в `inventory.getStats()` без энергии/связности/веса.
+const CARGO_LARGE_CAP = 8;      // ёмкость ВМЕСТИТЕЛЬНОГО трюма (узел mast_cargo) — больше дефолтного трюма (5)
+const REPAIR_HEAL_RATE = 1;     // HP за 10с базовой починки РЕМОНТНОГО модуля (доп-слот); трек РЕМОНТ +1/ур. (⚠️ объявлять ВЫШЕ MODULE_DEFS — он читает константу при загрузке)
 const MODULE_DEFS = {
-  drill:   { name: STR.module.name.drill, category: 'drill',   color: '#f08a2a', digMult: 1.0 },
+  drill:   { name: STR.module.name.drill, category: 'drill',   color: '#f08a2a', digMult: 0.85 },
   // ИМПУЛЬСНЫЙ бур (impulse.js): НЕ грызёт породу пассивно — заряд удержанием Пробела → направленная
   // волна (луч `setAir` вперёд) + урон врагам на луче. unlock — узел СЕТИ ПАМЯТИ `mast_di`.
   drill_impulse: { name: STR.module.name.drill_impulse, category: 'drill', color: '#ff8f3a', impulse: 1, unlock: 'mast_di' },
@@ -207,9 +354,9 @@ const MODULE_DEFS = {
   // ЭХО-СКАНЕР (scanners.js): по кнопке X волна-искажение на 4 тайла РАЗОМ метит все залежи в радиусе; кулдаун. unlock — `mast_ech`.
   scanner_echo: { name: STR.module.name.scanner_echo, category: 'scanner', color: '#b58cf0', scanR: 1.0, echoScan: 1, unlock: 'mast_ech' },
   cargo:   { name: STR.module.name.cargo, category: 'cargo',   color: '#c8e25a', capacity: 5 },
-  // вариант трюма: меньше ёмкость, зато чинит HP вне/на базе. unlock — узел СЕТИ ПАМЯТИ
-  // (в галерее сборки показывается только при metaHas). healRate — HP за 10с.
-  cargo_repair: { name: STR.module.name.cargo_repair, category: 'cargo', color: '#ff3a22', capacity: 3, healRate: 1, unlock: 'mast_rep' },
+  // ВМЕСТИТЕЛЬНЫЙ трюм: тот же слот ГРУЗ, больше ёмкости. unlock — узел `mast_cargo` (в галерее
+  // сборки показывается только при metaHas). Трек ЁМКОСТЬ + его metaCap докручивают так же, как дефолт.
+  cargo_large: { name: STR.module.name.cargo_large, category: 'cargo', color: '#a8d83a', capacity: CARGO_LARGE_CAP, unlock: 'mast_cargo' },
   // ДОП-СЛОТ (`aux`, опциональный): модули-«реликты». Пока один — Экран помех (база noiseResist,
   // трек ЭКРАН ПОМЕХ в апгрейдах докручивает). Будущие артефакты — сюда же, своей записью.
   shield: { name: STR.module.name.shield, category: 'aux', color: '#3a7ec8', noiseResist: 0.4, unlock: 'mast_sh' },
@@ -218,10 +365,20 @@ const MODULE_DEFS = {
   print: { name: STR.module.name.print, category: 'aux', color: '#ff8f3a', printer: 1, printReach: 2, unlock: 'vault_hub' },
   // МОДУЛЬ ВЗЛОМА (доп-слот, hack.js): ДОП-действие (цифра 2, `act:2`) — удержанием у сердца спящего города
   // взламывает его (пробуждение). Делит доп-слот с печатью (одно из двух за забег). unlock — узел `kart_wake`.
-  mod_hack: { name: STR.module.name.mod_hack, category: 'aux', color: '#c06ee6', hack: 1, act: 2, unlock: 'kart_defuse' },
-  // ОСАДНЫЙ МОДУЛЬ (доп-слот, siege.js): ДОП-действие (цифра 3, `act:3`) — заряд удержанием → пробойный луч по
+  mod_hack: { name: STR.module.name.mod_hack, category: 'aux', color: '#c06ee6', hack: 1, unlock: 'kart_defuse' },
+  // ОСАДНЫЙ МОДУЛЬ (доп-слот, siege.js): ДОП-действие (цифра от менеджера) — заряд удержанием → пробойный луч по
   // дикому гнезду (и врагам на линии). Цель — закрыть директиву «устрани угрозу». unlock — узел `print_siege` (после канонира).
-  mod_siege: { name: STR.module.name.mod_siege, category: 'aux', color: '#ff5a3a', siege: 1, act: 3, unlock: 'print_siege' },
+  mod_siege: { name: STR.module.name.mod_siege, category: 'aux', color: '#ff5a3a', siege: 1, unlock: 'print_siege' },
+  // СТЕЛС-МОДУЛЬ (доп-слот, stealth.js): ДОП-действие (цифра от менеджера) — разовая активация → юнит НЕВИДИМ для
+  // боевых врагов (охотник/снайпер теряют цель) на время, потом кулдаун. unlock — узел `kart_stealth` (ветвь ВЗЛОМА).
+  mod_stealth: { name: STR.module.name.mod_stealth, category: 'aux', color: '#8a7ed4', stealth: 1, unlock: 'kart_stealth' },
+  // ВЗЛОМ ЮНИТОВ (доп-слот, jam.js): ДОП-действие (цифра от менеджера) — импульс глушения: все враги в радиусе ЗАМЕДЛЕНЫ
+  // (как глушилка-структура, через e.slowT), потом кулдаун. unlock — узел `kart_stun` (ветвь ВЗЛОМА, до стелса).
+  mod_jam: { name: STR.module.name.mod_jam, category: 'aux', color: '#9ad0a0', jam: 1, unlock: 'kart_stun' },
+  // РЕМОНТНЫЙ МОДУЛЬ (доп-слот): пассивно чинит HP юнита вне/на базе, НЕ хранит груз. Делит aux-слот
+  // с печатью/взломом/осадой/стелсом/глушением (одно из). `heal`-флаг ставит inventory.getStats → stats.healRate.
+  // unlock — узел `mast_rep` (переиспользован под модуль). healRate — HP за 10с; трек РЕМОНТ докручивает.
+  mod_repair: { name: STR.module.name.mod_repair, category: 'aux', color: '#ff3a22', heal: REPAIR_HEAL_RATE, unlock: 'mast_rep' },
 };
 // ── ДЕЙСТВИЯ ЮНИТА (СТРОГОЕ разделение — НЕ ситуативно) ──────────────────────────────────────
 // ГЛАВНОЕ действие — ВСЕГДА Пробел: слот БУРА (импульс-заряд удержанием, винт-запуск) + взаимодействие
@@ -232,15 +389,9 @@ const KEY_PRIMARY = 'Space';                       // главное дейст�
 // KEY_ACTION(n) → коды цифры n (верхний ряд + нумпад, 1-based). Доп-действия мапятся на 1,2,3…
 const KEY_ACTIONS = [['Digit1', 'Numpad1'], ['Digit2', 'Numpad2'], ['Digit3', 'Numpad3'], ['Digit4', 'Numpad4']];
 function KEY_ACTION(n) { return KEY_ACTIONS[(n | 0) - 1] || []; }
-// Действие модуля: 'primary' = Пробел; ЧИСЛО = номер доп-действия (цифра). Базово — по категории СЛОТА; конкретный
-// ВАРИАНТ модуля может ПЕРЕОПРЕДЕЛИТЬ полем `act` в MODULE_DEFS (в доп-слоте: печать=Пробел, а взлом=цифра 2).
-const MODULE_ACTION = { drill: 'primary', aux: 'primary', scanner: 1 };
-// Клавиши действия для УСТАНОВЛЕННОГО в слот модуля: сперва `def.act` варианта, иначе MODULE_ACTION[категория].
-function moduleActionKeys(slot, moduleId) {
-  const def = moduleId && MODULE_DEFS[moduleId];
-  const a = (def && def.act != null) ? def.act : MODULE_ACTION[slot];
-  return a === 'primary' ? [KEY_PRIMARY] : KEY_ACTION(a);
-}
+// ⚠️ Раскладка ДОП-действий по клавишам — НЕ хардкод per-модуль, а ДИНАМИЧЕСКИЙ МЕНЕДЖЕР (`actionbar.js`:
+// `_actionList`/`actionKeys`): активные доп-действия (сканер/aux-модули/артефакты, по `unit.stats`) получают цифры
+// 1,2,3… ПО ПОРЯДКУ, без коллизий и пробелов. Источник действия не важен. KEY_PRIMARY/KEY_ACTION — атомы для него.
 // Человекочитаемая метка клавиши для HUD-подсказок ('Digit1'→'1', 'Space'→'ПРОБЕЛ').
 function keyLabel(code) {
   if (!code) return '';
@@ -257,8 +408,59 @@ const PRINT_BLINK = 0.5;           // сек: период мигания под
 const ENEMY_RU = STR.enemy.name;   // имена для лога скана (DATA — lang_ru_constants.js, STR.enemy.name)
 // Порог ЦИКЛА появления типа волны — ЗЕРКАЛО условий `n >= X` в ai.js onCycleStart (держать СИНХРОННО при тюнинге!).
 // Нужно ПРОГНОЗУ волн (узел `amb_predict`): тип следующей волны детерминирован по номеру цикла (гнездо — случайно).
-const WAVE_CYCLE = { collector: 2, digger: 2, raider: 3, hunter: 4, hacker: 5, sniper: 6 };
-const WAVE_TIERS = ['collector', 'digger', 'raider', 'hunter', 'hacker', 'sniper'];   // по ВОЗРАСТАНИЮ опасности — «заголовок» прогноза берёт последний доступный
+const WAVE_CYCLE = { collector: 2, digger: 2, swarm_midge: 3, lurker: 3, raider: 3, hunter: 4, mine_planter: 4, hacker: 5, mender: 5, blight_sower: 5, siege_ram: 5, sniper: 6, siege_mortar: 7 };
+const WAVE_TIERS = ['collector', 'swarm_midge', 'digger', 'lurker', 'blight_sower', 'raider', 'mender', 'hunter', 'mine_planter', 'siege_ram', 'hacker', 'sniper', 'siege_mortar'];   // по ВОЗРАСТАНИЮ опасности — «заголовок» прогноза берёт последний доступный
+// ── ЭСКАЛАЦИЯ ВОЛН (ai.onCycleStart): типы вводятся ступенчато (WAVE_CYCLE), а потолок и размер пачки РАСТУТ
+// с номером цикла → фронт НЕ выходит на плато (угроза-часы рогалика). Ничем не гейтится метой. ⚠️ Стартовые
+// значения — калибровать бот-плейтестами (метрика: цикл 3-6 — честный подъём, к ~циклу 12-15 неотвратимо давит).
+const WAVE_CAP_GROW = 3;        // каждые N циклов после ввода типа — +1 к его живому потолку
+const WAVE_CAP_GROW_SLOW = 5;   // медленнее — для взломщика/снайпера (у файрволла нет контр-ЮНИТА → быстрый рост = неотвратимый проигрыш)
+const WAVE_PACK_GROW = 4;       // каждые N циклов после ввода — +1 к размеру пачки за цикл (быстрее набивает потолок, крупнее пульс)
+const ENEMY_HARD_CAP = 40;      // ПЕРФ-ПРЕДОХРАНИТЕЛЬ: жёсткий глобальный кап одновременных НЕдружественных врагов (термочувствительный MacBook)
+// ── НОВЫЕ ТИПЫ ВРАГОВ (мозги в ai.js, рендер в render_enemy.js). ⚠️ Все значения — СТАРТОВЫЕ, под бот-тюнинг.
+const MINE_PLANTER_CAP = 2;     // ЗАКЛАДКА: зарывается к базе → embed как мина (реакция на юнита). Хрупкая в пути.
+const MINE_PLANT_R = 3;         // тайлов до базы, где закапывается и становится миной
+const LURKER_CAP = 3;           // ЗАЛЕЖЕНЬ: спит в породе вдоль ходов, мили-рывок при копке рядом
+const LURKER_WAKE_R = 1;        // радиус пробуждения (юнит вплотную/копает рядом)
+const LURKER_WIND = 0.4;        // сек замаха перед рывком
+const LURKER_STRIKE_T = 0.18;   // сек самого рывка
+const LURKER_HIT_R = 1.2;       // радиус удара
+const LURKER_DMG = 22;          // урон рывка
+const LURKER_REBURY_R = 4;      // куда перезакапывается после удара
+const LURKER_SEED_MAX = 12;     // в этом радиусе (по осям) от юнита залежень зарывается в засаду, дорывшись из гнезда
+const LURKER_LUNGE_SPEED = 12;  // скорость px-выпада из породы (тайла/с)
+const LURKER_TRAVEL_MAX = 25;   // сек: страховка — если не подобрался к юниту, зарывается где есть порода (не роет вечно)
+const MIDGE_PACK = 5;           // МОШКАРА: фикс. размер роя за спавн (НЕ спавнер)
+const MIDGE_CAP = 6;            // потолок мошкары
+const MIDGE_DMG = 3;            // контактный чип-урон одного дрона
+const MIDGE_HIT_R = 0.7;        // радиус контакта
+const MIDGE_HIT_CD = 0.6;       // сек между укусами одного дрона
+const MENDER_CAP = 1;           // ЛАТАЛЬЩИК: один саппорт-лекарь
+const MENDER_HEAL_RATE = 12;    // HP/с лечения раненого союзника
+const MENDER_HEAL_R = 4;        // радиус лечения
+const MENDER_SPEED = 4;         // скорость (тайла/с)
+const SIEGE_RAM_CAP = 2;        // ТАРАН: наземный структуролом (мили), гейт «есть постройки»
+const RAM_DMG = 45;             // урон тарана по структуре
+const RAM_HIT_R = 0.9;          // радиус удара
+const RAM_WIND = 0.45, RAM_CHARGE_SPEED = 9, RAM_CHARGE_MAX = 0.4, RAM_RECOVER = 0.6;   // фазы разгона (как охотник)
+const RAM_SEEK_R = 22;          // радиус, в котором таран замечает постройку игрока
+const RAM_CHARGE_R = 3.5;       // с этой дистанции до постройки начинает замах-разгон
+const SIEGE_MORTAR_CAP = 2;     // МОРТИРА: дальний структуролом, поздние волны, гейт «есть постройки»
+const MORTAR_RANGE = 16;        // дальность обстрела структур
+const MORTAR_MINDIST = 7;       // ближе — отходит (кайт)
+const MORTAR_COOLDOWN = 2.4;    // сек между залпами
+const MORTAR_GUARD_R = 10;      // держится в этом радиусе от целевой обороны
+const MORTAR_DMG = 30;          // урон залпа по структуре
+const BLIGHT_SOWER_CAP = 2;     // СКВЕРНОСЕЙ: наземный краулер, ставит маяки-глушилки
+const BLIGHT_SOW_INTERVAL = 14; // сек между установками маяков
+const BLIGHT_SOW_FIRST = 6;     // сек до первого маяка
+const BLIGHT_BEACON_HP = 40;    // прочность маяка (сносится буром/импульсом/турелью)
+const BLIGHT_BEACON_R = 10;     // радиус помех маяка (тайлов)
+const BLIGHT_BEACON_CAP = 0.5;  // ПОТОЛОК интенсивности помех маяка (≤50%, не слепит полностью)
+const BLIGHT_BEACON_SPACING = 8;     // мин. расстояние между маяками
+const BLIGHT_BEACON_GLOBAL_CAP = 5;  // глобальный потолок маяков
+const BLIGHT_DRILL_DPS = 60;    // урон маяку от контакта бура юнита (HP/с)
+const BLIGHT_KILL_R = 1.1;      // радиус контакта бура с маяком
 // ГЛОБАЛЬНЫЙ ЦИКЛ СУЩЕСТВОВАНИЯ ИИ (save.epoch): тикает в меню (1/CYCLE_TIME), забег стартует с текущего значения
 // (первый цикл = текущий глобальный, не 1), на выходе глобальный += прожитые циклы. НИКОГДА не сбрасывается.
 const EPOCH_START = 48217;   // с какого «возраста» ИИ начинает (большое число — давно существует)
@@ -268,6 +470,29 @@ const RESOURCE_DEFS = {
   organic: { name: STR.resource.name.organic, color: '#5fbf6a', edge: '#2f7a39', tough: 1.5 },
   crystal: { name: STR.resource.name.crystal, color: '#c264e0', edge: '#7a2f96', tough: 1.9 },
 };
+// ── ЗАСЕВ РЕСУРСОВ (world._seedResources): КАРКАС ПОКРЫТИЯ (jittered-grid одиночных зёрен — ГАРАНТИЯ, что
+// ресурс рядом из ЛЮБОЙ точки, нет «мёртвых зон» на 2+ ходки) + БОГАТЫЕ ЗАЛЕЖИ поверх. ЖЕЛЕЗО — ЖИЛЫ (вытянутые
+// ветвящиеся цепочки), ОРГАНИКА — КАРМАНЫ (округлые сгустки), КРИСТАЛЛ — ОДИНОЧКИ (глубинный биас; супер-редко ПАРА
+// с зазором). Кол-во в ОДНОМ тайле — RES_AMOUNT_* (1..3); print_ore +1 сверху.
+// ⚠️ RES_CELL (зазор покрытия) + ЧИСЛО/РАЗМЕР залежей — главные тюнинг-рычаги (калибровать бот-плейтестами).
+const RES_AMOUNT_MIN = 1, RES_AMOUNT_MAX = 3;     // случайное кол-во ресурса в ОДНОМ тайле залежи/зерна
+// КАРКАС ПОКРЫТИЯ — jittered-grid (стратифицированная сетка): РОВНО одно зерно на ячейку со случайным смещением.
+// Бюджет ходки ~25-30 тайлов (таймер 60с) → целевой max-зазор ~8-12. Гарантия зазора ≈ RES_CELL·1.4.
+const RES_CELL = 8;                                // размер ячейки покрытия (тайлов); кратен MAP_W=144 (18 кол.) → бесшовно по тору
+const RES_JIT = 0.8;                               // доля ячейки для джиттера зерна (0.8 — убивает видимую сетку, не создаёт клочья)
+const GRAIN_ORGANIC_P = 0.32;                      // доля органики среди зёрен каркаса (остальное — железо; кристалл зёрнами НЕ сыплем — он только залежами)
+// размеры БОГАТЫХ залежей РАСТУТ С ГЛУБИНОЙ от стартового слоя (LINEAR с ПОТОЛКОМ — НЕ экспонента):
+const DEPTH_RICH_MAX = 2.4;                        // во сколько раз залежь крупнее на макс. глубине (×база)
+const DEPTH_RICH_SPAN = 130;                       // глубина (тайлов ниже пола города), на которой достигается максимум
+const IRON_VEINS = 64;                             // число железных ЖИЛ за карту (uniform поверх каркаса — джекпоты + размывают сетку)
+const IRON_VEIN_LEN = [2, 5];                      // БАЗОВАЯ длина жилы у старта (глубже ×DEPTH_RICH, до IRON_VEIN_CAP)
+const IRON_VEIN_CAP = 13;                          // ПОТОЛОК длины жилы (тайлов)
+const ORGANIC_BLOBS = 28;                          // число органических КАРМАНОВ
+const ORGANIC_BLOB_SIZE = [3, 6];                  // БАЗОВЫЙ размер кармана у старта (глубже ×DEPTH_RICH, до ORGANIC_BLOB_CAP)
+const ORGANIC_BLOB_CAP = 15;                       // ПОТОЛОК размера кармана (тайлов)
+const CRYSTAL_DEPOSITS = 170;                      // число кристаллических залежей (ОДИНОЧКИ, глубинный биас; засев запрещает соседство)
+const CRYSTAL_PAIR_CHANCE = 0.08;                  // СУПЕР-РЕДКО залежь — ПАРА рядом
+const CRYSTAL_PAIR_GAP = [2, 3];                   // зазор между кристаллами пары (тайлов; НЕ вплотную)
 
 // Пещера с городом внутри породы (воздушный карман). CAVE_FLOOR_Y — пол,
 // по которому ходит юнит (твёрдая земля базы). Y0 опущен вниз, чтобы от спавна
@@ -285,7 +510,7 @@ const SPAWN_X = 30, SPAWN_Y = CAVE_FLOOR_Y;
 
 // Город (нарратив: игрок забирает у города реактор). Все значения апгрейдаемы.
 const CITY_TIMER_MAX = 60;       // сек до начала гибели после ухода с базы
-const CITY_TIMER_RECHARGE = 15;  // сек таймера/сек на базе (~4с до полного — заметная перезарядка)
+const CITY_TIMER_RECHARGE = 11;  // сек таймера/сек на базе (намеренно МЕДЛЕННЕЕ — возврат не должен слишком легко восстанавливать таймер)
 const CITY_RINGS = 3;            // кольца инфраструктуры
 const CITY_RING_HP = 100;        // HP на кольцо
 const CITY_DMG = 20;             // HP/сек, теряемых городом во время гибели
@@ -368,12 +593,15 @@ const RAD_SOURCE_BAND = [120, 220];        // диапазон глубины о
 const RAD_SOURCE_SPREAD = 45;              // разброс по X от спавна (тайлов, по тору) — НЕ используется (очаги привязаны к артефактам)
 
 // ── ПОГРЕБЁННЫЕ ОПАСНЫЕ ОБЪЕКТЫ (hazards.js): останки роботов + старые мины (1 тайл, маркер t.robot / t.mine) ──
-const ROBOT_COUNT = 3;            // останков роботов в породе за забег (+тест у базы)
+const ROBOT_COUNT = 16;           // останков роботов в ГЛУБОКОЙ породе за забег (+тест у базы)
+const ROBOT_UP = 7;               // + останков роботов в ВЕРХНЕЙ страте (старые боевые машины погребённой цивилизации)
+const HAZARD_MIN_DIST = 7;        // мин. 2D-дистанция между ЛЮБЫМИ опасностями (роботы/ловушки/мины — единый пул) → не кучкуются, кросс-тип не липнет
 const ROBOT_WAKE_T = 1.4;         // сек: телеграф (сенсоры разгораются красным) перед стрельбой — есть время отойти
 const ROBOT_SETTLE_T = 0.8;       // сек: ОСЕДАНИЕ после стрельбы (корпус оплывает, питание гаснет) → мёртв
 const ROBOT_SHOTS = 8;            // выстрелов «боевого протокола» в разные стороны (дольше «работает»)
 const ROBOT_SHOT_GAP = 0.16;      // сек между выстрелами
-const MINE_COUNT = 4;             // старых мин в породе за забег (+тест у базы)
+const ROBOT_SHOT_DMG = 12;        // урон ОДНОГО роботного выстрела (ОТДЕЛЬНО от снайпера SHOT_DMG_MIN/MAX): в упор все 8 ≈ 96 HP (база HP юнита 100) — угроза, но не мгновенная смерть; обычно прилетает 1-3
+// МИНА — теперь ПРОСТО ОДИН ИЗ ТИПОВ ЛОВУШКИ (в пуле `TT` генератора `genTraps`), без своего счётчика/генератора. Кол-во — доля от TRAP_COUNT/TRAP_UP.
 const MINE_BLINK_T = 1.3;         // сек: красный огонёк мигает перед взрывом
 const MINE_BLINKS = 4;            // число вспышек за MINE_BLINK_T
 const MINE_BLAST_R = 2.6;         // тайла: радиус урона взрыва (спад к краю)
@@ -404,8 +632,17 @@ const WILD_SABOTAGE_SLOW = 0.4;          // ×скорость макро-цик
 const ENEMY_HP = 100;          // базовая прочность (фолбэк для типов вне карты ниже)
 // Живучесть по роли (задел под бой — пока врагов никто не ранит). Охотник — таран-боец (танк);
 // копатель — бронированный проходчик; рейдер/собиратель — быстрые/хрупкие; снайпер — «стеклянная пушка».
-const ENEMY_HP_BY_TYPE = { hunter: 140, digger: 110, hacker: 90, raider: 80, collector: 70, sniper: 60 };
+const ENEMY_HP_BY_TYPE = { hunter: 140, siege_ram: 130, digger: 110, hacker: 90, raider: 80, blight_sower: 75, collector: 70, mender: 60, sniper: 60, mine_planter: 55, siege_mortar: 55, lurker: 50, swarm_midge: 8 };
 const ENEMY_DEATH_TIME = 0.5;   // сек: анимация уничтожения врага (обломки/искры) до чистки из массива
+// ── УДАР-ФИДБЭК (FX при попадании, hub `game._hitFxPass`) ──
+const HIT_FLASH_TIME = 0.16;    // сек: вспышка-флэш на сущности (юнит/враг/структура) при получении урона
+const HIT_SPARK_ENEMY = 5;      // искр на попадание по врагу
+const HIT_SPARK_STRUCT = 5;     // искр на попадание по структуре
+const HIT_SPARK_UNIT = 7;       // искр на ранение юнита
+const SHAKE_TIME = 0.16;        // сек: длительность тряски экрана при ранении ЮНИТА
+const SHAKE_HIT = 2.0;          // px: базовая амплитуда тряски
+const SHAKE_PER_DMG = 0.07;     // px на единицу урона сверх базовой
+const SHAKE_MAX = 5;            // px: потолок амплитуды (термо/перф — держим мелко)
 
 // ── ПЕЧАТЬ СТРУКТУР (structures.js / render_structure.js) ──
 // Реактор живёт В ЮНИТЕ (как у города): пассивные структуры энергии НЕ требуют; активные тратят
@@ -431,6 +668,9 @@ const STRUCT_DEFS = {
   // ОСАДНАЯ БАШНЯ (b:'siege', structures.js): цель — НЕ враги, а ДИКОЕ ГНЕЗДО. Запитана юнитом-реактором → авто-молотит
   // ближайшее живое гнездо в радиусе резонанс-импульсами (площадь, не луч; контраст ручному осадному модулю). Ведёт hp→0 → ПОДАВЛЕНИЕ.
   siege_tower: { name: STR.structure.name.siege_tower, b: 'siege',    kind: 'active',  hp: 130, build: 5.0, cost: { iron: 14, crystal: 8 }, color: '#ff5a3a', energyMax: 240, range: 6,  fireCd: 2.5, dmg: 22, eShot: 18 },
+  // КУРЬЕР-ТЕРМИНАЛ (b:'courier', structures.js + courier.js): НЕ боевая — ЛОГИСТИКА, энергии не требует. Юнит ВНЕ базы рядом
+  // ссыпает груз в её склад по единице; контейнер полон (store) → отлетает ДРОН с HP, летит к базе сам. Снимает беготню «юнит↔город».
+  courier:     { name: STR.structure.name.courier,     b: 'courier',   kind: 'depot',   hp: 90,  build: 3.5, cost: { iron: 10, crystal: 5 }, color: '#5fd0d8', store: 6 },
 };
 const JAM_SLOW = 0.45;             // множитель скорости врага под глушилкой (45% хода)
 const STRUCT_CAP = 12;             // потолок числа структур (перф/термалка: турели — хитскан, без облака проджектайлов)
@@ -446,7 +686,16 @@ const STRUCT_UNLOCK = {
   emp: 'vault_emp', jammer: 'vault_jam', repulsor: 'vault_repulse',         // лейн КОНТРОЛЬ — узел на тип
   battery: 'vault_batt', repair_drone: 'vault_repair',                      // лейн СНАБЖЕНИЕ — узел на тип
   siege_tower: 'vault_siege',                                               // ОСАДНАЯ БАШНЯ — венец турельного лейна (после рейлгана)
+  courier: 'vault_courier',                                                 // КУРЬЕР-ТЕРМИНАЛ — венец ЭКОНОМИКА-ветки (после утилизатора)
 };
+// КУРЬЕР-ДРОН (vault_courier — терминал b:'courier' + летящий дрон, structures.js/courier.js).
+const COURIER_DEPOSIT_R = 1.6;     // тайлов: юнит ВНЕ базы в этом радиусе ссыпает груз в терминал
+const COURIER_DEPOSIT_INT = 0.16;  // сек между единицами при ссыпке (быстрее базовой сдачи — дамп короткий)
+const COURIER_DRONE_HP = 28;       // HP курьерского дрона (боевой враг на пути может сбить → ресурс потерян)
+const COURIER_DRONE_SPEED = 7.5;   // тайлов/с: скорость дрона по прямой к базе (над тоннелями, поверх тумана)
+const COURIER_INTERCEPT_R = 2.4;   // тайлов: боевой враг в этом радиусе бьёт дрон
+const COURIER_INTERCEPT_DPS = 16;  // урон/с дрону от врага рядом (~1.75с под огнём — сбит)
+const COURIER_DRONE_TTL = 0.5;     // сек: анимация прибытия/гибели дрона до чистки
 const PRINT_SPEED_FACTOR = 0.7;    // узел vault_speed: ×время сборки всех структур (−30%)
 const PRINT_COST_FACTOR = 0.75;    // узел vault_cost: ×ресурсная цена всех структур (−25%)
 const DIGGER_RETURN_STEPS = 1500;          // ~кадров на возврат в гнездо; не дошёл (глубокое гнездо/крусты) → деспавн (магистраль уже прорыта — не копать вечно)
@@ -482,6 +731,35 @@ const BOULDER_HARD = 1.9;          // множитель твёрдости (> �
 const BOULDER_DAMAGE_MIN = 30;     // урон при ударе — больше, чем у нестабильной
 const BOULDER_DAMAGE_MAX = 55;
 
+// ── ЛОВУШКИ (world.genTraps → маркер `t.trap`; откоп `setAir` → `trap.dug`; логика `traps.js`, рендер `render_traps.js`) ──
+const TRAP_COUNT = 20;             // ловушек в ГЛУБОКОЙ породе за забег (4 типа вперемешку: кислота/сейсмо/разлом/МИНА), + 1 тестовая у базы
+const TRAP_UP = 9;                 // + ловушек в ВЕРХНЕЙ страте (старые защитные системы погребённой цивилизации; мина ~1/4 по типу)
+const TRAP_BAND = [Math.round(MAP_H * 0.42), Math.round(MAP_H * 0.97)];   // диапазон глубины засева (до ~дна — общие правила, без особой пустой зоны внизу)
+// 1) КИСЛОТНЫЕ НАНОРОБОТЫ — облако в ВОЗДУШНЫХ тайлах радиуса, DoT, рассеивается по таймеру (импульсом НЕ контрится)
+const ACID_R = 4;                  // радиус облака (тайлов)
+const ACID_ARM = 0.5;              // сек телеграф-разлёта (растёт от центра — окно уйти), урон ещё не полный
+const ACID_DUR = 5.0;              // сек жизни облака до рассеивания
+const ACID_DMG = 8;                // урон/с юниту и врагам внутри облака (после телеграфа)
+// 2) ДЫШАЩАЯ ПОРОДА — сейсмо: дестабилизирует породу вокруг + волна-ЛИНЗА (искажение)
+const SEISMIC_R = 5;               // радиус дестабилизации (тайлов)
+const SEISMIC_WAVE_T = 0.75;       // сек анимации волны-линзы
+const SEISMIC_UNSTABLE_P = 0.75;   // вероятность пометить тайл нестабильным в ЦЕНТРЕ (линейный спад к краю радиуса)
+// 3) РОЙ-КЛАДКА — пачка мини-дронов: сперва РАЗЛЁТ (инициация), затем атака (окно уйти)
+const BROOD_COUNT = 5;             // мини-дронов в кладке
+const BROOD_SCATTER_T = 1.4;       // сек разлёта в стороны до перехода в режим охоты
+// 4) РАЗЛОМ — замуровывание: свободные воздушные тайлы радиуса → порода (обычная твёрдость, прокапывается; кабель НЕ рвётся)
+const CAVEIN_R = 3;                // радиус замуровывания (тайлов)
+
+// ── ОСТАНКИ РОБОТОВ — ВАРИАНТЫ (`robot.kind`): помимо стрелка (`shooter`) — паутина/прыгун/глушилка/кладка ──
+// Дебаффы юнита дублируются игроку: лог + мигающая HUD-плашка (`drawDebuffBadge`), БЕЗ таймера сброса.
+const WEB_R = 2.5;                 // радиус опутывания паутиной (мал — успеть уйти при откопе издали)
+const WEB_DUR = 4.0;              // сек замедления движения
+const WEB_SLOW = 0.45;           // множитель скорости движения под паутиной
+const LATCH_JUMP_R = 3.0;        // дистанция прыжка прыгуна; не достал юнита → подыхает сразу
+const LATCH_TILES = 8;           // тайлов прокопать, чтобы стряхнуть прыгуна (сброс по проходке, не по таймеру)
+const LATCH_DRILL_SLOW = 0.5;    // множитель силы бурения, пока прыгун висит на буре
+const JAM_SCAN_DUR = 6.0;        // сек глушения сканера (снятие тумана отключено)
+
 // Мета-прогресс: метрики забега → МЕТА-ТОКЕНЫ (накопительный банк `save.meta`, межсессионно).
 // Пересчёт показывается на финальном экране анимированными счётчиками (game.computeMeta / drawGameOver).
 const META_NAME = 'МЕГА-ТОКЕНЫ';   // мета-валюта (банк save.meta); короткое — META_ABBR
@@ -507,6 +785,14 @@ const CABLE_LEN_BASE = 19;                          // базовая длина
 const CABLE_LEN_STEP = 7;                           // +тайлов длины за уровень (понерфлено 8→7); cap 3 → 19/26/33/40; узел print_cable2 поднимает cap→5 (47/54)
 const CABLE_BATT_R = 6;                             // print_batt: радиус ЛОКАЛЬНОГО питания от живой батареи (тайлы), отдельно от трейлинг-кабеля
 const CABLE_CEIL_SCAN = 3;                          // на сколько тайлов вверх искать «потолок», чтобы подвесить кабель на шест (иначе висит чуть над полом)
+const CABLE_GRAY_TIME = 0.55;                       // сек: анимация «ухода в серое» (свип-заполнение обесточивания от оторванного конца к корню)
+const CABLE_FALL_TIME = 0.7;                        // сек: БЕЗ «Энергорелеи» — обрушение оторванного кабеля (падение+растворение), затем кабель ПРОПАЛ
+const CABLE_FALL_DIST = 9;                          // тайлов: на сколько визуально падает кабель при обрушении, прежде чем исчезнуть
+const CABLE_ANCHOR_R = 1.5;                         // print_batt: радиус (тайлов) вокруг батареи, где доступна кнопка ЯКОРЯ (подключить/открепить шлейф). Юнит-реактор ПИТАЕТ город через шлейф; батареи — релеи-якоря, продлевающие цепь
+// ЕДИНОЕ ПРАВИЛО ВИЗУАЛКИ: кромка породы ЭРОДИРОВАНА внутрь на ~эту долю тайла (профиль `_ragDepth`, render_world ~0.34 макс).
+// Объекты, «садящиеся» на поверхность (стопы юнита, корпуса структур, шесты кабеля), СМЕЩАЮТСЯ на неё В ПОРОДУ, а не по сетке
+// тайла — иначе висят в воздушном зазоре у кромки. Действует для пола/потолка/стен.
+const STRUCT_EDGE_INSET = 0.34;
 
 // Апгрейды сессии (структура Dome Keeper): тиры цены по уровням (растут). Трек —
 // до UPG_MAX уровней. Валюта — банк сданных ресурсов (`game.bank`), обнуляется за забег.

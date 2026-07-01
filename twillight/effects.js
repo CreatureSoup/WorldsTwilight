@@ -17,6 +17,21 @@ class Fx {
       });
     }
   }
+  // Удар-фидбэк: короткий разлёт искр-стриков от точки попадания (цвет по источнику: враг тёплый, юнит красный).
+  // dir (опц., unit-вектор «от источника урона») → искры летят КОНУСОМ по нему (брызги в сторону, противоположную удару);
+  // без dir — круговой разлёт. Стрик в render тянется НАЗАД по скорости → шлейф указывает на точку удара.
+  hit(px, py, color, n, dir) {
+    n = n || 5;
+    const base = dir ? Math.atan2(dir.y, dir.x) : null;
+    for (let i = 0; i < n; i++) {
+      const a = base != null ? base + (Math.random() - 0.5) * 1.7 : Math.random() * 6.283;   // конус ±~49° по dir, иначе круг
+      const sp = TILE * (1.4 + Math.random() * 2.4);
+      this.parts.push({
+        kind: 'spark', px, py, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        color: color || '#ffd070', grav: FX_GRAV * 0.5, life: 0, ttl: 0.16 + Math.random() * 0.16,
+      });
+    }
+  }
   // Лечение юнита: зелёный «+», всплывающий и тающий (вызывать на ТИКАХ восстановления HP).
   heal(px, py) {
     this.parts.push({

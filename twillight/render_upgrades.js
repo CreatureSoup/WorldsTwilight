@@ -64,6 +64,8 @@ function drawUpgrades(ctx, u, W, H) {
     ctx.fillText(STR.upgrades.secCityLocked, L.list.x, cy + 13);
     cy += 24;
   }
+  const artTracks = u.tracks.filter((t) => t.cat === 'artifact');   // РЕЛИКТЫ — только при установленных артефактах (Батч 6)
+  if (artTracks.length) drawSection(STR.upgrades.secArtifact, PAL.violet || PAL.cobalt, artTracks);
   ctx.restore();
 
   const contentH = cy + u.scrollY - innerY;

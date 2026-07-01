@@ -42,6 +42,16 @@ function drawBackdrops(ctx, world, unit, camera, W, H) {
     const offX = unit ? wrapDeltaPx(unit.px, cxw) : 0, offY = unit ? (unit.py - cyw) : 0;
     _bdScene(ctx, b, sx, sy, hw, hh, offX, offY, rev);
     if (b.scanning) _bdSweep(ctx, b, sx, sy, hw, hh);
+    if (b._rejT > 0) {   // красная «ОТКАЗ»-вспышка: скан прошёл, но без узла kart_ruins данные не извлечь (ассет всё равно проявлен)
+      const k = b._rejT / BACKDROP_REJ_T;
+      ctx.save();
+      ctx.beginPath(); ctx.ellipse(sx, sy, hw * 1.1, hh * 1.35, 0, 0, 6.283); ctx.clip();
+      ctx.globalCompositeOperation = 'lighter';
+      const rg = ctx.createRadialGradient(sx, sy, 6, sx, sy, Math.max(hw, hh) * 1.2);
+      rg.addColorStop(0, `rgba(210,46,32,${(0.26 * k).toFixed(3)})`); rg.addColorStop(1, 'rgba(210,46,32,0)');
+      ctx.fillStyle = rg; ctx.fillRect(sx - hw * 1.1, sy - hh * 1.1, hw * 2.2, hh * 2.2);
+      ctx.restore();
+    }
   }
   ctx.restore();
 }

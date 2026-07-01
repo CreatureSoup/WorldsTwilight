@@ -97,11 +97,14 @@ class Inventory {
       if (m.radar)    { s.radar = true; s.radarSpectrum = (typeof metaHas === 'function' && metaHas('mast_rad_spec')); }   // радар-сканер: развёртка (узел полного спектра снимает фильтр типа)
       if (m.echoScan) { s.echoScan = true; s.echoLong = (typeof metaHas === 'function' && metaHas('mast_ech_len')); }   // эхо-сканер: волна-метка (узел дальности ×2)
       if (m.capacity) s.capacity += m.capacity;
-      if (m.healRate) s.healRate += m.healRate;          // ремонтный трюм
+      if (m.heal) s.healRate += m.heal;                  // ремонтный МОДУЛЬ (доп-слот): источник реген-стата healRate (как флаги hack/siege — только здесь)
       if (m.noiseResist) s.noiseResist += m.noiseResist; // экран помех (доп-слот)
       if (m.printer) s.printer += m.printer;             // модуль печати (доп-слот)
       if (m.printReach) s.printReach = Math.max(s.printReach, m.printReach);   // базовый радиус печати
       if (m.hack) s.hack = true;                         // модуль взлома (доп-слот): взлом/пробуждение города (hack.js)
+      if (m.siege) s.siege = true;                       // осадный модуль (доп-слот): пробойный луч по гнезду (siege.js)
+      if (m.stealth) s.stealth = true;                   // стелс-модуль (доп-слот): невидимость (stealth.js)
+      if (m.jam) s.jam = true;                           // взлом юнитов (доп-слот): импульс-глушение врагов (jam.js)
     }
     // Готов к старту, когда заняты все ОБЯЗАТЕЛЬНЫЕ слоты (опциональные — доп-слот — можно пустыми).
     const req = hull.slots.filter((cat) => !optional.includes(cat));

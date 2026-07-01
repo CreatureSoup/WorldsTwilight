@@ -257,7 +257,7 @@ function clipVisibleAir(ctx, world, camera) {
   for (let y = y0; y <= y1; y++)
     for (let x = x0; x <= x1; x++) {
       const sx = x * TILE - ox, sy = y * TILE - oy;
-      if (airU(x, y)) { ctx.rect(sx, sy, TILE + 1, TILE + 1); continue; }
+      if (airU(x, y)) { ctx.rect(sx, sy, TILE, TILE); continue; }   // ⚠️ БЕЗ +1: иначе rect залезает на 1px вправо/вниз в кайму породы, а зубцы стороны 2 (правая стена) намотаны ОБРАТНО → winding гасится (nonzero) → дыра в клипе на кромке → тень не доходит → СВЕТЛАЯ полоска. Зубцы покрывают кайму на всю глубину сами.
       if (world.tileAt(x, y).type === ROCK) {              // кайма со стороны воздуха = видимый воздух
         if (airU(x, y + 1)) _appendTeeth(ctx, x, y, sx, sy, 0);
         if (airU(x, y - 1)) _appendTeeth(ctx, x, y, sx, sy, 1);
@@ -338,13 +338,11 @@ function drawTunnelShadow(ctx, world, camera, ox, oy, x0, y0, x1, y1) {
   s.globalCompositeOperation = 'source-over';
 
   ctx.save();
-  ctx.beginPath();
-  let anyAir = false;
-  for (let y = y0; y <= y1; y++)
-    for (let x = x0; x <= x1; x++)
-      if (airU(x, y)) { ctx.rect(x * TILE - ox, y * TILE - oy, TILE, TILE); anyAir = true; }
-  if (!anyAir) { ctx.restore(); return; }
-  ctx.clip();
+  // ⚠️ клип по ВИДИМОМУ воздуху (тоннель + эрозийная КАЙМА `_ragDepth`), а НЕ по квадратам тайлов. Иначе в кайме
+  // (она покрашена в цвет дна → визуально воздух, но НЕ квадрат-тайл) тени НЕТ → у границы тайла образуется
+  // СВЕТЛАЯ кайма (без тени) рядом с ТЁМНЫМ воздушным тайлом (с тенью) = квадратный ШОВ. Теперь тень идёт ровно
+  // от рваного края породы внутрь хода.
+  clipVisibleAir(ctx, world, camera);
   ctx.shadowColor = 'rgba(3,2,1,0.95)';
   ctx.shadowBlur = TILE * 1.05;
   ctx.drawImage(_shC, 0, 0);
@@ -401,6 +399,15 @@ function drawWorld(ctx, world, unit, camera, debug) {
   ctx.clip();
   drawChunks(ctx, world, camera, W, H);
   ctx.restore();
+
+  // 2a) ПЕРЕКРЫТЬ протёкшую в воздух породу: base-fill (gapColor) и чанки рисуются `TILE+1` → залезают на 1px
+  // ВПРАВО/ВНИЗ в соседний воздушный тайл, а `raggedEdge` красит дно ТОЛЬКО внутри породы (в воздух не достаёт).
+  // Из-за дробного scale этот 1px виден как «полоска породы» ровно по квадратной кромке тайла (и H, и V, всегда).
+  // Перерисовываем дно воздуха `backColor` ПОВЕРХ осколков (тот же `TILE+1` — стыки воздух-воздух не разойдутся) →
+  // квадратная кромка исчезает, остаётся только рваная эрозийная линия (её рисует raggedEdge ниже, внутрь породы).
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++)
+      if (airU(x, y)) { ctx.fillStyle = backColor(y); ctx.fillRect(x * TILE - ox, y * TILE - oy, TILE + 1, TILE + 1); }
 
   // 2b) жилы ресурса в породе
   drawResourceVeins(ctx, world, ox, oy, x0, y0, x1, y1);

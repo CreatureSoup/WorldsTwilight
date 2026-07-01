@@ -100,8 +100,9 @@ function scanCdInfo(game) {
 function drawScanCooldown(ctx, game, W) {
   if (game.mode !== 'playing' || game.debug) return;
   const info = scanCdInfo(game); if (!info) return;
-  // сканер — ДОПОЛНИТЕЛЬНОЕ действие: метку клавиши берём из раскладки модуля (цифра 1)
-  const keyHint = keyLabel(moduleActionKeys('scanner', game.unit && game.unit.modules && game.unit.modules.scanner)[0]) || '1';
+  // сканер — ДОПОЛНИТЕЛЬНОЕ действие: метку клавиши берём у МЕНЕДЖЕРА действий (цифра назначена динамически)
+  const sk = game.unit && game.unit.stats;
+  const keyHint = keyLabel(game.actionKeys(sk && sk.radar ? 'radar' : 'echoScan')[0]) || '1';
   const w = 138, h = 20, x = W - 12 - w, y = 32;
   ctx.save();
   ctx.fillStyle = 'rgba(13,12,16,0.82)'; ctx.fillRect(x, y, w, h);

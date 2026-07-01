@@ -61,14 +61,17 @@ function _metaBuildGraph() {
   // веером и ПЕЧАТЬю (−151..−153°, место даёт авто-рост холста влево). Импульсный — центр (−123°), кинетический —
   // право (−108.5°). Координаты — из констрейнт-солвера (minDist≥197, клиренс провод↔узел≥153, 0 пересечений).
   un('mast_ds', 'out', 880, -137.5, STR.meta.node.mast_ds.name, STR.meta.node.mast_ds.sub, 'stab', STR.meta.node.mast_ds.desc);
-  un('mast_ds_b1', 'out', 1085, -138.5, STR.meta.node.mast_ds_b1.name, STR.meta.node.mast_ds_b1.sub, 'queue', STR.meta.node.mast_ds_b1.desc);
-  un('mast_ds_b2', 'out', 1280, -141.5, STR.meta.node.mast_ds_b2.name, STR.meta.node.mast_ds_b2.sub, 'queue', STR.meta.node.mast_ds_b2.desc);
+  // Ветка бура: АВТОНОМИЯ раньше ёмкости (mast_ds → ds_life → ds_b1 → ds_b2). Позиции трёх слотов НЕ меняются — меняется лишь какой узел в каком слоте.
+  un('mast_ds_life', 'out', 1085, -138.5, STR.meta.node.mast_ds_life.name, STR.meta.node.mast_ds_life.sub, 'stab', STR.meta.node.mast_ds_life.desc);   // ВРЕМЯ РАБОТЫ: +заряд щита (слот 1, сразу после бура)
+  un('mast_ds_b1', 'out', 1280, -141.5, STR.meta.node.mast_ds_b1.name, STR.meta.node.mast_ds_b1.sub, 'queue', STR.meta.node.mast_ds_b1.desc);
+  un('mast_ds_b2', 'out', 1475, -141.5, STR.meta.node.mast_ds_b2.name, STR.meta.node.mast_ds_b2.sub, 'queue', STR.meta.node.mast_ds_b2.desc);
   un('mast_ds_nav', 'out', 1115, -151.5, STR.meta.node.mast_ds_nav.name, STR.meta.node.mast_ds_nav.sub, 'map', STR.meta.node.mast_ds_nav.desc);
   un('mast_ds_scan', 'out', 1325, -153, STR.meta.node.mast_ds_scan.name, STR.meta.node.mast_ds_scan.sub, 'detector', STR.meta.node.mast_ds_scan.desc);
   un('mast_di', 'out', 905, -123, STR.meta.node.mast_di.name, STR.meta.node.mast_di.sub, 'bomb', STR.meta.node.mast_di.desc);
   un('mast_di_len', 'out', 1090, -127.5, STR.meta.node.mast_di_len.name, STR.meta.node.mast_di_len.sub(IMPULSE_LEN_NODE), 'detector', STR.meta.node.mast_di_len.desc(IMPULSE_LEN_NODE));
   un('mast_dk', 'out', 880, -108.5, STR.meta.node.mast_dk.name, STR.meta.node.mast_dk.sub, 'blades', STR.meta.node.mast_dk.desc);
   un('mast_dk_max', 'out', 1085, -114.5, STR.meta.node.mast_dk_max.name, STR.meta.node.mast_dk_max.sub, 'bomb', STR.meta.node.mast_dk_max.desc);
+  un('mast_dk_burst', 'out', 1010, -100, STR.meta.node.mast_dk_burst.name, STR.meta.node.mast_dk_burst.sub, 'resonance', STR.meta.node.mast_dk_burst.desc);   // ВЗРЫВНОЙ ПРОБОЙ: ветка ВВЕРХ от кинетического (вторая, отдельно от тяжёлого бойка)
   // Сенсорный веер: обнаружение угроз · экран помех · РАДАР (→полный спектр) · ЭХО-СКАНЕР (→дальность).
   // mast_sr (Детектор загрязнения) переехал в ветвь МИР (к Дешифратору). Координаты — констрейнт-солвер (minDist≥173).
   un('mast_sa', 'out', 900, -76, STR.meta.node.mast_sa.name, STR.meta.node.mast_sa.sub, 'quiet', STR.meta.node.mast_sa.desc);
@@ -79,12 +82,12 @@ function _metaBuildGraph() {
   // mast_sh (Экран помех) ПЕРЕЕХАЛ в ветвь МИР (к Детектору загрязнения) — определён там через kn(). id сохранён.
   edges.push(['core', 'mast_hub', 'wire']);
   edges.push(['mast_hub', 'mast_drill', 'wire'], ['mast_hub', 'mast_cargo', 'wire'], ['mast_hub', 'mast_sens', 'wire']);
-  edges.push(['mast_cargo', 'mast_hull', 'wire']);   // линия: доп-слот → улучшение трюма → ремонтный цех → ремонтный трюм
+  edges.push(['mast_cargo', 'mast_hull', 'wire']);   // линия: доп-слот → улучшение трюма (+вместительный трюм) → ремонтный цех → ремонтный модуль
   edges.push(['mast_hull', 'mast_rep', 'wire']);   // ремонт: сперва ЦЕХ (прочность), затем ТРЮМ (модуль)
   edges.push(['mast_drill', 'mast_di', 'wire'], ['mast_drill', 'mast_dk', 'wire'], ['mast_drill', 'mast_ds', 'wire']);
   edges.push(['mast_di', 'mast_di_len', 'wire']);   // импульсный бур → удлинение волны (узел длины луча)
-  edges.push(['mast_dk', 'mast_dk_max', 'wire']);   // кинетический бур → тяжёлый боёк (потолок разгона ×3 + ур.3)
-  edges.push(['mast_ds', 'mast_ds_b1', 'wire'], ['mast_ds_b1', 'mast_ds_b2', 'wire']);   // винтовой бур → +1 → +1 автономный бур (макс 4)
+  edges.push(['mast_dk', 'mast_dk_max', 'wire'], ['mast_dk', 'mast_dk_burst', 'wire']);   // кинетический бур → тяжёлый боёк (потолок разгона) + взрывной пробой (ветка вверх)
+  edges.push(['mast_ds', 'mast_ds_life', 'wire'], ['mast_ds_life', 'mast_ds_b1', 'wire'], ['mast_ds_b1', 'mast_ds_b2', 'wire']);   // винтовой бур → ВРЕМЯ РАБОТЫ (заряд щита) → +1 → +1 автономный бур (макс 4)
   edges.push(['mast_ds', 'mast_ds_nav', 'wire'], ['mast_ds_nav', 'mast_ds_scan', 'wire']);   // 2-я ветка винтового: навигация по щитам → сканеры на щитах
   edges.push(['mast_sens', 'mast_sa', 'wire'], ['mast_sens', 'mast_rad', 'wire'], ['mast_sens', 'mast_ech', 'wire']);   // mast_sh переехал в МИР (к Детектору)
   edges.push(['mast_rad', 'mast_rad_spec', 'wire'], ['mast_ech', 'mast_ech_len', 'wire']);   // радар→полный спектр; эхо→дальность волны
@@ -147,7 +150,7 @@ function _metaBuildGraph() {
   // ВЕНЕЦ: КОНВЕРГЕНЦИЯ — требует «Пробуждение города» И «Взлом диких городов» (allDeps)
   kn('kart_hackcity','out', 1205, 137.2, STR.meta.node.kart_hackcity.name, STR.meta.node.kart_hackcity.sub, 'contact', STR.meta.node.kart_hackcity.desc);
   nodes.find((x) => x.id === 'kart_hackcity').allDeps = ['kart_wake', 'kart_jam'];   // КОНВЕРГЕНЦИЯ: доступен только при ОБОИХ родителях (metaAvail)
-  ['kart_stun', 'kart_stealth'].forEach((id) => { const nn = nodes.find((x) => x.id === id); if (nn) nn.wip = true; });   // НЕТ ФУНКЦИОНАЛА → баннер «В РАЗРАБОТКЕ»; kart_jam РЕАЛИЗОВАН (контр-взлом диких, hack.js) → снят с wip
+  // Вся ветвь ВЗЛОМА реализована: kart_jam (контр-взлом), kart_stealth (стелс), kart_stun (глушение врагов) — wip снят со всех.
   edges.push(['core', 'kart_hub', 'wire']);
   edges.push(['kart_hub', 'mast_sr', 'wire'], ['mast_sr', 'mast_sh', 'wire']);   // ДЕТЕКТОР → Экран помех
   edges.push(['kart_hub', 'kart_wreck', 'wire'], ['kart_wreck', 'kart_ruins', 'wire']);   // ДАННЫЕ (прямо от хаба)
@@ -180,7 +183,6 @@ function _metaBuildGraph() {
   vn('vault_courier', 'out', 1140, 199, STR.meta.node.vault_courier.name, STR.meta.node.vault_courier.sub, 'map', STR.meta.node.vault_courier.desc);   // чуть выше
   // ОСАДНАЯ БАШНЯ (реализована, structures.js): венец турельного лейна после рейлгана — осада дикого гнезда.
   vn('vault_siege',   'out', 1300, 172, STR.meta.node.vault_siege.name, STR.meta.node.vault_siege.sub, 'bomb', STR.meta.node.vault_siege.desc);
-  nodes.find((x) => x.id === 'vault_courier').wip = true;   // структура ещё не построена → баннер «В РАЗРАБОТКЕ»
   edges.push(['core', 'vault_hub', 'wire']);
   edges.push(['vault_hub', 'vault_mg', 'wire'], ['vault_mg', 'vault_mw', 'wire'], ['vault_mw', 'vault_rail', 'wire'], ['vault_rail', 'vault_siege', 'wire']);
   edges.push(['vault_hub', 'vault_emp', 'wire'], ['vault_emp', 'vault_jam', 'wire'], ['vault_jam', 'vault_repulse', 'wire']);
@@ -218,18 +220,26 @@ function _metaBuildGraph() {
   // ОСАДНЫЙ МОДУЛЬ (реализован, siege.js): после канонира — пробойный луч-копьё по дикому гнезду (директива «устрани угрозу»).
   pn('print_siege', 'out', 1330, -6.5,  STR.meta.node.print_siege.name, STR.meta.node.print_siege.sub, 'bomb', STR.meta.node.print_siege.desc, 40);
   ['print_slots', 'print_gun'].forEach((id) => { const nn = nodes.find((x) => x.id === id); if (nn) nn.wip = true; });   // КОРПУСА — нет в редакторе, делаем отдельно → баннер «В РАЗРАБОТКЕ»; остальные красные узлы реализованы
-  nodes.find((x) => x.id === 'print_life').allDeps = ['print_batt', 'print_mtmod'];   // КОНВЕРГЕНЦИЯ: тело требует ГОРОД(Энергорелеи) И ИИ(Контекст-расширение)
+  nodes.find((x) => x.id === 'print_life').allDeps = ['print_disc3', 'print_mtmod'];   // КОНВЕРГЕНЦИЯ: тело требует ГОРОД(Симбиоз) И ИИ(Контекст-расширение)
   edges.push(['core', 'print_hub', 'wire']);
   edges.push(['print_hub', 'print_disc', 'wire'], ['print_disc', 'print_disc2', 'wire'], ['print_disc2', 'print_disc3', 'wire']);   // ГОРОД: рационализация 5→10→15%
   edges.push(['print_hub', 'print_cable', 'wire'], ['print_cable', 'print_batt', 'wire'], ['print_cable', 'print_cable2', 'wire']);   // ГОРОД: энерго (+улучшение шлейфа)
   edges.push(['print_hub', 'print_mtmod', 'wire'], ['print_mtmod', 'print_mtdata', 'wire'], ['print_mtmod', 'print_mtcyc', 'wire'], ['print_mtmod', 'print_ore', 'wire']);   // ИИ: когниция
   edges.push(['print_hub', 'print_speed', 'wire'], ['print_speed', 'print_jump', 'wire']);   // ИИ: движение
-  edges.push(['print_batt', 'print_life', 'wire'], ['print_mtmod', 'print_life', 'wire']);   // КОНВЕРГЕНЦИЯ город+ИИ → тело
+  edges.push(['print_disc3', 'print_life', 'wire'], ['print_mtmod', 'print_life', 'wire']);   // КОНВЕРГЕНЦИЯ город(Симбиоз)+ИИ(Контекст) → тело
   edges.push(['print_life', 'print_slots', 'wire'], ['print_life', 'print_gun', 'wire']);   // корпуса из тела
   edges.push(['print_gun', 'print_siege', 'wire']);   // осадный модуль — после канонира
 
   // «Модули дороже»: узел, открывающий МОДУЛЬ сборки, +50% к цене (премия по ценности анлока; корпуса/жизнь красной — заданы явно).
   for (const n of nodes) if (typeof metaUnlocksModule === 'function' && metaUnlocksModule(n.id)) n.cost = Math.round(n.cost * 1.5);
+
+  // БОЕВЫЕ узлы (эффект завязан на ВРАГОВ/ВОЛНЫ) → в РЕЖИМЕ ИСТОРИИ (дикий город молчит) почти не задействуются → тег-предупреждение
+  // (meta_dom.mtRenderCard). Турели/контроль/снабжение структур · детект-угроз/прогноз/файрволл · контр-враг модули (глушение/стелс/саботаж гнёзд).
+  const STORY_LIMITED = new Set([
+    'vault_mg', 'vault_mw', 'vault_rail', 'vault_siege', 'vault_emp', 'vault_jam', 'vault_repulse', 'vault_batt', 'vault_repair',
+    'mast_sa', 'amb_fw', 'amb_predict', 'kart_stun', 'kart_stealth', 'kart_jam', 'kart_breach',
+  ]);
+  for (const n of nodes) if (STORY_LIMITED.has(n.id)) n.storyLimited = true;
 
   // Кольцо ХАБОВ убрано: из ЯДРА и так запитывается каждый хаб (core→hub wire) → поперечные связи между
   // ветками бессмысленны (только путали раскладку). Кольцо внешних — только среди СТАНДАРТНЫХ секторов (гард).

@@ -6,6 +6,65 @@
 // пауза). Выбор: 0 ТЕХНОЛОГИЯ (особое свойство — эффекты позже) · 1 ДАННЫЕ городу (кодекс) · 2 ПЕРЕРАБОТКА
 // (ресурсы лутом). После выбора объект ПОТРЕБЛЁН (тайлы в воздух), мир размораживается. Рендер — render_artifact.
 Object.assign(Game.prototype, {
+  // ── СЛОТЫ артефактов (3 типа: city/unit/drone, по ARTIFACT_SLOT_CAP). ЗАЛОЧЕНО при установке: слот занят → только Данные/Переработка. ──
+  artifactHas(id) { const sl = this.artifactSlots; return !!sl && (sl.city.includes(id) || sl.unit.includes(id) || sl.drone.includes(id)); },
+  // ── ГОРОДСКИЕ АПГРЕЙДЫ артефактов (Батч 6): уровень из upgrades + скалированное значение эффекта (единый источник ARTIFACT_UP). ──
+  _artLvl(id) { return (this.upgrades && this.upgrades.levels && this.upgrades.levels['art_' + id]) || 0; },
+  _artScaled(id) { const u = (typeof ARTIFACT_UP !== 'undefined') && ARTIFACT_UP[id]; if (!u) return 0; return u.base + Math.min(this._artLvl(id), u.cap) * u.step; },
+  _installedArtifactIds() { const sl = this.artifactSlots; return sl ? [].concat(sl.city || [], sl.unit || [], sl.drone || []) : []; },
+  artifactSlotFree(slot) { const sl = this.artifactSlots; return !!sl && sl[slot] && sl[slot].length < (ARTIFACT_SLOT_CAP[slot] || 0); },
+  // Проброс эффектов установленных артефактов в unit.stats/город. Зовётся ПОСЛЕ каждого setStats (onChange) и на установку —
+  // иначе пересборка статов апгрейдом стёрла бы флаги. Боевые/щитовые эффекты гейтятся прямо через artifactHas(id).
+  _applyArtifacts() {
+    const s = this.unit && this.unit.stats;
+    if (s) {
+      s.jets = this.artifactHas('jets');                                            // активная способность → кнопка в ACTION_DEFS (флаг-стат)
+      s.lootMagnet = this.artifactHas('loot_magnet') ? ARTIFACT_MAGNET_R : 0;         // лут-магнит → радиус подхвата (loot.update)
+      s.combatDrill = this.artifactHas('combat_drill');                              // бой-бур → контактный урон (artifact._combatDrillTick)
+      // БАТЧ 1 — защита/бур (эффекты в unit.hurt() / drill-блоке; поля юнита наполняются регеном/КД сами). Значения скалируются город-апгрейдом (_artScaled).
+      s.armorMult = this.artifactHas('armor') ? this._artScaled('armor') : 0;          // бронепластины: −% урона
+      s.overshieldMax = this.artifactHas('overshield') ? this._artScaled('overshield') : 0;   // энергощит: ёмкость буфера
+      s.absorbMax = this.artifactHas('absorb') ? Math.round(this._artScaled('absorb')) : 0;   // поглощение: число зарядов (1→3)
+      s.absorbCd = ABSORB_CD;
+      s.thorns = this.artifactHas('thorns');                                          // шипы: контактному врагу урон назад
+      s.thornsDmg = this.artifactHas('thorns') ? this._artScaled('thorns') : 0;        // урон ответки (unit.hurt читает s.thornsDmg)
+      s.echoDrill = this.artifactHas('echo_drill');                                   // эхо-бур: шанс пробить соседний тайл
+      s.echoDrillChance = this.artifactHas('echo_drill') ? this._artScaled('echo_drill') : 0;   // шанс эха (unit.js читает s.echoDrillChance)
+      s.overdriveBonus = this.artifactHas('drill_overdrive') ? this._artScaled('drill_overdrive') : 0;   // форсаж: прибавка силы на пике нагрева (unit/borers)
+      s.harpoonRange = this.artifactHas('harpoon') ? this._artScaled('harpoon') : 0;   // гарпун: длина (updateHarpoon)
+      s.dataDetectR = this.artifactHas('data_detector') ? this._artScaled('data_detector') : 0;   // детектор данных: радиус (updateDataDetector)
+      // БАТЧ 2 — активные доп-действия (логика — artifacts_active.js; флаг = кнопка в ACTION_DEFS)
+      s.stunPulse = this.artifactHas('stun_pulse');                                   // ЭМИ-импульс: стан врагам в радиусе
+      s.blastCharge = this.artifactHas('blast_charge');                               // подрыв-заряд: взрыв у юнита (своих не бьёт)
+      s.nanoRepair = this.artifactHas('nano_repair');                                 // нано-ремонт: хил во времени
+      // БАТЧ 3 — сложные активки/пассивы (логика — artifacts_active.js + хуки в unit/borers)
+      s.drillOverdrive = this.artifactHas('drill_overdrive');                         // форсаж бура: нагрев→множитель, перегрев→лок (ПАССИВ, без кнопки)
+      s.dash = this.artifactHas('drive_dash');                                        // рывок: доп-действие — авто-проходка по воздуху по взгляду
+      s.harpoon = this.artifactHas('harpoon');                                        // гарпун: доп-действие — притяг к стене по взгляду (длина — город-апгрейд harpoonRange)
+      s.xray = this.artifactHas('xray');                                              // рентген: доп-действие — полное снятие тумана с затуханием к радиусу сканера
+      s.droneHack = this.artifactHas('drone_hacker');                                 // дрон-хакер: доп-действие (деплой); прочие дроны — пассивные компаньоны (без кнопки)
+    }
+    if (this._syncDrone) this._syncDrone();                                           // БАТЧ 5 — компаньон-дрон по дрон-слоту (collector/courier/battery/scout/hacker)
+    if (this.upgrades && this.upgrades.syncArtifactTracks) this.upgrades.syncArtifactTracks(this._installedArtifactIds());   // БАТЧ 6 — динамические треки апгрейда установленных артефактов
+    if (this.city) {                                                                // щит города — буфер на city (city.js перехватывает урон)
+      const sh = this.artifactHas('city_shield'), shieldHp = sh ? this._artScaled('city_shield') : 0;
+      if (sh && this.city.shieldMax <= 0) this.city.shield = shieldHp;                // ПЕРВАЯ установка → купол сразу полон (без стартового штрафа на реген)
+      this.city.shieldMax = shieldHp;
+      if (!sh) this.city.shield = 0;
+    }
+  },
+  // БОЙ-БУР: пока установлен, врагам в контакте с юнитом капает урон (юнит обретает «рукопашную» буром).
+  _combatDrillTick(dt) {
+    if (!this.artifactHas('combat_drill') || !this.unit || !this.enemies) return;
+    const u = this.unit;
+    for (const e of this.enemies) {
+      if (e.dying || e.dead || e.friendly) continue;
+      if (Math.hypot(wrapDeltaPx(u.px, e.px), u.py - e.py) / TILE <= COMBAT_DRILL_R) {
+        e.damage(this._artScaled('combat_drill') * dt);
+        if (this.dust && Math.random() < 0.3) { const a = Math.random() * 6.283; this.dust._grit(e.px, e.py, Math.cos(a) * TILE, Math.sin(a) * TILE - TILE * 0.4, true); }   // искры контакта
+      }
+    }
+  },
   // ВСЕ тайлы артефакта откопаны (в воздухе)? — активация только когда объект ПОЛНОСТЬЮ освобождён от породы.
   artifactExcavated(a) {
     for (let dy = 0; dy < a.h; dy++) for (let dx = 0; dx < a.w; dx++) if (this.world.tileAt(wrapX(a.tx + dx), a.ty + dy).type !== AIR) return false;
@@ -22,6 +81,13 @@ Object.assign(Game.prototype, {
   openArtifact(a) {
     this.pendingArtifact = a; this.artifactSel = 0; this.mode = 'artifact';
     if (this.logEvent) this.logEvent(STR.log.artifactDug);
+    // ГЛОССАРИЙ + лог про ТИП реликта — РАЗОВО на тип: codexDiscover персистит found-set в save.codex и сам гейтит «первую встречу»
+    // (повторная находка того же типа → codexDiscover вернёт null, дубля не будет). Карта id→запись — поле `gloss` в ARTIFACT_POOL.
+    const def = a && a.tech, eid = def && def.gloss;
+    if (eid && typeof codexDiscover === 'function') {
+      const e = codexDiscover(eid);
+      if (e && this.logEvent) this.logEvent(STR.log.detected((e.name || def.name).toUpperCase()));
+    }
   },
   _artifactConsume(a) {   // потребить объект — все его тайлы в воздух (noTrigger: не сыпать породу сверху)
     for (let dy = 0; dy < a.h; dy++) for (let dx = 0; dx < a.w; dx++) this.world.setAir(wrapX(a.tx + dx), a.ty + dy, true);
@@ -29,9 +95,12 @@ Object.assign(Game.prototype, {
   },
   artifactChoose(idx) {
     const a = this.pendingArtifact; if (!a) return;
-    if (idx === 0) {                                   // ИЗВЛЕЧЬ ТЕХНОЛОГИЮ (эффект — позже)
-      (this.artifactTechs || (this.artifactTechs = [])).push(a.tech.id);
-      if (this.logEvent) this.logEvent(STR.log.techExtracted(a.tech.name));
+    if (idx === 0) {                                   // УСТАНОВИТЬ ТЕХНОЛОГИЮ в слот (если свободен — иначе залочено, no-op)
+      const def = a.tech;
+      if (!this.artifactSlotFree(def.slot)) return;    // слот занят (DK-модель: без смены) → выбор недоступен
+      this.artifactSlots[def.slot].push(def.id);
+      this._applyArtifacts();
+      if (this.logEvent) this.logEvent(STR.log.techExtracted(def.name));
     } else if (idx === 1) {                            // ОТДАТЬ ГОРОДУ — ДАННЫЕ
       this.dataCount = (this.dataCount || 0) + 1;
       { const r = this._dataGain(ARTIFACT_DATA); if (r && typeof codexPopupShow === 'function') codexPopupShow(r, this._codexAnchor()); }   // множитель kart_data учитывается

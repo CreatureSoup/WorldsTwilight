@@ -44,32 +44,42 @@ function drawPrintGhost(ctx, game, camera) {
 
 function drawStructure(ctx, s, cx, cy) {
   if (s.dying) { drawStructDeath(ctx, s, cx, cy); return; }
+  if (s.hitT > 0) {   // удар-флэш: аддитивная вспышка при получении урона
+    const f = s.hitT / HIT_FLASH_TIME;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5 * f;
+    ctx.fillStyle = '#ff9a4a'; ctx.beginPath(); ctx.arc(cx, cy, TILE * (0.55 + (1 - f) * 0.4), 0, 6.283); ctx.fill(); ctx.restore();
+  }
   const b = s.def.b, building = s.state === 'building';
-  // Активные «садятся» на пол (рисуются по центру тайла → парили бы над неровной кромкой). Стена/шипы — нет.
-  const dcy = cy + ((b === 'wall' || b === 'spike') ? 0 : Math.round(TILE * 0.34));
+  // Активные «садятся» на ПОВЕРХНОСТЬ по face (пол/потолок/стена): смещаются НА ВИДИМУЮ КРОМКУ породы (эрозия `STRUCT_EDGE_INSET`,
+  // единое правило — как стопы юнита/шесты кабеля), иначе парят по сетке тайла над неровной кромкой. Стена/шипы (solid) — без смещения.
+  const solid = (b === 'wall' || b === 'spike'), off = solid ? 0 : Math.round(TILE * STRUCT_EDGE_INSET), f = s.face || 'floor';
+  const dcx = cx + (f === 'wallL' ? -off : f === 'wallR' ? off : 0);
+  const dcy = cy + (f === 'ceil' ? -off : f === 'floor' ? off : 0);
   if (!building) {   // ауры/конусы/импульсы непрерывных эффектов — ПОД корпусом
-    if (b === 'microwave' && s.active2) drawMwCone(ctx, s, cx, dcy);
-    else if ((b === 'jammer' || b === 'repair') && s.active2) drawAura(ctx, cx, dcy, s.def.radius, s.def.color);
-    if ((b === 'emp' || b === 'repulsor') && s.pulse > 0) drawPulseRing(ctx, s, cx, dcy);
-    if (b === 'siege' && s.pulse > 0) drawSiegeShock(ctx, s, cx, dcy);   // резонанс-фронт к гнезду
+    if (b === 'microwave' && s.active2) drawMwCone(ctx, s, dcx, dcy);
+    else if ((b === 'jammer' || b === 'repair') && s.active2) drawAura(ctx, dcx, dcy, s.def.radius, s.def.color);
+    if ((b === 'emp' || b === 'repulsor') && s.pulse > 0) drawPulseRing(ctx, s, dcx, dcy);
+    if (b === 'siege' && s.pulse > 0) drawSiegeShock(ctx, s, dcx, dcy);   // резонанс-фронт к гнезду
   }
   ctx.save();
   if (building) ctx.globalAlpha = 0.45;
   switch (b) {
     case 'wall': drawWallStruct(ctx, s, cx, cy); break;
     case 'spike': drawSpikeStruct(ctx, s, cx, cy); break;
-    case 'turret': case 'railgun': drawTurretStruct(ctx, s, cx, dcy); break;
-    case 'microwave': drawMwStruct(ctx, s, cx, dcy); break;
-    case 'emp': drawEmpStruct(ctx, s, cx, dcy); break;
-    case 'repulsor': drawRepulsorStruct(ctx, s, cx, dcy); break;
-    case 'jammer': drawJammerStruct(ctx, s, cx, dcy); break;
-    case 'repair': drawRepairStruct(ctx, s, cx, dcy); break;
-    case 'battery': drawBatteryStruct(ctx, s, cx, dcy); break;
-    case 'siege': drawSiegeStruct(ctx, s, cx, dcy); break;
+    case 'turret': case 'railgun': drawTurretStruct(ctx, s, dcx, dcy); break;
+    case 'microwave': drawMwStruct(ctx, s, dcx, dcy); break;
+    case 'emp': drawEmpStruct(ctx, s, dcx, dcy); break;
+    case 'repulsor': drawRepulsorStruct(ctx, s, dcx, dcy); break;
+    case 'jammer': drawJammerStruct(ctx, s, dcx, dcy); break;
+    case 'repair': drawRepairStruct(ctx, s, dcx, dcy); break;
+    case 'battery': drawBatteryStruct(ctx, s, dcx, dcy); break;
+    case 'siege': drawSiegeStruct(ctx, s, dcx, dcy); break;
+    case 'courier': drawCourierStruct(ctx, s, dcx, dcy); break;
   }
   ctx.restore();
-  if (building) { drawBuildProgress(ctx, s, cx, dcy); return; }
-  if (s.active) drawEnergyBar(ctx, s, cx, dcy);
+  if (building) { drawBuildProgress(ctx, s, dcx, dcy); return; }
+  if (s.active) drawEnergyBar(ctx, s, dcx, dcy);
+  else if (b === 'courier') drawCourierFill(ctx, s, dcx, dcy);   // индикатор накопления контейнера (вместо энергобара)
 }
 
 // Стена — бронеплита поверх тайла-породы (рёбра + заклёпки), цвет металла.
@@ -224,6 +234,33 @@ function drawSiegeShock(ctx, s, cx, cy) {
     ctx.beginPath(); ctx.arc(cx + dx * d, cy + dy * d, TILE * 0.5 * f, a - 1.2, a + 1.2); ctx.stroke();
   }
   ctx.restore();
+}
+
+// КУРЬЕР-ТЕРМИНАЛ — посадочная площадка-док с парковочным дроном на ней + антенна-релей. Принимает груз (active2) → пульс.
+function drawCourierStruct(ctx, s, cx, cy) {
+  const r = TILE / 2 - 3, col = s.def.color, base = cy + r;
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.fillStyle = '#16383a'; ctx.fillRect(cx - r, base - r * 0.5, r * 2, r * 0.5);   // тумба-док
+  ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.strokeRect(cx - r, base - r * 0.5, r * 2, r * 0.5);
+  // парковочный дрон на площадке — мини-капсула с двумя роторами
+  const dy = base - r * 0.75 - (s.active2 ? 1.5 : 0);
+  ctx.fillStyle = '#1c2e30'; ctx.strokeStyle = col; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.ellipse(cx, dy, r * 0.55, r * 0.32, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = '#2a3a3c'; ctx.lineWidth = 1;
+  for (const sx of [-1, 1]) { ctx.beginPath(); ctx.moveTo(cx, dy - r * 0.1); ctx.lineTo(cx + sx * r * 0.7, dy - r * 0.35); ctx.stroke(); ctx.beginPath(); ctx.arc(cx + sx * r * 0.7, dy - r * 0.4, r * 0.22, 0, 6.283); ctx.stroke(); }
+  // антенна-релей сбоку
+  ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(cx + r * 0.7, base - r * 0.5); ctx.lineTo(cx + r * 0.95, cy - r * 0.4); ctx.stroke();
+  const beat = s.active2 ? (0.55 + 0.45 * Math.sin(performance.now() / 110)) : 0.5;
+  ctx.fillStyle = col; ctx.globalAlpha *= beat; ctx.beginPath(); ctx.arc(cx + r * 0.95, cy - r * 0.5, 1.8, 0, 6.283); ctx.fill();
+  ctx.restore();
+}
+
+// Индикатор накопления контейнера терминала (бирюзовая заливка снизу — сколько единиц до отправки дрона).
+function drawCourierFill(ctx, s, cx, cy) {
+  if (!s.def.store) return;
+  const w = TILE / 2, f = Math.min(1, (s.stored || 0) / s.def.store), y = cy + TILE / 2 - 1;
+  ctx.fillStyle = 'rgba(10,8,6,0.7)'; ctx.fillRect(cx - w / 2 - 1, y - 1, w + 2, 4);
+  ctx.fillStyle = s.def.color; ctx.fillRect(cx - w / 2, y, w * f, 2);
 }
 
 function drawEnergyBar(ctx, s, cx, cy) {

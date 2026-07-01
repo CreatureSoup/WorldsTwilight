@@ -15,35 +15,51 @@ function drawFog(ctx, world, unit, camera, W, H) {
   const cols = x1 - x0 + 1, rows = y1 - y0 + 1;
   if (cols <= 0 || rows <= 0) { ctx.fillStyle = 'rgb(7,5,10)'; ctx.fillRect(0, 0, W, H); return; }   // фейл-сейф: вырожденный диапазон → лучше полный туман, чем чистый экран (баг «туман пропал»)
   if (!_fogC) { _fogC = document.createElement('canvas'); _fogX = _fogC.getContext('2d'); }
-  if (_fogC.width < cols || _fogC.height < rows) { _fogC.width = cols; _fogC.height = rows; }
-  const img = _fogX.createImageData(cols, rows), d = img.data;
+  // СУБ-ТАЙЛОВОЕ разрешение фога: 1 пиксель/тайл + апскейл ×48 давал bilinear-ФАСЕТКИ (тенты яркости по плавному
+  // радиальному градиенту → видимые светлые/тёмные полосы на ГРАНИЦАХ тайлов). SS семплов/тайл → ошибка реконструкции
+  // ~1/SS² → при SS=3 незаметна. seen/revealT — пер-тайловые (берём по родительскому тайлу), `lit` (дистанция) — суб-тайлово.
+  const SS = 3, cw = cols * SS, ch = rows * SS;
+  if (_fogC.width < cw || _fogC.height < ch) { _fogC.width = cw; _fogC.height = ch; }
+  const img = _fogX.createImageData(cw, ch), d = img.data;
   const ux = unit.px / TILE - 0.5, uy = unit.py / TILE - 0.5;
   const seen = world.seen, rt = world.revealT;
-  for (let j = 0; j < rows; j++)
-    for (let i = 0; i < cols; i++) {
-      const tx = x0 + i, ty = y0 + j;
+  const xrayR = unit.xrayR || 0;                        // РЕНТГЕН (реликт): временное вскрытие в радиусе вокруг юнита (не трогает seen)
+  for (let J = 0; J < ch; J++) {
+    const ty = y0 + ((J / SS) | 0), fj = ((J % SS) + 0.5) / SS;
+    for (let I = 0; I < cw; I++) {
+      const tx = x0 + ((I / SS) | 0), fi = ((I % SS) + 0.5) / SS;
       let a;
       if (ty < 0 || ty >= MAP_H) a = 1;
       else {
         const idx = ty * MAP_W + wrapX(tx);
-        if (seen[idx] !== 1) a = 1;
+        const isSeen = seen[idx] === 1;
+        if (!isSeen && xrayR <= 0) a = 1;               // быстрый путь: непросмотрено и рентген выкл → полный туман
         else {
-          let rv = rt[idx];
-          if (rv < 255) { rv = Math.min(255, rv + REVEAL_FADE_STEP); rt[idx] = rv; }   // плавное проявление новооткрытого тайла
-          let dxw = tx - ux;                            // расстояние до света — по кольцу
+          let dxw = (tx + fi) - ux;                     // расстояние до света — по кольцу, суб-тайлово
           if (dxw > MAP_W / 2) dxw -= MAP_W; else if (dxw < -MAP_W / 2) dxw += MAP_W;
-          const dist = Math.hypot(dxw, ty - uy);
+          const dist = Math.hypot(dxw, (ty + fj) - uy);
           const lit = Math.min(1, Math.max(0, (dist - LIGHT_R0) / (LIGHT_R1 - LIGHT_R0))) * FOG_EXPLORED;
-          const f = rv / 255;
-          a = lit * f + (1 - f);                        // от полного тумана (1) к градиенту по мере проявления
+          if (isSeen) {
+            let rv = rt[idx];
+            if (rv < 255 && (I % SS) === 0 && (J % SS) === 0) { rv = Math.min(255, rv + REVEAL_FADE_STEP); rt[idx] = rv; }   // фейд проявления тикаем РАЗ на тайл (на первом суб-семпле)
+            const f = rv / 255;
+            a = lit * f + (1 - f);                      // от полного тумана (1) к градиенту по мере проявления
+          } else a = 1;                                 // непросмотрено → полный туман (рентген снимет ниже)
+          // РЕНТГЕН: вскрываем тайлы в радиусе xrayR (мягкий 2-тайловый край), временно — поверх seen-альфы
+          if (xrayR > 0 && dist <= xrayR) {
+            const edge = Math.min(1, Math.max(0, (xrayR - dist) / 2));
+            a = a * (1 - edge) + Math.min(a, lit) * edge;
+          }
         }
       }
-      const o = (j * cols + i) * 4;
+      const o = (J * cw + I) * 4;
       d[o] = 7; d[o + 1] = 5; d[o + 2] = 10; d[o + 3] = Math.round(a * 255);  // PAL.void — тёплая темнота тумана
     }
+  }
   _fogX.putImageData(img, 0, 0);
   const sm = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(_fogC, 0, 0, cols, rows, x0 * TILE - camera.x, y0 * TILE - camera.y, cols * TILE, rows * TILE);
+  // ⚠️ смещение ОКРУГЛЯЕМ как в drawWorld (`ox=Math.round(camera.x)`): иначе фог-битмап сдвинут на ~0.5px от сетки тайлов.
+  ctx.drawImage(_fogC, 0, 0, cw, ch, x0 * TILE - Math.round(camera.x), y0 * TILE - Math.round(camera.y), cols * TILE, rows * TILE);
   ctx.imageSmoothingEnabled = sm;
 }
 

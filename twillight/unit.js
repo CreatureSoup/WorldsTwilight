@@ -16,8 +16,18 @@ class Unit {
     this.fromX = x; this.fromY = y; this.toX = x; this.toY = y;
     this.moveSpeed = 4; this.progress = 0;
     this.drilling = false; this.drillX = 0; this.drillY = 0;
+    this.drillHeat = 0; this.drillOverheatT = 0;   // ФОРСАЖ БУРА (реликт): нагрев 0..1 + лок-кулдаун перегрева (тикает game.updateDrillOverdrive)
+    this.dashing = false; this.dashDir = 1; this.dashRemain = 0; this.dashSpeed = DASH_SPEED;   // РЫВОК/ГАРПУН (реликты): авто-проходка по воздуху (updateDash/updateHarpoon запускают, _dashStep ведёт; скорость — dashSpeed)
+    this.xrayR = 0;   // РЕНТГЕН (реликт): текущий радиус вскрытия тумана (тайлов, 0 = выкл); ставит game.updateXray, читает render_light.drawFog
     this.kinRamp = 0; this.kinDir = null; this.kinIdleT = 0;   // КИНЕТИЧЕСКИЙ бур: разгон ПО ВРЕМЕНИ (0..1) + направление бурения + таймер простоя
     this.dug = null; // событие «выкопан ресурсный тайл» для оркестратора (game)
+    this.kinCharged = false; // ВЗРЫВНОЙ ПРОБОЙ (mast_dk_burst): суперзаряд праймлен — СЛЕДУЮЩАЯ тычка по породе мгновенна
+    this.kinBurstFx = null;  // {x,y}: тайл, пробитый суперзарядом → game рисует FX
+    this.echoBreak = null;   // {x,y,type,amount}: соседний тайл, пробитый ЭХО-БУРОМ → game: лут+проходка+FX
+    this.webT = 0;           // ДЕБАФФ паутина (останок-робот): >0 → замедление движения (×WEB_SLOW), спадает по таймеру
+    this.latchTiles = 0;     // ДЕБАФФ прыгун (останок-робот): >0 → бурение ×LATCH_DRILL_SLOW; сброс по проходке (game считает)
+    this.overshield = 0; this.overshieldDelay = 0;   // РЕЛИКТ энергощит: буфер-овершилд + задержка до регена
+    this.absorbCharges = 0; this.absorbCd = 0;       // РЕЛИКТ поглощение: заряды (первые удары в ноль) + КД восстановления
     this.broke = false; // событие «прокопан ЛЮБОЙ тайл» (game считает проходку)
     this.crouchT = 0; this.crouchTarget = null; // присед перед прыжком вверх (ощущение веса)
     this.setStats(stats);
@@ -36,8 +46,9 @@ class Unit {
     this.state = IDLE; this.dx = 1; this.dy = 0; this.faceX = 1; this._ringAim = 0;
     this.fromX = x; this.fromY = y; this.toX = x; this.toY = y; this.progress = 0;
     this.drilling = false; this.kinRamp = 0; this.kinDir = null; this.kinIdleT = 0;
-    this.dug = null; this.broke = false; this.crouchT = 0; this.crouchTarget = null;
+    this.dug = null; this.kinCharged = false; this.kinBurstFx = null; this.echoBreak = null; this.webT = 0; this.latchTiles = 0; this.overshield = 0; this.overshieldDelay = 0; this.absorbCharges = 0; this.absorbCd = 0; this.drillHeat = 0; this.drillOverheatT = 0; this.dashing = false; this.dashRemain = 0; this.broke = false; this.crouchT = 0; this.crouchTarget = null;
     this.frozenPrint = this.frozenImpulse = this.frozenHack = this.frozenSiege = false;
+    this.stealthT = 0;   // СТЕЛС: >0 → юнит невидим для боевых врагов (stealth.js пишет, ai.js читает)
     this.hp = this.stats.maxHp;
   }
   // опора: только соседняя порода (клинг). Никаких «искусственных» полов —
@@ -48,13 +59,78 @@ class Unit {
   }
   isAnchored(world) { return this.anchoredAt(world, this.tileX, this.tileY); }
   // Скорость хода — напрямую от модуля «Двигатель». Замедления от веса нет.
-  effectiveSpeed() { return this.stats.moveSpeed; }
+  effectiveSpeed() { return this.stats.moveSpeed * (this.webT > 0 ? WEB_SLOW : 1); }   // паутина-останок: замедление движения
+  // ЕДИНАЯ точка урона по юниту (реликты защиты применяются ТУТ → работают со ВСЕМИ источниками урона).
+  // Порядок: ШИПЫ (контактному врагу назад) → ПОГЛОЩЕНИЕ (удар в ноль) → БРОНЕПЛАСТИНЫ (−%) → ЭНЕРГОЩИТ (буфер) → hp.
+  hurt(amount, src) {
+    if (amount <= 0 || this.hp <= 0) return 0;
+    const s = this.stats;
+    if (src && s && s.thorns && typeof src.damage === 'function' && !src.dying && !src.dead) src.damage(s.thornsDmg || THORNS_DMG);   // урон ответки скалируется город-апгрейдом (s.thornsDmg)
+    if (this.absorbCharges > 0) { this.absorbCharges--; if (this.absorbCharges <= 0) this.absorbCd = (s && s.absorbCd) || ABSORB_CD; return 0; }
+    if (s && s.armorMult) amount *= (1 - s.armorMult);
+    if (this.overshield > 0) { const a = Math.min(this.overshield, amount); this.overshield -= a; amount -= a; }
+    this.overshieldDelay = OVERSHIELD_REGEN_DELAY;
+    this.hp = Math.max(0, this.hp - amount);
+    return amount;
+  }
   startMove(toX, toY, speed) {
     this.fromX = this.tileX; this.fromY = this.tileY;
     this.toX = toX; this.toY = toY;
     this.moveSpeed = speed; this.progress = 0;
     this.state = MOVING;
   }
+
+  // ПРЫЖКОВЫЕ ДВИЖКИ (jets.js ставит this.flying): полёт по ВОЗДУХУ в любую сторону по WASD, БЕЗ анкера и гравитации.
+  // Тайл-шаговая модель как у обычного хода (startMove→MOVING), но без падения/копа: в породу не летим (только AIR).
+  _flyStep(dt, input, world) {
+    this.drilling = false; this._dugBlock = null;
+    if (this.state === MOVING) {                       // докручиваем текущий тайл полёта
+      this.progress += this.moveSpeed * dt;
+      if (this.progress >= 1) {
+        this.tileX = wrapX(this.toX); this.tileY = this.toY;
+        this.px = this.tileX * TILE + TILE / 2; this.py = this.tileY * TILE + TILE / 2;
+        this.state = IDLE; this.progress = 0;
+      } else {
+        const fx = this.fromX * TILE + TILE / 2, fy = this.fromY * TILE + TILE / 2;
+        const tx = this.toX * TILE + TILE / 2, ty = this.toY * TILE + TILE / 2;
+        this.px = fx + (tx - fx) * this.progress; this.py = fy + (ty - fy) * this.progress;
+        return;
+      }
+    }
+    let dx = 0, dy = 0;
+    if (input.left()) dx = -1; else if (input.right()) dx = 1;
+    if (input.up()) dy = -1; else if (input.down()) dy = 1;
+    if (dx) this.faceX = dx;
+    if (dx === 0 && dy === 0) return;                  // парение на месте (топливо всё равно тратится — jets.js)
+    const air = (tx, ty) => ty >= 0 && ty < MAP_H && world.tileAt(tx, ty).type === AIR;   // только сквозь воздух (в породу не летим)
+    if (dx && dy && air(this.tileX + dx, this.tileY + dy)) { this.dx = dx; this.dy = dy; this.startMove(this.tileX + dx, this.tileY + dy, FLY_SPEED); return; }
+    if (dx && air(this.tileX + dx, this.tileY)) { this.dx = dx; this.dy = 0; this.startMove(this.tileX + dx, this.tileY, FLY_SPEED); return; }
+    if (dy && air(this.tileX, this.tileY + dy)) { this.dx = 0; this.dy = dy; this.startMove(this.tileX, this.tileY + dy, FLY_SPEED); return; }
+  }
+  // РЫВОК (artifacts_active.js ставит this.dashing/dashDir/dashRemain): быстрая тайл-шаговая проходка ПО ВОЗДУХУ в
+  // зафиксированную сторону (faceX). Породу НЕ пробивает — упёрся → стоп (зацеп/гравитация в обычном update). Без ввода/гравитации.
+  _dashStep(dt, world) {
+    this.drilling = false; this._dugBlock = null;
+    if (this.state === MOVING) {                        // докручиваем текущий тайл рывка
+      this.progress += this.moveSpeed * dt;
+      if (this.progress >= 1) {
+        this.tileX = wrapX(this.toX); this.tileY = this.toY;
+        this.px = this.tileX * TILE + TILE / 2; this.py = this.tileY * TILE + TILE / 2;
+        this.state = IDLE; this.progress = 0;
+      } else {
+        const fx = this.fromX * TILE + TILE / 2, fy = this.fromY * TILE + TILE / 2;
+        const tx = this.toX * TILE + TILE / 2, ty = this.toY * TILE + TILE / 2;
+        this.px = fx + (tx - fx) * this.progress; this.py = fy + (ty - fy) * this.progress; return;
+      }
+    }
+    if (this.dashRemain <= 0) { this.dashing = false; return; }   // исчерпали дистанцию → стоп
+    const nx = wrapX(this.tileX + this.dashDir);
+    if (this.tileY >= 0 && this.tileY < MAP_H && world.tileAt(nx, this.tileY).type === AIR) {
+      this.dx = this.dashDir; this.dy = 0; this.dashRemain--;
+      this.startMove(this.tileX + this.dashDir, this.tileY, this.dashSpeed || DASH_SPEED);
+    } else this.dashing = false;                        // впереди порода → стоп (зацеп/падение решит обычный апдейт)
+  }
+
   // Толчок (валуном): мгновенно перенести юнита в клетку (nx,ny), сбросив движение/бур.
   shove(nx, ny) {
     this.tileX = nx; this.tileY = ny;
@@ -66,10 +142,15 @@ class Unit {
   update(dt, input, world) {
     const s = this.stats;
     this.drilling = false;
+    if (this.webT > 0) this.webT = Math.max(0, this.webT - dt);   // ДЕБАФФ паутина (останок-робот): спад по таймеру → замедление снимается
+    if (s.overshieldMax) { if (this.overshieldDelay > 0) this.overshieldDelay -= dt; else if (this.overshield < s.overshieldMax) this.overshield = Math.min(s.overshieldMax, this.overshield + OVERSHIELD_REGEN * dt); }   // РЕЛИКТ энергощит: реген после задержки без урона
+    if (s.absorbMax && this.absorbCharges <= 0) { this.absorbCd -= dt; if (this.absorbCd <= 0) this.absorbCharges = s.absorbMax; }   // РЕЛИКТ поглощение: восстановление зарядов по КД
     if (this.frozenPrint) return;   // ПЕЧАТЬ: юнит залочен на месте (ввод/гравитация/бур выкл) — см. print.js
     if (this.frozenImpulse) return; // ИМПУЛЬСНЫЙ БУР: юнит стоит, пока копит заряд (аим/выстрел — impulse.js)
     if (this.frozenHack) return;    // ВЗЛОМ: юнит стоит у сердца города, пока держит канал взлома (hack.js)
     if (this.frozenSiege) return;   // ОСАДНЫЙ МОДУЛЬ: юнит стоит, пока копит заряд разряда (siege.js)
+    if (this.flying) { this._flyStep(dt, input, world); return; }   // ПРЫЖКОВЫЕ ДВИЖКИ (jets.js): полёт через воздух без анкера/гравитации
+    if (this.dashing) { this._dashStep(dt, world); return; }        // РЫВОК (реликт): авто-проходка по воздуху по взгляду (без ввода/гравитации)
 
     if (this.dx === 1 || this.dx === -1) this.faceX = this.dx;  // запомнить горизонталь до возможной смены на «вверх/вниз»
 
@@ -78,7 +159,7 @@ class Unit {
     // `kinIdleT` копит время с последнего бурения (drill-блок его обнуляет → пауза между тайлами разгон держит).
     if (s.kinetic) {
       this.kinIdleT += dt;
-      if (!(input.up() || input.down() || input.left() || input.right()) || this.kinIdleT > KIN_GRACE) { this.kinRamp = 0; this.kinDir = null; }
+      if (!(input.up() || input.down() || input.left() || input.right()) || this.kinIdleT > KIN_GRACE) { this.kinRamp = 0; this.kinDir = null; this.kinCharged = false; }
     }
 
     // «Замок» свежепрокопанного тайла: разовое нажатие (пробил → отпустил) НЕ въезжает в дыру —
@@ -191,7 +272,7 @@ class Unit {
       this.dx = dx; this.dy = dy;
       const nx = this.tileX + dx, ny = this.tileY + dy;
       const t = world.tileAt(nx, ny);
-      if (t.type === ROCK && s.canDig && !s.impulse && !s.screw) {
+      if (t.type === ROCK && s.canDig && !s.impulse && !s.screw && !(s.drillOverdrive && this.drillOverheatT > 0)) {   // ФОРСАЖ перегрет → бур не копает (лок-кулдаун)
         // бурим: соседняя порода = опора по определению (ИМПУЛЬСНЫЙ/ВИНТОВОЙ буры пассивно НЕ грызут — волна/автономные щиты)
         this.drilling = true; this.drillX = nx; this.drillY = ny;
         // КИНЕТИКА: разгон ПО ВРЕМЕНИ бурения в одну сторону. Смена направления → сброс. Мощность = lerp(база→макс)
@@ -199,21 +280,35 @@ class Unit {
         let dmult = s.digMult;
         if (s.kinetic) {
           const dd = dx + ',' + dy;
-          if (this.kinDir !== null && this.kinDir !== dd) this.kinRamp = 0;   // ПОВЕРНУЛ — сброс разгона
+          if (this.kinDir !== null && this.kinDir !== dd) { this.kinRamp = 0; this.kinCharged = false; }   // ПОВЕРНУЛ — сброс разгона И суперзаряда
           this.kinDir = dd; this.kinIdleT = 0;
           this.kinRamp = Math.min(1, this.kinRamp + dt / KIN_RAMP_TIME);      // копим по времени бурения
           dmult = s.digMult + ((s.kinMax || KIN_MAX_MULT) - s.digMult) * this.kinRamp + (s.kinPower || 0);
         }
+        if (this.latchTiles > 0) dmult *= LATCH_DRILL_SLOW;   // ДЕБАФФ прыгун (останок-робот): бур ослаблен, пока висит (сброс по проходке — game считает)
+        if (s.drillOverdrive) dmult *= 1 + this.drillHeat * (s.overdriveBonus || OVERDRIVE_MAX_BONUS);   // ФОРСАЖ (реликт): нагрев→сила; пик скалируется город-апгрейдом (s.overdriveBonus)
+        // ВЗРЫВНОЙ ПРОБОЙ (узел mast_dk_burst): праймленный суперзаряд делает ЭТУ тычку мгновенной — тайл дробится за один контакт.
+        // Разгон при этом НЕ рвётся (копка непрерывна, kinDir тот же) — в отличие от «пробить сразу два тайла».
+        let superHit = false;
+        if (this.kinCharged && s.kinetic) { t.dig += digThreshold(t); this.kinCharged = false; superHit = true; }
         t.dig += dmult * dt;
         if (t.dig >= digThreshold(t)) {
           const res = t.resource;
           world.setAir(nx, ny);
           this.broke = true;
-          if (res) this.dug = { x: nx, y: ny, type: res };
+          if (res) this.dug = { x: nx, y: ny, type: res, amount: t.amount || 1 };   // количество залежи (1..3) → столько лута
           // ⚠️ НЕ ДОБАВЛЯЙ здесь startMove! На кадре ПРОБИТИЯ юнит ОСТАЁТСЯ НА МЕСТЕ (решено с игроком).
           //    Ставим «замок» на прокопанный тайл: тем же удержанием въедем только спустя DRILL_HOLD_ADVANCE
           //    (тоннель), а разовое нажатие (отпустил) — стоим. Избыток мощности бура в движение НЕ переходит.
           this._dugBlock = { x: nx, y: ny }; this._dugBlockT = 0;
+          if (superHit) this.kinBurstFx = { x: nx, y: ny };   // FX на тайле, пробитом суперзарядом (заряд незаметен — вспышка сопровождает сам пробой)
+          // ПРАЙМ следующего суперзаряда: после пробоя породы кинетикой с шансом — СЛЕДУЮЩАЯ тычка по породе мгновенна (разгон сохраняется).
+          if (s.kinetic && this.kinRamp >= KIN_BURST_MIN_RAMP && typeof metaHas === 'function' && metaHas('mast_dk_burst') && Math.random() < KIN_BURST_CHANCE + (s.kinBurstBonus || 0)) this.kinCharged = true;
+          // ЭХО-БУР (реликт): с шансом пробить случайный СОСЕДНИЙ тайл породы (любой бур; событие в game — лут/проходка/FX)
+          if (s.echoDrill && Math.random() < (s.echoDrillChance || ECHO_DRILL_CHANCE)) {   // шанс эха скалируется город-апгрейдом
+            const ed = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(Math.random() * 4)], enx = nx + ed[0], eny = ny + ed[1];
+            if (eny >= 0 && eny < MAP_H) { const et = world.tileAt(enx, eny); if (et && et.type === ROCK) { const eres = et.resource, eamt = et.amount || 1; world.setAir(enx, eny); this.echoBreak = { x: enx, y: eny, type: eres, amount: eamt }; } }
+          }
         }
         return;
       }

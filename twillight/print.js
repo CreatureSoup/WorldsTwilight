@@ -6,7 +6,7 @@
 // тратится ТОЛЬКО при завершении печати; отмена по Esc (place или build) — без траты. Юнит залочен
 // (unit.frozenPrint) в place и build. Размещение — на тайл-воздух с твёрдой поверхностью, в радиусе PRINT_REACH.
 
-const PRINT_TYPES = ['wall', 'spike', 'turret_mg', 'turret_rail', 'turret_mw', 'emp', 'repulsor', 'jammer', 'repair_drone', 'battery', 'siege_tower'];   // полный ростер; видимость чертежа — гейт по узлам меты (STRUCT_UNLOCK)
+const PRINT_TYPES = ['wall', 'spike', 'turret_mg', 'turret_rail', 'turret_mw', 'emp', 'repulsor', 'jammer', 'repair_drone', 'battery', 'siege_tower', 'courier'];   // полный ростер; видимость чертежа — гейт по узлам меты (STRUCT_UNLOCK)
 
 Object.assign(Game.prototype, {
   printActive() { return !!(this.unit && this.unit.modules && this.unit.modules.aux === 'print'); },

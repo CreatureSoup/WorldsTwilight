@@ -84,3 +84,46 @@ function drawHazardDebug(ctx, game, camera) {
   for (const m of (w.mines || [])) mark(m.tx, m.ty, '#ff5038', 'M');
   ctx.globalAlpha = 1; ctx.restore();
 }
+
+// FX дебаффов от останков роботов НА ЮНИТЕ (мир): паутина-нити (замедление) + комок-прыгун на буре (дебафф бурения).
+function drawUnitDebuffFx(ctx, game, camera) {
+  const u = game.unit; if (!u) return;
+  const cx = camera.screenX(u.px), cy = u.py - camera.y, r = TILE * 0.5, t = performance.now() / 1000;
+  if (u.webT > 0) {   // ПАУТИНА: нити + дуги вокруг юнита
+    ctx.save(); ctx.strokeStyle = 'rgba(212,202,228,0.5)'; ctx.lineWidth = 1;
+    const n = 9;
+    for (let i = 0; i < n; i++) { const a = i / n * 6.283; ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r * 0.4, cy + Math.sin(a) * r * 0.4); ctx.lineTo(cx + Math.cos(a) * r * (1.35 + 0.1 * Math.sin(t * 4 + i)), cy + Math.sin(a) * r * (1.35 + 0.1 * Math.cos(t * 3 + i))); ctx.stroke(); }
+    ctx.globalAlpha = 0.32; for (let k = 1; k <= 2; k++) { ctx.beginPath(); ctx.arc(cx, cy, r * (0.6 + k * 0.36), 0, 6.283); ctx.stroke(); }
+    ctx.restore();
+  }
+  if (u.latchTiles > 0) {   // ПРЫГУН: тёмный комок с красным глазом на буре (по направлению бурения)
+    const dx = u.dx || u.faceX || 1, dy = u.dy || 0, bx = cx + dx * r * 0.8, by = cy + dy * r * 0.8;
+    ctx.save(); ctx.fillStyle = '#2a2230'; ctx.beginPath(); ctx.arc(bx, by, r * 0.4, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = '#7a3a2f'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.strokeStyle = '#5a2a22'; ctx.lineWidth = 1.4;   // лапки-захваты
+    for (const sgn of [-0.7, 0, 0.7]) { ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - dx * r * 0.5 + Math.cos(sgn) * r * 0.3, by - dy * r * 0.5 + Math.sin(sgn) * r * 0.3); ctx.stroke(); }
+    ctx.fillStyle = '#ff5a3a'; ctx.beginPath(); ctx.arc(bx, by, r * 0.13 * (0.8 + 0.4 * Math.sin(t * 12)), 0, 6.283); ctx.fill();
+    ctx.restore();
+  }
+}
+
+// МИГАЮЩАЯ ПЛАШКА дебаффов (HUD, screen-space): по строке на активный дебафф с текстом эффекта. БЕЗ таймера сброса (по требованию).
+function drawDebuffBadge(ctx, game, w, h) {
+  const u = game.unit; if (!u) return;
+  const rows = [];
+  if (u.webT > 0) rows.push({ txt: STR.hud.debuff.web, c: '#c8a0e0' });
+  if (u.latchTiles > 0) rows.push({ txt: STR.hud.debuff.latch, c: '#e0a040' });
+  if ((game.scanJamT || 0) > 0) rows.push({ txt: STR.hud.debuff.jam, c: '#5ad0c0' });
+  if (!rows.length) return;
+  const blink = 0.5 + 0.5 * Math.sin(performance.now() / 130);
+  ctx.save(); ctx.font = `bold 12px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  let y = 94;
+  for (const r of rows) {
+    const tw = ctx.measureText(r.txt).width, bw = tw + 24, bx = Math.round(w / 2 - bw / 2);
+    ctx.globalAlpha = 0.85; ctx.fillStyle = 'rgba(18,12,16,0.85)'; ctx.fillRect(bx, y - 9, bw, 18);
+    ctx.globalAlpha = 0.4 + 0.6 * blink; ctx.strokeStyle = r.c; ctx.lineWidth = 1.4; ctx.strokeRect(bx + 0.5, y - 8.5, bw - 1, 17);
+    ctx.globalAlpha = 0.6 + 0.4 * blink; ctx.fillStyle = r.c; ctx.fillText(r.txt, Math.round(w / 2), y);
+    y += 23;
+  }
+  ctx.globalAlpha = 1; ctx.restore();
+}

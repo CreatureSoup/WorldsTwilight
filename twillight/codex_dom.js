@@ -29,6 +29,7 @@ const CXICON = {
   cave:    (s) => _cxIc('<path d="M4 27 Q5 11 16 9 Q27 11 28 27"/><path d="M12 27 Q13 18 16 17 Q19 18 20 27"/>', s),
   remains: (s) => _cxIc('<path d="M10 6 L22 6 L20 14 L12 14 Z"/><path d="M12 14 L9 27 M20 14 L23 27 M14 19 H18"/>', s),
   play:    (s) => _cxIc('<path d="M11 7 L25 16 L11 25 Z"/>', s),
+  artifact:(s) => _cxIc('<path d="M16 4 L25 13 L16 28 L7 13 Z"/><path d="M7 13 H25 M16 4 V28"/>', s),
 };
 
 const CXCATS = [
@@ -38,6 +39,8 @@ const CXCATS = [
   { id:'unit',    name:STR.codex.cat.unit,     icon:'unit',    c:CX.amber },
   { id:'cave',    name:STR.codex.cat.cave,     icon:'cave',    c:CX.gold },
   { id:'remains', name:STR.codex.cat.remains,  icon:'remains', c:CX.jade },
+  { id:'trap',    name:STR.codex.cat.trap,     icon:'wild',    c:CX.bloodB },
+  { id:'artifact',name:STR.codex.cat.artifact, icon:'artifact',c:CX.turq },
 ];
 
 /* глоссарий — только ОТКРЫТЫЕ записи (неоткрытое игрок не видит, данные целые) */
@@ -56,6 +59,47 @@ const CXENTRIES = [
     lore:STR.codex.entry.e6.lore },
   { id:'e7', cat:'remains', name:STR.codex.entry.e7.name, cycle:2, scan:'0x2E55', depth:-94,
     lore:STR.codex.entry.e7.lore },
+  { id:'a1', cat:'artifact', name:STR.codex.entry.a1.name, cycle:2, scan:'0x4C0D', depth:-105,
+    lore:STR.codex.entry.a1.lore },
+  { id:'a2', cat:'artifact', name:STR.codex.entry.a2.name, cycle:3, scan:'0x4F22', depth:-148,
+    lore:STR.codex.entry.a2.lore },
+  { id:'a3', cat:'artifact', name:STR.codex.entry.a3.name, cycle:3, scan:'0x52B8', depth:-176,
+    lore:STR.codex.entry.a3.lore },
+  { id:'a4', cat:'artifact', name:STR.codex.entry.a4.name, cycle:3, scan:'0x5631', depth:-118, lore:STR.codex.entry.a4.lore },
+  { id:'a5', cat:'artifact', name:STR.codex.entry.a5.name, cycle:4, scan:'0x5A07', depth:-152, lore:STR.codex.entry.a5.lore },
+  { id:'a6', cat:'artifact', name:STR.codex.entry.a6.name, cycle:4, scan:'0x5E9C', depth:-160, lore:STR.codex.entry.a6.lore },
+  { id:'a7', cat:'artifact', name:STR.codex.entry.a7.name, cycle:3, scan:'0x612D', depth:-128, lore:STR.codex.entry.a7.lore },
+  { id:'a8', cat:'artifact', name:STR.codex.entry.a8.name, cycle:2, scan:'0x4488', depth:-90,  lore:STR.codex.entry.a8.lore },
+  { id:'a9',  cat:'artifact', name:STR.codex.entry.a9.name,  cycle:4, scan:'0x65F1', depth:-138, lore:STR.codex.entry.a9.lore },
+  { id:'a10', cat:'artifact', name:STR.codex.entry.a10.name, cycle:4, scan:'0x69AD', depth:-166, lore:STR.codex.entry.a10.lore },
+  { id:'a11', cat:'artifact', name:STR.codex.entry.a11.name, cycle:3, scan:'0x6C30', depth:-120, lore:STR.codex.entry.a11.lore },
+  { id:'a12', cat:'artifact', name:STR.codex.entry.a12.name, cycle:4, scan:'0x70B4', depth:-172, lore:STR.codex.entry.a12.lore },
+  { id:'a13', cat:'artifact', name:STR.codex.entry.a13.name, cycle:3, scan:'0x7402', depth:-110, lore:STR.codex.entry.a13.lore },
+  { id:'a14', cat:'artifact', name:STR.codex.entry.a14.name, cycle:3, scan:'0x77C9', depth:-126, lore:STR.codex.entry.a14.lore },
+  { id:'a15', cat:'artifact', name:STR.codex.entry.a15.name, cycle:4, scan:'0x7B55', depth:-158, lore:STR.codex.entry.a15.lore },
+  { id:'a16', cat:'artifact', name:STR.codex.entry.a16.name, cycle:3, scan:'0x7F2A', depth:-100, lore:STR.codex.entry.a16.lore },
+  { id:'a17', cat:'artifact', name:STR.codex.entry.a17.name, cycle:3, scan:'0x82C1', depth:-112, lore:STR.codex.entry.a17.lore },
+  { id:'a18', cat:'artifact', name:STR.codex.entry.a18.name, cycle:3, scan:'0x8644', depth:-130, lore:STR.codex.entry.a18.lore },
+  { id:'a19', cat:'artifact', name:STR.codex.entry.a19.name, cycle:4, scan:'0x89F0', depth:-148, lore:STR.codex.entry.a19.lore },
+  { id:'a20', cat:'artifact', name:STR.codex.entry.a20.name, cycle:3, scan:'0x8D72', depth:-104, lore:STR.codex.entry.a20.lore },
+  { id:'a21', cat:'artifact', name:STR.codex.entry.a21.name, cycle:5, scan:'0x9133', depth:-184, lore:STR.codex.entry.a21.lore },
+  { id:'e8',  cat:'unit', name:STR.codex.entry.e8.name,  cycle:4, scan:'0x4A1C', depth:-110, lore:STR.codex.entry.e8.lore },
+  { id:'e9',  cat:'unit', name:STR.codex.entry.e9.name,  cycle:3, scan:'0x3D6B', depth:-96,  lore:STR.codex.entry.e9.lore },
+  { id:'e10', cat:'unit', name:STR.codex.entry.e10.name, cycle:3, scan:'0x2B05', depth:-70,  lore:STR.codex.entry.e10.lore },
+  { id:'e11', cat:'unit', name:STR.codex.entry.e11.name, cycle:5, scan:'0x5C40', depth:-132, lore:STR.codex.entry.e11.lore },
+  { id:'e12', cat:'unit', name:STR.codex.entry.e12.name, cycle:5, scan:'0x6122', depth:-150, lore:STR.codex.entry.e12.lore },
+  { id:'e13', cat:'unit', name:STR.codex.entry.e13.name, cycle:7, scan:'0x6F18', depth:-188, lore:STR.codex.entry.e13.lore },
+  { id:'e14', cat:'unit', name:STR.codex.entry.e14.name, cycle:5, scan:'0x58AE', depth:-140, lore:STR.codex.entry.e14.lore },
+  // ЛОВУШКИ (открываются по факту срабатывания, traps.js _trapDiscover)
+  { id:'e15', cat:'trap', name:STR.codex.entry.e15.name, cycle:3, scan:'0x7A1C', depth:-130, lore:STR.codex.entry.e15.lore },
+  { id:'e16', cat:'trap', name:STR.codex.entry.e16.name, cycle:4, scan:'0x8B33', depth:-160, lore:STR.codex.entry.e16.lore },
+  { id:'e17', cat:'trap', name:STR.codex.entry.e17.name, cycle:3, scan:'0x6C09', depth:-120, lore:STR.codex.entry.e17.lore },
+  { id:'e18', cat:'trap', name:STR.codex.entry.e18.name, cycle:2, scan:'0x3E44', depth:-150, lore:STR.codex.entry.e18.lore },
+  // ВАРИАНТЫ ОСТАНКОВ РОБОТОВ (открываются сканом мёртвого по kind, hazards.js)
+  { id:'e19', cat:'remains', name:STR.codex.entry.e19.name, cycle:4, scan:'0x91A0', depth:-140, lore:STR.codex.entry.e19.lore },
+  { id:'e20', cat:'remains', name:STR.codex.entry.e20.name, cycle:4, scan:'0x9D2B', depth:-155, lore:STR.codex.entry.e20.lore },
+  { id:'e21', cat:'remains', name:STR.codex.entry.e21.name, cycle:5, scan:'0xA4F1', depth:-170, lore:STR.codex.entry.e21.lore },
+  { id:'e22', cat:'remains', name:STR.codex.entry.e22.name, cycle:4, scan:'0x88C5', depth:-135, lore:STR.codex.entry.e22.lore },
 ];
 
 /* ДАННЫЕ → ФРАГМЕНТЫ → % восстановления.

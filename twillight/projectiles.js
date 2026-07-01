@@ -10,9 +10,10 @@ const SHOT_STRUCT_DMG = 22;   // урон структуре игрока за �
 class Projectiles {
   constructor() { this.list = []; }
   clear() { this.list.length = 0; }
-  fire(fromPx, fromPy, toPx, toPy) {
+  // dmg — опциональный ФИКС. урон по юниту (роботные выстрелы слабее снайпера); без него — рандом SHOT_DMG_MIN..MAX (снайпер).
+  fire(fromPx, fromPy, toPx, toPy, dmg) {
     const dx = wrapDeltaPx(toPx, fromPx), dy = toPy - fromPy, d = Math.hypot(dx, dy) || 1;
-    this.list.push({ px: fromPx, py: fromPy, ppx: fromPx, ppy: fromPy, vx: dx / d * SHOT_SPEED * TILE, vy: dy / d * SHOT_SPEED * TILE, ttl: SHOT_TTL });
+    this.list.push({ px: fromPx, py: fromPy, ppx: fromPx, ppy: fromPy, vx: dx / d * SHOT_SPEED * TILE, vy: dy / d * SHOT_SPEED * TILE, ttl: SHOT_TTL, dmg: (dmg == null ? null : dmg) });
   }
   // onHit(dmg) вызывается при попадании по юниту (урон применяет game; в debug — без урона). `structs` —
   // список структур игрока (фаза 4): выстрел гасится и бьёт ближайшую структуру на пути (щит для юнита). null в debug.
@@ -26,7 +27,7 @@ class Projectiles {
         for (const st of structs) { if (st.dying || st.def.solid || st.state !== 'active') continue; if (Math.hypot(wrapDeltaPx(st.px, s.px), st.py - s.py) < TILE * SHOT_HIT_R) { st.damage(SHOT_STRUCT_DMG); s.ttl = 0; hit = true; break; } }
         if (hit) continue;
       }
-      if (unit) { const ddx = wrapDeltaPx(unit.px, s.px), ddy = unit.py - s.py; if (Math.hypot(ddx, ddy) < TILE * SHOT_HIT_R) { s.ttl = 0; onHit(SHOT_DMG_MIN + Math.random() * (SHOT_DMG_MAX - SHOT_DMG_MIN)); } }
+      if (unit) { const ddx = wrapDeltaPx(unit.px, s.px), ddy = unit.py - s.py; if (Math.hypot(ddx, ddy) < TILE * SHOT_HIT_R) { s.ttl = 0; onHit(s.dmg != null ? s.dmg : SHOT_DMG_MIN + Math.random() * (SHOT_DMG_MAX - SHOT_DMG_MIN)); } }
     }
     if (this.list.some((s) => s.ttl <= 0)) this.list = this.list.filter((s) => s.ttl > 0);
   }

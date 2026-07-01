@@ -25,6 +25,20 @@ i18nRegister('ru', {
     remnantsData: 'ДАННЫЕ ИЗ ОСТАНКОВ ИЗВЛЕЧЕНЫ',
     mineDefused: 'МИНА ОБЕЗВРЕЖЕНА',
     mineBlast: 'ВЗРЫВ СТАРОЙ МИНЫ',
+    // hazards.js — варианты останков роботов (дебаффы)
+    robotWeb: 'ОСТАНОК ОПУТАЛ ПАУТИНОЙ · ДВИЖЕНИЕ ЗАМЕДЛЕНО',
+    robotLatch: 'ПРЫГУН ВЦЕПИЛСЯ В БУР · БУРЕНИЕ ОСЛАБЛЕНО',
+    robotLatchOff: 'ПРЫГУН СТРЯХНУТ',
+    robotJam: 'ДЖАММЕР-ИМПУЛЬС · СКАНЕР ЗАГЛУШЕН',
+    robotJamOff: 'СКАНЕР ВОССТАНОВЛЕН',
+    // blight.js — маяки скверны (скверносей)
+    blightBeacon: 'УСТАНОВЛЕН МАЯК СКВЕРНЫ · ПОМЕХИ РАСТУТ',
+    blightBeaconDown: 'МАЯК СКВЕРНЫ УНИЧТОЖЕН · ЭФИР ЧИСТ',
+    // traps.js — ловушки
+    trapAcid: 'ВЫПУЩЕНЫ КИСЛОТНЫЕ НАНОРОБОТЫ · УЙДИ ИЗ ОБЛАКА',
+    trapSeismic: 'СЕЙСМО-ТОЛЧОК · ПОРОДА ДЕСТАБИЛИЗИРОВАНА',
+    trapBrood: 'ВСКРЫТА КЛАДКА · РОЙ РАЗЛЕТАЕТСЯ',
+    trapCaveIn: 'ОБВАЛ · ПРОХОД ЗАМУРОВАН',
     // datascan.js
     newData: 'НАЙДЕНЫ НОВЫЕ ДАННЫЕ',
     identified: (name) => 'ОБЪЕКТ ОПОЗНАН · ' + name,
@@ -36,7 +50,7 @@ i18nRegister('ru', {
     ruinsNoMethod: 'РУИНЫ: НЕТ МЕТОДОВ ИЗВЛЕЧЕНИЯ ДАННЫХ',
     identifiedCave: 'ОБЪЕКТ ОПОЗНАН · ПЕЩЕРА',
     caveData: 'ДАННЫЕ ИЗ ПЕЩЕРЫ ИЗВЛЕЧЕНЫ',
-    findHint: { server: 'СИГНАЛ', wild: 'РОЙ', sleep: 'СПЯЩИЙ ГОРОД', unit: 'ЧУЖОЙ', cave: 'КУЛЬТ. СЛОЙ', remains: 'ОСТОВ' },
+    findHint: { server: 'ОБНАРУЖЕНЫ ДАННЫЕ', wild: 'РОЙ', sleep: 'СПЯЩИЙ ГОРОД', unit: 'ЧУЖОЙ', cave: 'КУЛЬТ. СЛОЙ', remains: 'ОСТОВ' },
     findFallback: 'НАХОДКА',
     // artifact.js
     artifactDug: 'АРТЕФАКТ ОТКОПАН',
@@ -45,6 +59,29 @@ i18nRegister('ru', {
     artifactRecycled: 'АРТЕФАКТ ПЕРЕРАБОТАН В РЕСУРС',
     // borers.js
     borerReturned: 'БУР-ЩИТ ВОЗВРАЩЁН',
+    borerDepleted: 'БУР-ЩИТ РАЗРЯЖЕН · НУЖНА ПОДЗАРЯДКА',
+    borerRecharged: 'БУР-ЩИТ ПОДЗАРЯЖЕН',
+    // cable.js (энергорелеи — якоря шлейфа)
+    cableAnchor: 'ШЛЕЙФ ЗАЯКОРЕН НА БАТАРЕЮ · ЦЕПЬ ПРОДЛЕНА',
+    cableUnanchor: 'ШЛЕЙФ ОТКРЕПЛЁН ОТ БАТАРЕИ',
+    // stealth.js
+    stealthOn: 'МАСКИРОВКА · НЕВИДИМ',
+    // jam.js
+    jamPulse: 'ГЛУШЕНИЕ · ВРАГИ ЗАМЕДЛЕНЫ',
+    // artifacts_active.js (активные реликты)
+    artStun: 'ЭМИ-ИМПУЛЬС · ВРАГИ ОГЛУШЕНЫ',
+    artBlast: 'ПОДРЫВ-ЗАРЯД · ДЕТОНАЦИЯ',
+    artNano: 'НАНО-РЕМОНТ · РЕГЕНЕРАЦИЯ КОРПУСА',
+    overdriveOverheat: 'ФОРСАЖ · ПЕРЕГРЕВ · БУР ОСТАНОВЛЕН',
+    overdriveReady: 'ФОРСАЖ · ОХЛАЖДЁН · БУР ГОТОВ',
+    artDash: 'ПРИВОД-РЫВОК · РАЗГОН',
+    artHarpoon: 'ГАРПУН · ЗАЦЕП · ПРИТЯГ',
+    artHarpoonDry: 'ГАРПУН · ХОЛОСТОЙ ВЫСТРЕЛ',
+    artXray: 'РЕНТГЕН · ТУМАН СНЯТ',
+    artXrayEnd: 'РЕНТГЕН · ОБЗОР СВЁРНУТ',
+    droneScout: 'ДРОН-СКАУТ · ГНЕЗДО РАЗВЕДАНО',
+    droneHackGo: 'ДРОН-ХАКЕР · ВЫХОД НА ЦЕЛЬ',
+    droneHackDone: 'ДРОН-ХАКЕР · ГНЕЗДО САБОТИРОВАНО',
     // wildcity.js (директива «устрани угрозу»)
     wildSaboted: 'ГНЕЗДО САБОТИРОВАНО · ВОЛНЫ ЗАМЕДЛЕНЫ',
     wildDown: 'ГНЕЗДО ПОДАВЛЕНО',
@@ -55,5 +92,9 @@ i18nRegister('ru', {
     reactorIntercepted: 'РЕАКТОР ПЕРЕХВАЧЕН · ПЕРЕДАЧА ЯДРА',
     // print.js
     structPrinted: (name) => 'СТРУКТУРА НАПЕЧАТАНА · ' + name,
+    // courier.js (vault_courier — логистика)
+    courierLaunch: 'КУРЬЕР ВЫЛЕТЕЛ · КОНТЕЙНЕР В ПУТИ',
+    courierArrived: 'КОНТЕЙНЕР ДОСТАВЛЕН В ГОРОД',
+    courierLost: 'КУРЬЕР СБИТ · РЕСУРС ПОТЕРЯН',
   },
 });

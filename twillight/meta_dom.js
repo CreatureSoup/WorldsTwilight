@@ -49,6 +49,7 @@ function _bundle(na, nb, kind) { const dx = nb.x - na.x, dy = nb.y - na.y, len =
 
 let _mt = null, _mtGame = null, _mtView = { s: 0.62, tx: 0, ty: 0 }, _mtSel = null, _mtDrag = null;
 let _mtHold = null;   // контроллер удержания-покупки выбранного узла ({start,cancel}) — общий для ЛКМ и Пробела
+let _mtPending = null;   // id ТОЛЬКО ЧТО купленного узла на время анимации запитывания (граф рисует его ещё «доступным» + surge на ребре; см. _mtUnlock)
 
 function metaDomEnsure() {
   if (_mt) return _mt;
@@ -142,16 +143,32 @@ function _mtZoom(f, cx, cy) { const ns = Math.max(0.28, Math.min(1.6, _mtView.s 
 
 /* ---------- рёбра + узлы (svg + div), как в дизайне ---------- */
 function _mtWorldHTML(save) {
-  const dist = _metaDist(save), st = (n) => metaState(save, n, dist), own = (id) => metaUnlocked(save, id);
+  const pending = _mtPending, dist = _metaDist(save);
+  const own = (id) => metaUnlocked(save, id) && id !== pending;                       // pending рисуем ещё как «доступный»
+  const st = (n) => (n.id === pending ? 'avail' : metaState(save, n, dist));
   let svg = `<svg width="${META_CW}" height="${META_CH}" style="position:absolute;inset:0">
     <defs><pattern id="mt-grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M60 0 H0 V60" fill="none" stroke="rgba(212,160,66,0.045)" stroke-width="1"/></pattern>
     <filter id="mt-gl" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
     <rect width="${META_CW}" height="${META_CH}" fill="url(#mt-grid)"/>`;
   [360, 640, 940].forEach((r) => { svg += `<circle cx="${MX}" cy="${MY}" r="${r}" fill="none" stroke="rgba(122,112,94,0.08)" stroke-width="1" stroke-dasharray="2 8"/>`; });
+  let surgeHTML = '';
   for (const litPass of [false, true]) {
     for (const [a, b, kind] of META_EDGES) {
       const na = META_BY_ID[a], nb = META_BY_ID[b], sa = st(na), sb = st(nb);
       if (sa === 'hidden' && sb === 'hidden') continue;
+      // SURGE: ребро к ТОЛЬКО ЧТО купленному узлу (другой конец реально запитан) — рисуем ВЕСЬ ПУЧОК запитанного
+      // ребра (обводка + все дорожки + glow-центр), но «прорисовывающимся» родитель→узел (.mt-surge), чтобы по
+      // завершении он БЕЗ скачка совпал с финальным `on`-ребром (доп-дорожки не «возникают»). См. _mtUnlock.
+      const surge = pending && ((a === pending && metaUnlocked(save, b)) || (b === pending && metaUnlocked(save, a)));
+      if (surge) {
+        if (!litPass) {
+          const par = (a === pending) ? nb : na, chi = (a === pending) ? na : nb, sp = _bundle(par, chi, kind), sci = (sp.length - 1) >> 1;
+          sp.forEach((d) => { surgeHTML += `<path d="${d}" fill="none" stroke="#0b0807" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" pathLength="1" class="mt-surge"/>`; });
+          sp.forEach((d) => { surgeHTML += `<path d="${d}" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" pathLength="1" class="mt-surge"/>`; });
+          surgeHTML += `<path d="${sp[sci]}" fill="none" stroke="var(--gold)" stroke-width="6" opacity="0.12" filter="url(#mt-gl)" pathLength="1" class="mt-surge"/><path d="${sp[sci]}" fill="none" stroke="var(--gold-bright)" stroke-width="1.6" pathLength="1" class="mt-surge"/>`;
+        }
+        continue;
+      }
       const ownA = own(a), ownB = own(b), on = ownA && ownB; if (on !== litPass) continue;
       const ghost = (sa === 'hidden' || sb === 'hidden');
       const potential = !on && (ownA || ownB) && !ghost;   // ребро-«потенциал»: один конец запитан, второй доступен — ток ещё не пошёл
@@ -166,6 +183,7 @@ function _mtWorldHTML(save) {
       svg += `</g>`;
     }
   }
+  svg += surgeHTML;   // surge поверх рёбер, под ромбами узлов
   for (const n of META_NODES) { if (st(n) === 'hidden') continue; svg += `<rect x="${n.x - 4.5}" y="${n.y - 4.5}" width="9" height="9" transform="rotate(45 ${n.x} ${n.y})" rx="1.5" fill="#0b0807" stroke="${own(n.id) ? 'var(--gold)' : 'var(--bronze)'}" stroke-width="1.4"/>`; }
   svg += `</svg>`;
 
@@ -227,6 +245,8 @@ function mtRenderCard() {
   let body = wipBanner + `<div><div style="${lbl('var(--ash)')}">${STR.meta.ui.hDesc}</div><p style="margin:8px 0 0;font-family:var(--font-body);font-size:13.5px;color:var(--bone);line-height:1.6">${s === 'visible' ? STR.meta.ui.descLocked : n.desc}</p></div>`;
   if (s !== 'visible' && prereq.length) body += `<div style="margin-top:16px"><div style="${lbl('var(--ash)')}">${STR.meta.ui.hRequires}</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${prereq.map((p) => `<span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--bone);background:var(--earth);border:1px solid var(--bronze);padding:4px 8px">${p}</span>`).join('')}</div></div>`;
   if (n.kind === 'cap') body += `<div style="margin-top:16px;padding:12px 14px;border:1px solid var(--gold-dim);background:rgba(212,160,66,0.05)"><div style="${lbl('var(--gold)')}">${STR.meta.ui.capTitle}</div><p style="margin:6px 0 0;font-family:var(--font-body);font-size:12.5px;color:var(--pewter);line-height:1.55">${STR.meta.ui.capDesc}</p></div>`;
+  // ТЕГ «ограниченно в режиме истории» (боевые узлы) — КРУПНЫЙ, внизу тела (над статусом/футером), с ОТДЕЛЯЮЩЕЙ ЛИНИЕЙ; виден когда описание расшифровано (не 'visible'). Каутион-янтарь, НЕ красный (узел рабочий, просто не применим без врагов).
+  if (n.storyLimited && s !== 'visible') body += `<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--gold-dim)"><div style="display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border:1px solid var(--gold-dim);border-left:3px solid var(--gold);background:rgba(212,160,66,0.09)"><span style="font-size:17px;line-height:1;color:var(--gold)">⚠</span><div style="min-width:0"><div style="font-family:var(--font-display);font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);line-height:1.05">${STR.meta.ui.storyTitle}</div><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;color:var(--bone);margin-top:6px;text-transform:uppercase;line-height:1.55">${STR.meta.ui.storySub}</div></div></div></div>`;
   let footer;
   if (owned) footer = `<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border:1px solid ${acc};color:${acc};font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase">● ${STR.meta.ui.nodePoweredFull}</div>`;
   else footer = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="${lbl('var(--ash)')}">${STR.meta.ui.hCost}</span><span style="display:inline-flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:20px;font-weight:700;color:${can ? 'var(--gold)' : 'var(--blood-bright)'}">${_mtToken(20)}${n.cost}<span style="font-size:11px;color:var(--ash)">${STR.meta.ui.mt}</span></span></div>
@@ -237,7 +257,7 @@ function mtRenderCard() {
       <div style="display:flex;gap:14px;align-items:flex-start">
         <div style="width:52px;height:52px;flex-shrink:0;border:1px solid ${acc};display:flex;align-items:center;justify-content:center;color:${acc};background:var(--earth);clip-path:polygon(0 8px,8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%)">${MICON[n.icon] || ''}</div>
         <div style="min-width:0"><div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><span style="width:8px;height:8px;background:${acc};display:inline-block"></span><span style="${lbl(acc)}">${n.sys || STR.meta.ui.sysCore}</span></div>
-        <div style="font-family:var(--font-display);font-size:20px;font-weight:700;text-transform:uppercase;letter-spacing:-0.02em;color:var(--chalk);line-height:1.02">${n.name}</div></div>
+        <div style="font-family:var(--font-display);font-size:20px;font-weight:700;text-transform:uppercase;letter-spacing:-0.02em;color:var(--chalk);line-height:1.02">${s === 'visible' ? '? ? ?' : n.name}</div></div>
       </div>
       <div style="margin-top:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <div style="display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid ${stTag[1]};color:${stTag[1]};font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase"><span style="width:6px;height:6px;border-radius:50%;background:${stTag[1]}"></span>${stTag[0]}</div>
@@ -251,7 +271,7 @@ function mtRenderCard() {
   const buy = card.querySelector('#mtBuy');     // покупка — УДЕРЖАНИЕ (ЛКМ ИЛИ Пробел) с горизонтальной заливкой
   if (buy && can) {
     const fill = card.querySelector('#mtBuyFill'); let raf = null, t0 = 0; const DUR = 620;
-    const tick = () => { const p = Math.min(1, (performance.now() - t0) / DUR); fill.style.width = (p * 100) + '%'; if (p >= 1) { raf = null; if (metaBuy(save, n)) mtRender(); return; } raf = requestAnimationFrame(tick); };
+    const tick = () => { const p = Math.min(1, (performance.now() - t0) / DUR); fill.style.width = (p * 100) + '%'; if (p >= 1) { raf = null; if (metaBuy(save, n)) _mtUnlock(save, n); return; } raf = requestAnimationFrame(tick); };
     const startHold = (e) => { if (e) e.preventDefault(); if (raf) return;   // уже идёт — НЕ перезапускаем (иначе авто-репит Пробела сбрасывал бы заливку в ноль)
       t0 = performance.now(); raf = requestAnimationFrame(tick); };
     const cancelHold = () => { if (raf) { cancelAnimationFrame(raf); raf = null; } fill.style.width = '0'; };
@@ -272,6 +292,23 @@ function mtRender() {
   mtRenderCard();
 }
 
+// Анимация ЗАПИТЫВАНИЯ узла: яркий ток бежит по ребру родитель→узел (~0.56с, CSS .mt-surge), затем узел
+// загорается (mtRender) + вспышка-кольцо. Дёшево: один прорисовывающийся path + один CSS-кадр, без рекурсии rAF.
+function _mtUnlock(save, n) {
+  const hasParent = META_EDGES.some(([a, b]) => (a === n.id && metaUnlocked(save, b)) || (b === n.id && metaUnlocked(save, a)));
+  if (!hasParent || !_mt) { mtRender(); return; }   // корень/без запитанного соседа — мгновенно
+  _mtPending = n.id; mtRender();                     // граф: узел ещё «доступен» + surge на ребре
+  setTimeout(() => { if (_mtPending !== n.id) return; _mtPending = null; mtRender(); _mtIgniteFlash(n); }, 560);
+}
+function _mtIgniteFlash(n) {
+  if (!_mt || !_mt.world) return;
+  const R = META_RADIUS[n.kind] || 30, el = document.createElement('div');
+  el.className = 'mt-ignite';
+  el.style.cssText = `position:absolute;left:${n.x}px;top:${n.y}px;width:${R * 2.6}px;height:${R * 2.6}px;margin:${-R * 1.3}px 0 0 ${-R * 1.3}px;border:2px solid var(--gold-bright);border-radius:28%;pointer-events:none;z-index:30`;
+  el.addEventListener('animationend', () => el.remove());
+  _mt.world.appendChild(el);
+}
+
 function _mtKey(e) {
   if (e.code === 'Escape') { metaDomBack(); return; }
   // ПРОБЕЛ при выбранном покупаемом узле = удержание-запитывание (как зажатая ЛКМ на кнопке).
@@ -284,6 +321,12 @@ function _mtKey(e) {
     if (typeof codexResetSave === 'function') codexResetSave();   // глоссарий + диски данных тоже в ноль
     if (typeof writeSave === 'function') writeSave(_mtGame.save);
     _mtSel = null; mtRender();
+  }
+  // ВРЕМЕННО (для тестов): M — +10 МЕГА-ТОКЕНОВ (быстро тестировать покупки узлов). Убрать перед релизом.
+  if (e.code === 'KeyM' && _mtGame) {
+    _mtGame.save.meta = (_mtGame.save.meta || 0) + 10;
+    if (typeof writeSave === 'function') writeSave(_mtGame.save);
+    mtRender();
   }
 }
 function _mtKeyUp(e) { if (e.code === 'Space' && _mtHold) _mtHold.cancel(); }   // отпустил Пробел — отмена недозаполненной покупки

@@ -6,6 +6,14 @@ function drawFx(ctx, fx, camera) {
   for (const p of fx.parts) {
     const a = Math.max(0, 1 - p.life / p.ttl);
     const cx = camera.screenX(p.px), cy = p.py - camera.y;
+    if (p.kind === 'spark') {   // удар-искра: короткий аддитивный стрик вдоль скорости, гаснет
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a;
+      ctx.strokeStyle = p.color; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+      const d = Math.hypot(p.vx, p.vy) || 1, len = TILE * 0.2 * (0.4 + a);
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx - (p.vx / d) * len, cy - (p.vy / d) * len); ctx.stroke();
+      ctx.restore();
+      continue;
+    }
     if (p.kind === 'heal') {   // зелёный «+» лечения: тёмный контур + яркая заливка, чуть растёт по мере таяния
       const s = TILE * 0.065 * (0.8 + (1 - a) * 0.45);
       ctx.lineCap = 'round';

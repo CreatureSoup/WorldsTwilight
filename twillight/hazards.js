@@ -22,12 +22,16 @@ Object.assign(Game.prototype, {
       }
       if (r.state === 'wake') {
         r.t += dt;
-        if (r.t >= ROBOT_WAKE_T) { r.state = 'fire'; r.fired = 0; r.fireT = 0; }
+        if (r.t >= ROBOT_WAKE_T) {
+          const kind = r.kind || 'shooter';
+          if (kind === 'shooter') { r.state = 'fire'; r.fired = 0; r.fireT = 0; }
+          else { this._robotEffect(r, kind); r.state = 'settle'; r.t = 0; }   // вариант останка: разовый эффект на пробуждении → оседает (мёртвый скан как у стрелка)
+        }
       } else if (r.state === 'fire') {
         r.fireT -= dt;
         if (r.fireT <= 0 && r.fired < ROBOT_SHOTS) {
           const px = (r.tx + 0.5) * TILE, py = (r.ty + 0.5) * TILE, ang = r.seed + r.fired * (Math.PI * 2 / ROBOT_SHOTS);
-          this.shots.fire(px, py, px + Math.cos(ang) * TILE * 6, py + Math.sin(ang) * TILE * 6);
+          this.shots.fire(px, py, px + Math.cos(ang) * TILE * 6, py + Math.sin(ang) * TILE * 6, ROBOT_SHOT_DMG);   // слабее снайпера: суммарно ~96 HP даже в упор
           if (this.dust) this.dust._grit(px, py, Math.cos(ang) * TILE * 2.4, Math.sin(ang) * TILE * 2.4, Math.random() < 0.4);
           r.fired++; r.fireT = ROBOT_SHOT_GAP;
         }
@@ -42,19 +46,13 @@ Object.assign(Game.prototype, {
       } else if (r.state === 'dead' && !r.scanned && canScan && this._hazardScan(r, dt)) {
         r.scanned = true; this.dataCount = (this.dataCount || 0) + 1;
         this._dataGain(typeof CODEX_DATA_PER_SCAN !== 'undefined' ? CODEX_DATA_PER_SCAN : 1);   // множитель kart_data учитывается
+        // глоссарий ОСТАНКОВ — СВОЯ запись на каждый вариант (kind): shooter e7 / web e19 / latch e20 / jam e21 / brood e22
+        const cid = { shooter: 'e7', web: 'e19', latch: 'e20', jam: 'e21', brood: 'e22' }[r.kind || 'shooter'];
+        if (cid && typeof codexDiscover === 'function') codexDiscover(cid); else if (this.discover) this.discover('remains');
         if (!this.debug) this.logEvent(STR.log.remnantsData);
       }
     }
-
-    for (const m of w.mines) {
-      if (m.state === 'buried') {
-        if (!m.dug) continue;
-        if (defuse) { m.state = 'done'; m.defused = true; if (!this.debug) this.logEvent(STR.log.mineDefused); }
-        else { m.state = 'blink'; m.t = 0; }
-        continue;
-      }
-      if (m.state === 'blink') { m.t += dt; if (m.t >= MINE_BLINK_T) { m.state = 'done'; this._mineBlast(m); } }
-    }
+    // (СТАРЫЕ МИНЫ переехали в traps.js как тип ловушки `trap.type='mine'` — стейт-машина dug→blink→взрыв там)
   },
 
   // Накопление времени скана у мёртвого робота (в радиусе SCAN_RADIUS и в раскрытом тумане); true по завершении.
@@ -70,7 +68,7 @@ Object.assign(Game.prototype, {
     const cx = m.tx, cy = m.ty, px = (cx + 0.5) * TILE, py = (cy + 0.5) * TILE;
     if (!this.debug && this.unit) {
       const d = Math.hypot(wrapDeltaPx(this.unit.px, px), this.unit.py - py) / TILE;
-      if (d <= MINE_BLAST_R) this.unit.hp = Math.max(0, this.unit.hp - Math.round(MINE_DMG * (1 - d / MINE_BLAST_R)));
+      if (d <= MINE_BLAST_R) this.unit.hurt(Math.round(MINE_DMG * (1 - d / MINE_BLAST_R)));
     }
     for (const e of this.enemies) {
       if (e.dead || e.dying || typeof e.damage !== 'function') continue;
@@ -82,5 +80,32 @@ Object.assign(Game.prototype, {
     for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) if (dx * dx + dy * dy <= R2) this.world.setAir(cx + dx, cy + dy);
     if (this.dust) for (let i = 0; i < 16; i++) { const a = Math.random() * 6.283, sp = TILE * (1 + Math.random() * 2.6); this.dust._grit(px, py, Math.cos(a) * sp, Math.sin(a) * sp - TILE * 0.6, Math.random() < 0.5); }
     if (!this.debug) this.logEvent(STR.log.mineBlast);
+  },
+
+  // Разовый эффект варианта-останка на пробуждении (kind ≠ shooter). Все дебаффы дублируются игроку: лог + плашка (drawDebuffBadge).
+  _robotEffect(r, kind) {
+    if (kind === 'web') this._robotWeb(r);
+    else if (kind === 'latch') this._robotLatch(r);
+    else if (kind === 'jam') this._robotJam(r);
+    else if (kind === 'brood') this._trigBrood({ tx: r.tx, ty: r.ty });   // рой-кладка (реюз спавна роя из traps.js)
+  },
+  _robotDist(r) { const u = this.unit; if (!u) return Infinity; return Math.hypot(wrapDeltaPx(u.px, (r.tx + 0.5) * TILE), u.py - (r.ty + 0.5) * TILE) / TILE; },
+  // ПАУТИНА: юнит в малом радиусе → замедление движения на время (unit.webT). Издали — мимо (успеть уйти).
+  _robotWeb(r) {
+    if (this._robotDist(r) > WEB_R || !this.unit) return;
+    this.unit.webT = WEB_DUR;
+    if (this.dust) { const px = this.unit.px, py = this.unit.py; for (let i = 0; i < 8; i++) { const a = Math.random() * 6.283; this.dust._grit(px, py, Math.cos(a) * TILE, Math.sin(a) * TILE, false); } }
+    if (!this.debug) this.logEvent(STR.log.robotWeb);
+  },
+  // ПРЫГУН: достал юнита (в радиусе прыжка) → виснет на буре = дебафф бурения на N тайлов проходки; не достал → подыхает.
+  _robotLatch(r) {
+    if (this._robotDist(r) > LATCH_JUMP_R || !this.unit) return;   // не достал — подох (просто оседает)
+    this.unit.latchTiles = LATCH_TILES;
+    if (!this.debug) this.logEvent(STR.log.robotLatch);
+  },
+  // ГЛУШИЛКА: джаммер-импульс вырубает сканер (снятие тумана) на время.
+  _robotJam(r) {
+    this.scanJamT = JAM_SCAN_DUR;
+    if (!this.debug) this.logEvent(STR.log.robotJam);
   },
 });

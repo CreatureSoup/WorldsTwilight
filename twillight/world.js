@@ -56,7 +56,7 @@ class World {
   // Обзор КРУГОМ (Euclidean): радиус R тайлов вокруг (cx,cy). Целые тайлы (R округляем — дробный r напр. 3.5
   // при вскрытии базы дал бы нецелые индексы Uint8Array → запись в пустоту → интро на чёрном фоне).
   reveal(cx, cy, r) {
-    const R = Math.max(0, Math.round(r)), r2 = R * R + 0.25;   // +0.25 — диагонали радиуса попадают в круг
+    const R = Math.max(0, Math.round(r)), r2 = R * R + R + 0.25;   // (R+0.5)² — диск ВКЛЮЧАЕТ диагонали (R=1 → 3×3, не «крест»); на больших R срезает дальние углы (круг)
     const y0 = Math.max(0, cy - R), y1 = Math.min(MAP_H - 1, cy + R);
     for (let y = y0; y <= y1; y++) {
       const dy = y - cy;
@@ -103,6 +103,15 @@ class World {
 
   // тороидальная дистанция по X в тайлах
   torDist(a, b) { const d = Math.abs(a - b) % MAP_W; return Math.min(d, MAP_W - d); }
+  torDist2D(x1, y1, x2, y2) { const dx = this.torDist(x1, x2), dy = y1 - y2; return Math.hypot(dx, dy); }   // дистанция точка-точка по кольцу (X-тор, Y прямой)
+  // ВЕРХНЯЯ СТРАТА (погребённая цивилизация НАД городом): диапазон засева тематических объектов (данные/руины/старые защиты).
+  _upperBand() { return [SURFACE_ROWS + 4, CAVE_FLOOR_Y - 4]; }
+  // Ряд-БАРЬЕР (не сеем спецобъекты): главная корка пола + ПОТОЛОЧНЫЕ крусты (барьеры подъёма к поверхности).
+  _blockedSeedRow(y) {
+    if (y >= CRUST_Y0 && y <= CRUST_Y1) return true;
+    if (typeof CEILING_CRUSTS !== 'undefined') for (const c of CEILING_CRUSTS) if (y >= c.y0 && y <= c.y1) return true;
+    return false;
+  }
   inEllipseList(x, y, list) {
     for (const c of list) {
       const dx = wrapDeltaPx(x * TILE, c.cx * TILE) / TILE, dy = y - c.cy;
@@ -122,20 +131,23 @@ class World {
     list.push({ cx: wrapX(Math.round(startCx) + 14), cy: CAVE_FLOOR_Y + 7, rx: 4, ry: 3, floorY: CAVE_FLOOR_Y + 10, kind: 'idol', seed: 1234, scanned: false, scanning: false, sweepT: 0, reveal: 0 });
     const avoid = this.caverns.concat(this.wilds).concat([{ cx: startCx, cy: CAVE_FLOOR_Y }]).concat(list.map((b) => ({ cx: b.cx, cy: b.cy })));
     const kinds = ['city', 'machine', 'idol'];
-    for (let i = 0; i < BACKDROP_COUNT; i++) {
-      const band = bands[i % bands.length]; let placed = null;
+    const place = (band, i) => {
+      let placed = null;
       for (let tries = 0; tries < 50 && !placed; tries++) {
         const x = Math.floor(this.rand() * MAP_W), y = band[0] + Math.floor(this.rand() * (band[1] - band[0] + 1));
         if (this.inCave(x, y) || this.inCavern(x, y) || this.inWild(x, y) || this.inBackdrop(x, y)) continue;
+        if (this._blockedSeedRow(y)) continue;
         if (avoid.some((a) => this.torDist(x, a.cx) < 20 && Math.abs(y - a.cy) < 16)) continue;
         placed = { cx: x, cy: y };
       }
-      if (!placed) continue;
+      if (!placed) return;
       const rx = BACKDROP_RX[0] + Math.floor(this.rand() * (BACKDROP_RX[1] - BACKDROP_RX[0] + 1));
       const ry = BACKDROP_RY[0] + Math.floor(this.rand() * (BACKDROP_RY[1] - BACKDROP_RY[0] + 1));
       list.push({ cx: placed.cx, cy: placed.cy, rx, ry, floorY: placed.cy + ry, kind: kinds[i % kinds.length], seed: (this.rand() * 1e9) >>> 0, scanned: false, scanning: false, sweepT: 0, reveal: 0 });
       avoid.push({ cx: placed.cx, cy: placed.cy });   // следующие держатся подальше
-    }
+    };
+    for (let i = 0; i < BACKDROP_COUNT; i++) place(bands[i % bands.length], i);   // ГЛУБОКИЕ сцены
+    const up = this._upperBand(); for (let i = 0; i < BACKDROP_UP; i++) place(up, i);   // ВЕРХНЯЯ страта (руины-сцены)
     return list;
   }
   // Размещение в эллипс-бэндах глубины с разносом 2D (далеко по X ИЛИ по глубине).
@@ -179,39 +191,40 @@ class World {
   // по маркеру в раскрытой туманом породе. Разнесены по тору 2D друг от друга и от городов.
   genServers() {
     const H = MAP_H, list = [];
-    const bands = [[Math.round(H * 0.45), Math.round(H * 0.62)], [Math.round(H * 0.66), Math.round(H * 0.86)]];   // ниже города
+    const bands = [[Math.round(H * 0.45), Math.round(H * 0.62)], [Math.round(H * 0.66), Math.round(H * 0.97)]];   // ниже города, до ~дна
     const startCx = (CAVE_X0 + CAVE_X1) / 2;
     // ТЕСТ: гарантированный сервер у базы — пара тайлов вниз от пола стартовой пещеры (быстро дотянуться
     // и проверить дайджест dig→хлам→скан без глубокой копки). Сдвиг по X от принтера → не в фундаменте.
     list.push({ tx: wrapX(Math.round(startCx) + 4), ty: CAVE_FLOOR_Y + 3, dug: false, data: 0, done: false });
     const avoid = this.caverns.concat(this.wilds).concat([{ cx: startCx, cy: CAVE_FLOOR_Y }]);
-    for (let i = 0; i < SERVER_COUNT; i++) {
-      const band = bands[i % bands.length];
-      let tx = -1, ty = 0;
+    const place = (band) => {
       for (let tries = 0; tries < 120; tries++) {
         const x = Math.floor(this.rand() * MAP_W), y = band[0] + Math.floor(this.rand() * (band[1] - band[0] + 1));
         if (this.inCave(x, y) || this.inCavern(x, y) || this.inWild(x, y) || this.inBackdrop(x, y)) continue;
-        if (y >= CRUST_Y0 && y <= CRUST_Y1) continue;
+        if (this._blockedSeedRow(y)) continue;
         const farCity = avoid.every((a) => this.torDist(x, a.cx) >= 5 || Math.abs(y - a.cy) >= 6);
-        const farSrv = list.every((s) => this.torDist(x, s.tx) >= 8 || Math.abs(y - s.ty) >= 6);
-        if (farCity && farSrv) { tx = x; ty = y; break; }
+        const farSrv = list.every((s) => this.torDist2D(x, y, s.tx, s.ty) >= SERVER_MIN_DIST);   // 2D-дистанция: не липнут по диагонали
+        if (farCity && farSrv) { list.push({ tx: wrapX(x), ty: y, dug: false, data: 0, done: false }); return; }
       }
-      if (tx >= 0) list.push({ tx: wrapX(tx), ty, dug: false, data: 0, done: false });
-    }
+    };
+    for (let i = 0; i < SERVER_COUNT; i++) place(bands[i % bands.length]);   // ГЛУБОКИЕ серверы
+    const up = this._upperBand(); for (let i = 0; i < SERVER_UP; i++) place(up);   // ВЕРХНЯЯ страта (архивы данных)
     return list;
   }
   // Артефакты: продолговатый регион ПОРОДЫ (2×1 ИЛИ 1×2 — ориентация случайна, маркер `t.artifact`),
   // разнесены по тору и от городов/серверов/пещер. Каждому — случайная технология из пула (для модалки).
   genArtifacts() {
     const H = MAP_H, list = [];
-    const band = [Math.round(H * 0.5), Math.round(H * 0.8)];
     const avoid = this.caverns.concat(this.wilds);
-    const tech = () => ARTIFACT_TECHS[Math.floor(this.rand() * ARTIFACT_TECHS.length)];
-    // ТЕСТ: гарантированный артефакт у базы (как тест-сервер) — быстро проверить дайджест откоп→модалка.
-    const startCx = Math.round((CAVE_X0 + CAVE_X1) / 2);
-    list.push({ tx: wrapX(startCx - 6), ty: CAVE_FLOOR_Y + 3, w: ARTIFACT_LONG, h: 1, tech: tech(), dug: false, resolved: false });
-    for (let i = 0; i < ARTIFACT_COUNT; i++) {
+    // НАБОР из пула БЕЗ ПОВТОРОВ (Фишер-Йейтс на seed-rand) → каждая сессия даёт разный состав по мере роста пула.
+    const pool = ARTIFACT_POOL.slice();
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(this.rand() * (i + 1)); const t = pool[i]; pool[i] = pool[j]; pool[j] = t; }
+    const picks = pool.slice(0, Math.min(ARTIFACT_SEED_COUNT + ARTIFACT_SEED_UP, pool.length));
+    const up = this._upperBand();
+    picks.forEach((def, idx) => {
+      const upper = idx < ARTIFACT_SEED_UP;   // ПЕРВЫЕ ARTIFACT_SEED_UP — в верхнюю страту (человеческое техно над городом)
       const horiz = this.rand() < 0.5, w = horiz ? ARTIFACT_LONG : 1, h = horiz ? 1 : ARTIFACT_LONG;
+      const band = upper ? up : (def.tier === 'rare' ? [Math.round(H * 0.78), Math.round(H * 0.97)] : [Math.round(H * 0.5), Math.round(H * 0.78)]);   // редкий — ГЛУБЖЕ (опаснее добыть), до ~дна
       let ax = -1, ay = 0;
       for (let tries = 0; tries < 200; tries++) {
         const x = Math.floor(this.rand() * MAP_W), y = band[0] + Math.floor(this.rand() * (band[1] - band[0] + 1));
@@ -220,52 +233,163 @@ class World {
         for (let dy = 0; dy < h && ok; dy++) for (let dx = 0; dx < w && ok; dx++) {
           const xx = x + dx, yy = y + dy;
           if (this.inCave(xx, yy) || this.inCavern(xx, yy) || this.inWild(xx, yy) || this.inBackdrop(xx, yy)) ok = false;
-          else if (yy >= CRUST_Y0 && yy <= CRUST_Y1) ok = false;
+          else if (this._blockedSeedRow(yy)) ok = false;
           else if (this.tiles[yy * MAP_W + wrapX(xx)].server) ok = false;
         }
         if (!ok) continue;
         const farCity = avoid.every((a) => this.torDist(x, a.cx) >= 6 || Math.abs(y - a.cy) >= 7);
-        const farOther = list.every((o) => this.torDist(x, o.tx) >= 10 || Math.abs(y - o.ty) >= 8);
+        const farOther = list.every((o) => this.torDist2D(x, y, o.tx, o.ty) >= ARTIFACT_MIN_DIST);   // 2D ≥ 2×RAD_SOURCE_R → очаги радиации не перекрываются
         if (farCity && farOther) { ax = x; ay = y; break; }
       }
-      if (ax >= 0) list.push({ tx: wrapX(ax), ty: ay, w, h, tech: tech(), dug: false, resolved: false });
-    }
+      if (ax >= 0) list.push({ tx: wrapX(ax), ty: ay, w, h, tech: def, dug: false, resolved: false });
+      else console.warn('genArtifacts: не удалось разместить артефакт', def.id, '(тесно/много объектов)');   // тихий пропуск → меньше артефактов; диагностика
+    });
     return list;
   }
   // Погребённые опасные объекты (1 тайл, маркер t.robot / t.mine; всегда копаются). Останки роботов —
   // боевой протокол при откопке; старые мины — взрыв. Разнесены по тору и от городов/серверов/артефактов.
-  _genHazard(count, band, testDx, make) {
+  // `extraAvoid` — уже размещённые ОПАСНОСТИ другого типа (роботы/ловушки/мины): держим `HAZARD_MIN_DIST` ОТ НИХ ТОЖЕ
+  // (единый пул) → ловушки и останки роботов не липнут друг к другу. Тест-объект у базы дистанцию не проверяет (форсирован).
+  // `upCount`/`upBand` — ДОП. посев в ВЕРХНЕЙ страте (старые защиты погребённой цивилизации); единый `list` →
+  // спейсинг (`HAZARD_MIN_DIST`) и кросс-тип покрывают верх+глубину вместе. Крусты (вкл. потолочные) — барьеры, не сеем.
+  _genHazard(count, band, testDx, make, extraAvoid, upCount, upBand) {
     const list = [], startCx = (CAVE_X0 + CAVE_X1) / 2;
     const avoid = this.caverns.concat(this.wilds).concat([{ cx: startCx, cy: CAVE_FLOOR_Y }]);
+    const others = extraAvoid || [];
     list.push(make(wrapX(Math.round(startCx) + testDx), CAVE_FLOOR_Y + 3));   // ТЕСТ у базы (быстро найти/проверить)
-    for (let i = 0; i < count; i++) {
-      for (let tries = 0; tries < 120; tries++) {
-        const x = Math.floor(this.rand() * MAP_W), y = band[0] + Math.floor(this.rand() * (band[1] - band[0] + 1));
+    const place = (n, bnd) => {
+      for (let i = 0; i < n; i++) for (let tries = 0; tries < 120; tries++) {
+        const x = Math.floor(this.rand() * MAP_W), y = bnd[0] + Math.floor(this.rand() * (bnd[1] - bnd[0] + 1));
         if (this.inCave(x, y) || this.inCavern(x, y) || this.inWild(x, y) || this.inBackdrop(x, y)) continue;
-        if (y >= CRUST_Y0 && y <= CRUST_Y1) continue;
+        if (this._blockedSeedRow(y)) continue;
         const t = this.tiles[y * MAP_W + wrapX(x)];
-        if (t.server || t.artifact || t.robot || t.mine) continue;
-        const far = avoid.every((a) => this.torDist(x, a.cx) >= 5 || Math.abs(y - a.cy) >= 6);
-        if (far) { list.push(make(wrapX(x), y)); break; }
+        if (t.server || t.artifact || t.robot || t.trap) continue;
+        const farCity = avoid.every((a) => this.torDist(x, a.cx) >= 5 || Math.abs(y - a.cy) >= 6);
+        const farHaz = list.every((h) => this.torDist2D(x, y, h.tx, h.ty) >= HAZARD_MIN_DIST) && others.every((h) => this.torDist2D(x, y, h.tx, h.ty) >= HAZARD_MIN_DIST);   // 2D от своих И чужих опасностей
+        if (farCity && farHaz) { list.push(make(wrapX(x), y)); break; }
       }
-    }
+    };
+    place(count, band);                          // ГЛУБОКИЕ
+    if (upCount && upBand) place(upCount, upBand);   // ВЕРХНЯЯ страта
     return list;
   }
-  genRobots() { return this._genHazard(ROBOT_COUNT, [Math.round(MAP_H * 0.46), Math.round(MAP_H * 0.82)], 8,
-    (tx, ty) => ({ tx, ty, dug: false, state: 'buried', t: 0, fired: 0, fireT: 0, scan: 0, scanned: false, defused: false, seed: this.rand() * 6.283 })); }
-  genMines() { return this._genHazard(MINE_COUNT, [Math.round(MAP_H * 0.5), Math.round(MAP_H * 0.85)], -9,
-    (tx, ty) => ({ tx, ty, dug: false, state: 'buried', t: 0, defused: false })); }
+  genRobots() { const RK = ['shooter', 'shooter', 'web', 'latch', 'jam', 'brood']; return this._genHazard(ROBOT_COUNT, [Math.round(MAP_H * 0.46), Math.round(MAP_H * 0.97)], 8,
+    (tx, ty) => ({ tx, ty, kind: RK[Math.floor(this.rand() * RK.length)], dug: false, state: 'buried', t: 0, fired: 0, fireT: 0, scan: 0, scanned: false, defused: false, seed: this.rand() * 6.283 }), null, ROBOT_UP, this._upperBand()); }
+  // ЛОВУШКИ (ЕДИНЫЙ тип): маркер `t.trap` (всегда копается); тип вперемешку. МИНА — ОДИН ИЗ типов пула (своя стейт-машина
+  // dug→blink→взрыв в traps.js, поля state/t/defused; `world.mines`=фильтр type==='mine' для drawMines). Откоп `setAir` → `trap.dug` → срабатывание.
+  genTraps(extraAvoid) {
+    const TT = ['acid', 'seismic', 'cavein', 'mine'];   // мина — равноправный тип ловушки (~1/4); brood переехал в останки роботов (robot.kind)
+    const make = (tx, ty) => { const type = TT[Math.floor(this.rand() * TT.length)], o = { tx, ty, type, dug: false, triggered: false }; if (type === 'mine') { o.state = 'buried'; o.t = 0; o.defused = false; } return o; };
+    return this._genHazard(TRAP_COUNT, TRAP_BAND, 11, make, extraAvoid, TRAP_UP, this._upperBand());
+  }
 
-  resourceFor(x, y) {
-    const depth = Math.max(0, y - CAVE_FLOOR_Y);
-    const pRes = Math.min(0.32, 0.06 + 0.015 * (depth / 10));
-    if (this.tileNoise(x * 7 + 13, y * 11 + 5) >= pRes) return null;
-    const depthF = Math.min(1, depth / (MAP_H - CAVE_FLOOR_Y));
-    const pCrystal = 0.02 + 0.22 * depthF, pOrganic = 0.30;
-    const r = this.tileNoise(x * 5 + 91, y * 3 + 17);
-    if (r < pCrystal) return 'crystal';
-    if (r < pCrystal + pOrganic) return 'organic';
-    return 'iron';
+  // ── РЕСУРСЫ (зовётся из generate() ПОСЛЕ кладки породы, ДО спецобъектов — те затирают resource на своих тайлах).
+  // КАРКАС ПОКРЫТИЯ (jittered-grid зёрен) + ЖЕЛЕЗО-ЖИЛЫ / ОРГАНИКА-КАРМАНЫ (размер РАСТЁТ С ГЛУБИНОЙ) / КРИСТАЛЛ-ОДИНОЧКИ.
+  _seedResources() {
+    this._seedCoverageGrid();   // КАРКАС: одно зерно на ячейку (джиттер) → ГАРАНТИЯ покрытия, нет мёртвых зон. ДО залежей → залежи перекрывают.
+    // ЖЕЛЕЗО — ЖИЛЫ: базовая длина × глубинный множитель (чем глубже от старта, тем протяжённее), до IRON_VEIN_CAP.
+    for (let i = 0; i < IRON_VEINS; i++) {
+      const x = Math.floor(this.rand() * MAP_W), y = SURFACE_ROWS + Math.floor(this.rand() * (MAP_H - SURFACE_ROWS - 1));
+      if (!this._isPlainRock(x, y)) continue;
+      const base = IRON_VEIN_LEN[0] + Math.floor(this.rand() * (IRON_VEIN_LEN[1] - IRON_VEIN_LEN[0] + 1));
+      this._stampVein(x, y, 'iron', Math.min(IRON_VEIN_CAP, Math.round(base * this._depthRich(y))));
+    }
+    // ОРГАНИКА — КАРМАНЫ: базовый размер × глубинный множитель (глубже — крупнее), до ORGANIC_BLOB_CAP.
+    for (let i = 0; i < ORGANIC_BLOBS; i++) {
+      const x = Math.floor(this.rand() * MAP_W), y = SURFACE_ROWS + Math.floor(this.rand() * (MAP_H - SURFACE_ROWS - 1));
+      if (!this._isPlainRock(x, y)) continue;
+      const base = ORGANIC_BLOB_SIZE[0] + Math.floor(this.rand() * (ORGANIC_BLOB_SIZE[1] - ORGANIC_BLOB_SIZE[0] + 1));
+      this._stampBlob(x, y, 'organic', Math.min(ORGANIC_BLOB_CAP, Math.round(base * this._depthRich(y))));
+    }
+    for (let i = 0; i < CRYSTAL_DEPOSITS; i++) {
+      // ГЛУБИННЫЙ БИАС (sqrt тянет выборку к НИЗУ карты): РЕДКО в верхних стратах / у базы — ранний доступ ЕСТЬ,
+      // ГУСТО глубоко. Раньше был жёсткий обрез (только y≥137) → кристалл недосягаем на ранних этапах (исправлено).
+      const x = Math.floor(this.rand() * MAP_W), y = SURFACE_ROWS + Math.floor(Math.sqrt(this.rand()) * (MAP_H - SURFACE_ROWS - 1));
+      if (!this._isPlainRock(x, y) || this._hasResNear(x, y, 'crystal', 1)) continue;   // ОДИНОЧКА: НИКОГДА не вплотную к другому кристаллу (и совпадением тоже)
+      this._stampRes(x, y, 'crystal');
+      if (this.rand() < CRYSTAL_PAIR_CHANCE) {   // супер-редко: второй кристалл РЯДОМ, но НЕ вплотную — направление×зазор даёт Чебышёв 2-3 (нет 8-соседства)
+        const gap = CRYSTAL_PAIR_GAP[0] + Math.floor(this.rand() * (CRYSTAL_PAIR_GAP[1] - CRYSTAL_PAIR_GAP[0] + 1));
+        const dir = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]][Math.floor(this.rand() * 8)];
+        const x2 = wrapX(x + dir[0] * gap), y2 = y + dir[1] * gap;
+        if (this._isPlainRock(x2, y2) && !this._hasResNear(x2, y2, 'crystal', 1)) this._stampRes(x2, y2, 'crystal');
+      }
+    }
+  }
+  // КАРКАС ПОКРЫТИЯ (jittered-grid / стратифицированная сетка): РОВНО одно зерно на ячейку RES_CELL×RES_CELL со
+  // случайным смещением RES_JIT → ГАРАНТИЯ, что из любой точки ближайший ресурс ≤ ~RES_CELL·1.4 (нет «мёртвых зон»
+  // на 2+ ходки), но без видимой сетки. Невалидный тайл (воздух/корка/спецобъект) → ищем валидную породу В ЯЧЕЙКЕ
+  // (иначе зазор не гарантирован); вся ячейка пустая (каверна) → пропуск (в пустоте скуки нет — юнит идёт быстро).
+  // ⚠️ глобальный this.rand() (gen — один проход, детерминирован сидом; чанк-стриминга нет → пер-ячейковый хэш не нужен).
+  _seedCoverageGrid() {
+    const cols = Math.round(MAP_W / RES_CELL), cw = MAP_W / cols, rows = Math.ceil((MAP_H - SURFACE_ROWS) / RES_CELL);
+    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
+      const x0 = cx * cw, y0 = SURFACE_ROWS + cy * RES_CELL;
+      let tx = wrapX(Math.floor(x0 + (0.5 + RES_JIT * (this.rand() - 0.5)) * cw));
+      let ty = Math.min(MAP_H - 2, Math.floor(y0 + (0.5 + RES_JIT * (this.rand() - 0.5)) * RES_CELL));
+      if (!this._isPlainRock(tx, ty)) {   // нудж к валидной породе В ТОЙ ЖЕ ячейке (сохраняет границу зазора)
+        let ok = false;
+        for (let k = 0; k < 6 && !ok; k++) { const nx = wrapX(Math.floor(x0 + this.rand() * cw)), ny = Math.min(MAP_H - 2, Math.floor(y0 + this.rand() * RES_CELL)); if (this._isPlainRock(nx, ny)) { tx = nx; ty = ny; ok = true; } }
+        if (!ok) continue;
+      }
+      this._stampRes(tx, ty, this.rand() < GRAIN_ORGANIC_P ? 'organic' : 'iron');
+    }
+  }
+  // множитель «богатства» залежи от глубины НИЖЕ стартового слоя: 1.0 у города → DEPTH_RICH_MAX на DEPTH_RICH_SPAN
+  // ниже (ЛИНЕЙНО, с потолком — НЕ экспонента). Выше города (страты) — база (f=1). Кормит длину жил / размер карманов.
+  _depthRich(y) {
+    const f = Math.min(1, Math.max(0, (y - CAVE_FLOOR_Y) / DEPTH_RICH_SPAN));
+    return 1 + (DEPTH_RICH_MAX - 1) * f;
+  }
+  // тайл годен под залежь: обычная порода (не корка/спецобъект/пустота/прокоп), ниже неба
+  _isPlainRock(x, y) {
+    if (y < SURFACE_ROWS || y >= MAP_H - 1) return false;
+    const t = this.tiles[y * MAP_W + wrapX(x)];
+    if (!t || t.type !== ROCK || t.dug || t.server || t.artifact || t.robot || t.trap || t.boulder) return false;
+    if (y >= CRUST_Y0 && y <= CRUST_Y1) return false;
+    for (const c of CEILING_CRUSTS) if (y >= c.y0 && y <= c.y1) return false;
+    return true;
+  }
+  // есть ли ресурс данного типа в радиусе r (Чебышёв) — для запрета соседства кристаллов-одиночек
+  _hasResNear(x, y, type, r) {
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (!dx && !dy) continue;
+      const yy = y + dy; if (yy < 0 || yy >= MAP_H) continue;
+      const t = this.tiles[yy * MAP_W + wrapX(x + dx)];
+      if (t && t.resource === type) return true;
+    }
+    return false;
+  }
+  _stampRes(x, y, type) {
+    const t = this.tiles[y * MAP_W + wrapX(x)]; if (!t) return;
+    t.resource = type; t.amount = RES_AMOUNT_MIN + Math.floor(this.rand() * (RES_AMOUNT_MAX - RES_AMOUNT_MIN + 1));   // 1..3 в тайле
+  }
+  // ЖИЛА: направленный random-walk с лёгким поворотом ±45°, редким перпенд. «вздутием» и короткой веткой
+  _stampVein(sx, sy, type, len) {
+    const D = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+    let di = Math.floor(this.rand() * 8), x = sx, y = sy;
+    for (let i = 0; i < len; i++) {
+      if (!this._isPlainRock(x, y)) break;
+      this._stampRes(x, y, type);
+      if (this.rand() < 0.35) { const p = D[(di + 2) % 8]; if (this._isPlainRock(x + p[0], y + p[1])) this._stampRes(x + p[0], y + p[1], type); }   // толщина
+      if (i > 0 && this.rand() < 0.18) {   // короткая боковая ветка
+        const b = D[(di + (this.rand() < 0.5 ? 2 : 6)) % 8]; let bx = x, by = y;
+        for (let k = 0; k < 2; k++) { bx = wrapX(bx + b[0]); by += b[1]; if (!this._isPlainRock(bx, by)) break; this._stampRes(bx, by, type); }
+      }
+      if (this.rand() < 0.4) di = (di + (this.rand() < 0.5 ? 1 : 7)) % 8;   // поворот ±45°
+      x = wrapX(x + D[di][0]); y += D[di][1];
+    }
+  }
+  // КАРМАН: рост от фронтира случайными соседями (округлая амёба)
+  _stampBlob(sx, sy, type, size) {
+    const NB = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+    const seen = new Set(), key = (x, y) => wrapX(x) + ',' + y;
+    let frontier = [[sx, sy]], n = 0; seen.add(key(sx, sy));
+    while (n < size && frontier.length) {
+      const cell = frontier.splice(Math.floor(this.rand() * frontier.length), 1)[0], x = cell[0], y = cell[1];
+      if (!this._isPlainRock(x, y)) continue;
+      this._stampRes(x, y, type); n++;
+      for (const d of NB) { const nx = wrapX(x + d[0]), ny = y + d[1], k = key(nx, ny); if (!seen.has(k) && this.rand() < 0.6) { seen.add(k); frontier.push([nx, ny]); } }
+    }
   }
   // Радиационный ФОН у полюсов (0..1) — НЕ урон, а интенсивность помех интерфейсу.
   // Растёт к поверхности (выше города) и ко дну (глубже RAD_BOT_Y); середина «тихая».
@@ -281,7 +405,7 @@ class World {
     for (const s of this.radSources) {
       const dx = this.torDist(x, s.x), dy = y - s.y;
       const d = Math.sqrt(dx * dx + dy * dy);
-      if (d < s.r) v = Math.max(v, 1 - d / s.r);
+      if (d < s.r) v = Math.max(v, (s.cap || 1) * (1 - d / s.r));   // s.cap<1 — слабый очаг (маяк скверносея, кап 50%); природные без cap → 1
     }
     return Math.min(1, v);
   }
@@ -317,7 +441,7 @@ class World {
             const zone = this.pnoise(x, y, 4), fine = this.tileNoise(x * 3 + 1, y * 5 + 7);
             dens = Math.min(1, Math.max(0, zone * 0.72 + fine * 0.32 + 0.04));
             hardness = this.hardnessForY(y) * (0.5 + dens);
-            resource = this.resourceFor(x, y);
+            // resource засеваем НЕ поштучно — месторождениями (this._seedResources ниже, после кладки)
             // Природные пустоты — только НИЖЕ города (между крустами вверху коридоров не нужно:
             // подъём к поверхности — это копание через барьеры, а не свободный проход).
             if (y > CAVE_FLOOR_Y && this.pnoise(x, y, VOID_SCALE) > VOID_THRESHOLD) { type = AIR; hardness = 0; dens = 0; resource = null; }
@@ -325,6 +449,7 @@ class World {
         }
         this.tiles[y * MAP_W + x] = { type, hardness, resource, dig: 0, dens };
       }
+    this._seedResources();   // РЕСУРСЫ месторождениями (жилы/карманы/кристалл) — ДО спецобъектов (те затирают resource на своих тайлах)
     // Неразрушимый фундамент ТОЛЬКО под самим городом (принтер + площадка спавна;
     // у чужих — под маркером). Остальной пол пещеры — обычная порода (копается).
     this.layFoundation(PRINTER.x - 1, PRINTER.x + PRINTER.w, CAVE_FLOOR_Y + 1);
@@ -346,16 +471,17 @@ class World {
     // Останки роботов / старые мины: тайл — ПОРОДА с маркером (всегда копается). ДО genUnstable — их не помечаем.
     this.robots = this.genRobots();
     for (const r of this.robots) { const t = this.tiles[r.ty * MAP_W + wrapX(r.tx)]; t.type = ROCK; t.hardness = this.hardnessForY(r.ty) * 1.15; t.dig = 0; t.resource = null; t.dens = 1; t.robot = r; }
-    this.mines = this.genMines();
-    for (const m of this.mines) { const t = this.tiles[m.ty * MAP_W + wrapX(m.tx)]; t.type = ROCK; t.hardness = this.hardnessForY(m.ty) * 1.1; t.dig = 0; t.resource = null; t.dens = 1; t.mine = m; }
-    this.genUnstable();   // нестабильная порода (после серверов/артефактов/роботов/мин/фундамента — их не помечаем)
+    this.traps = this.genTraps(this.robots);                   // ловушки (вкл. мину как тип) держат дистанцию ОТ роботов И друг от друга
+    for (const tr of this.traps) { const t = this.tiles[tr.ty * MAP_W + wrapX(tr.tx)]; t.type = ROCK; t.hardness = this.hardnessForY(tr.ty) * (tr.type === 'mine' ? 1.1 : 1); t.dig = 0; t.resource = null; t.dens = 1; t.trap = tr; }
+    this.mines = this.traps.filter((tr) => tr.type === 'mine');   // фильтр-ссылка (ТЕ ЖЕ объекты) — для drawMines/drawHazardDebug
+    this.genUnstable();   // нестабильная порода (после серверов/артефактов/роботов/мин/ЛОВУШЕК/фундамента — их не помечаем)
   }
   // Помечаем часть породы НИЖЕ города как «нестабильную» (падающие валуны) — НЕ большими кластерами,
   // а МЕЛКИМИ группами по 1-3 соседних тайла, разбросанными так, чтобы покрытие было ~20%. Только где
   // СНИЗУ есть опора на старте (не висит над пустотой сразу) и не круста/сервер/фундамент.
   genUnstable() {
     const inCeil = (y) => { for (const c of CEILING_CRUSTS) if (y >= c.y0 && y <= c.y1) return true; return false; };
-    const eligible = (t, y) => t && t.type === ROCK && !t.server && !t.artifact && !t.robot && !t.mine && !(y >= CRUST_Y0 && y <= CRUST_Y1) && !inCeil(y);
+    const eligible = (t, y) => t && t.type === ROCK && !t.server && !t.artifact && !t.robot && !t.trap && !(y >= CRUST_Y0 && y <= CRUST_Y1) && !inCeil(y);
     for (let y = CAVE_FLOOR_Y + 2; y < MAP_H - 1; y++)
       for (let x = 0; x < MAP_W; x++) {
         const t = this.tiles[y * MAP_W + x];
@@ -410,7 +536,7 @@ class World {
   }
   setAir(x, y, noTrigger) {
     const t = this.tileAt(x, y);
-    if (t.type === ROCK) { if (t.server) t.server.dug = true; if (t.artifact) t.artifact.dug = true; if (t.robot) t.robot.dug = true; if (t.mine) t.mine.dug = true; t.type = AIR; t.hardness = 0; t.dig = 0; t.resource = null; t.dug = true; } // dug=прорытый ход (не природная пустота) — враги избегают своих ходов; сервер → «хлам»; артефакт → откопан (модалка по близости юнита)
+    if (t.type === ROCK) { if (t.server) t.server.dug = true; if (t.artifact) t.artifact.dug = true; if (t.robot) t.robot.dug = true; if (t.trap) t.trap.dug = true; t.type = AIR; t.hardness = 0; t.dig = 0; t.resource = null; t.dug = true; } // dug=прорытый ход (не природная пустота) — враги избегают своих ходов; сервер → «хлам»; артефакт → откопан (модалка по близости юнита)
     if (noTrigger) return;             // ВИНТОВОЙ бур: укреплённый ход — НЕ осыпает породу/валуны сверху
     const a = this.tileAt(x, y - 1);   // клетка СВЕРХУ потеряла опору? нестабильная/валун — в очередь на срыв (falling.js)
     if (a.type === ROCK && (a.unstable || a.boulder)) this.unstableTriggers.push({ x: wrapX(x), y: y - 1 });

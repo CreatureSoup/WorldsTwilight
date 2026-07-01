@@ -70,3 +70,35 @@ function drawRadarCompass(ctx, w, x, y) {
   else { ctx.fillStyle = PAL.ash; ctx.fillText(STR.hud.contam.scanBg, x + 60, cy); }
   ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
 }
+
+// Виджет ДЕТЕКТОРА ДАННЫХ (реликт ГОРОДА data_detector) — ТОЧНЫЙ компас-роза: стрелка-пеленг к ближайшему
+// серверу с неизвлечёнными данными + дистанция. Тон кобальт (системный голос ИИ). Состояние — game.dataCompass
+// (artifacts_active.updateDataDetector). Намеренно ИНОЙ язык, чем у «живого» детектора загрязнения. Перф: без filter/офскринов.
+const DATADET_W = 188, DATADET_H = 56;
+function drawDataCompass(ctx, dc, x, y) {
+  techPanel(ctx, x, y, DATADET_W, DATADET_H, { accent: PAL.cobalt, label: STR.hud.dataDet.title, bolts: false });
+  const cx = x + 36, cy = y + 34, R = 13, has = dc.has, sig = Math.max(0, Math.min(1, dc.sig));
+  const pulse = 0.5 + 0.5 * Math.sin(dc.t * 4);
+  ctx.fillStyle = 'rgba(6,12,20,0.55)'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283); ctx.fill();   // тёмная линза
+  ctx.strokeStyle = has ? PAL.cobalt : PAL.bronze; ctx.globalAlpha = 0.5; ctx.lineWidth = 1;          // тики компас-розы
+  for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, r0 = R - 2.5, r1 = R; ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1); ctx.stroke(); }
+  ctx.globalAlpha = 1;
+  if (has) {                                              // СТРЕЛКА-пеленг к данным
+    const a = dc.dir, al = R - 2, hot = sig > 0.6 ? '#8fd0ff' : PAL.cobalt;
+    ctx.strokeStyle = hot; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx - Math.cos(a) * 4, cy - Math.sin(a) * 4); ctx.lineTo(cx + Math.cos(a) * al, cy + Math.sin(a) * al); ctx.stroke();
+    const tx = cx + Math.cos(a) * al, ty = cy + Math.sin(a) * al;   // наконечник
+    ctx.fillStyle = hot; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.cos(a - 0.5) * 4.5, ty - Math.sin(a - 0.5) * 4.5); ctx.lineTo(tx - Math.cos(a + 0.5) * 4.5, ty - Math.sin(a + 0.5) * 4.5); ctx.closePath(); ctx.fill();
+    ctx.lineCap = 'butt';
+  } else {                                               // нет данных — медленный поисковый штрих
+    ctx.globalAlpha = 0.3 + 0.2 * pulse; ctx.strokeStyle = PAL.bronze; ctx.lineWidth = 1.5;
+    const a = dc.t * 0.8; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * (R - 3), cy + Math.sin(a) * (R - 3)); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = has ? PAL.cobalt : PAL.ash; ctx.globalAlpha = has ? 0.6 + 0.4 * pulse : 0.5;          // ядро-глиф (диск данных)
+  ctx.beginPath(); ctx.arc(cx, cy, 2.4, 0, 6.283); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = has ? PAL.cobalt : PAL.bronze; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283); ctx.stroke();   // обод
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = `9px ${FONT_MONO}`;
+  if (has) { ctx.fillStyle = PAL.cobalt; ctx.fillText(STR.hud.dataDet.dist(Math.round(dc.dist)), x + 60, cy); }
+  else { ctx.fillStyle = PAL.ash; ctx.fillText(STR.hud.dataDet.none, x + 60, cy); }
+  ctx.textBaseline = 'alphabetic';
+}
