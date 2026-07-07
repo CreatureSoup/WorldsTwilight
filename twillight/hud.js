@@ -4,6 +4,23 @@
 // (рамка + уголки + болты + шапка label/serial + опц. PCB-пальцы), акцент по смыслу,
 // пульс-LED индикаторы. Шрифты Tektur/JetBrains Mono/Plex, палитра PAL.
 function blinkA() { return 0.35 + 0.55 * (0.5 + 0.5 * Math.sin(performance.now() / 320)); }
+// Обрезать строку по ширине с «…» (лог: длинные записи не вылезают из правого угла в печать/панель действий).
+function _logTrunc(ctx, s, maxW) {
+  if (ctx.measureText(s).width <= maxW) return s;
+  let lo = 1, hi = s.length;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (ctx.measureText(s.slice(0, m) + '…').width <= maxW) lo = m; else hi = m - 1; }
+  return s.slice(0, lo) + '…';
+}
+// ПЕРЕКЛЮЧАТЕЛЬ-КАПСУЛА ВКЛ/ВЫКЛ — ПЕРЕИСПОЛЬЗУЕМЫЙ элемент (как в «Обнаружении угроз»): рамка + бегунок + подпись. Возвращает свой rect.
+function hudToggleSwitch(ctx, sx, sy, on) {
+  const sw = 30, sh = 14;
+  ctx.fillStyle = on ? 'rgba(200,226,90,0.16)' : PAL.earth; ctx.fillRect(sx, sy, sw, sh);
+  ctx.strokeStyle = on ? PAL.toxic : PAL.bronze; ctx.lineWidth = 1; ctx.strokeRect(sx + 0.5, sy + 0.5, sw - 1, sh - 1);
+  ctx.font = `7px ${FONT_MONO}`; ctx.textBaseline = 'middle';
+  if (on) { ctx.fillStyle = PAL.toxic; ctx.textAlign = 'left'; ctx.fillText(STR.hud.toggle.on, sx + 5, sy + sh / 2 + 0.5); ctx.fillRect(sx + sw - 9, sy + 2, 7, sh - 4); }   // надпись слева, бегунок справа
+  else { ctx.fillStyle = PAL.ash; ctx.fillRect(sx + 2, sy + 2, 7, sh - 4); ctx.textAlign = 'right'; ctx.fillText(STR.hud.toggle.off, sx + sw - 4, sy + sh / 2 + 0.5); }   // бегунок слева, надпись справа
+  return { x: sx, y: sy, w: sw, h: sh };
+}
 function pulseDot(ctx, x, y, r, color) { ctx.save(); ctx.globalAlpha = blinkA(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill(); ctx.restore(); }
 // мигающий КВАДРАТ (центр x,y, сторона s) — буллет директивы/индикатор.
 function pulseSquare(ctx, x, y, s, color) { ctx.save(); ctx.globalAlpha = blinkA(); ctx.fillStyle = color; ctx.fillRect(Math.round(x - s / 2), Math.round(y - s / 2), s, s); ctx.restore(); }
@@ -85,6 +102,7 @@ function drawPrintHud(ctx, game, W, H) {
   ctx.save();   // ⚠️ ИЗОЛЯЦИЯ: внутри меняем globalAlpha (тусклые карточки/кнопка) — без restore утечка в след. кадр (мир/туман на 0.4 = «туман пропал»)
   const RED = PAL.blood || '#ff3a22', REDB = PAL.bloodBright || '#ff6a4a';
   const types = game.printTypes(), L = printPanelLayout(W, H, types);
+  if (typeof HudLayout !== 'undefined') HudLayout.reserve('bl', L.w, L.h);   // застолбить низ зоны bl → бур-статус стекается НАД панелью печати (без наложения)
   techPanel(ctx, L.x, L.y, L.w, L.h, { accent: RED, label: STR.hud.print.title });
   drawCargoToggle(ctx, L.toggle, !!game.hoardCargo);   // тумблер копить/отдавать — только при установленном принтере (плашка видна)
   // имя наведённого чертежа рядом с заголовком — цветом самого объекта (отличным от красного заголовка)
@@ -241,8 +259,9 @@ function drawCrtOverlay(ctx, W, H) {
 }
 
 // Геометрия левого стека HUD (ЮНИТ → ГРУЗ → БАНК) — одна на рендер, клик-хит и переразметку под-виджетов.
-const HUD_VX = 10, HUD_VY = 8, HUD_VW = 188, HUD_VH = 58;          // ЮНИТ
+const HUD_VX = 10, HUD_VY = 8, HUD_VW = 188, HUD_VH = 42;          // ЮНИТ (компактный: шапка + HP, ≈ высота блока таймера гибернации)
 const HUD_GY = HUD_VY + HUD_VH + 6, HUD_GH = 46, HUD_BANK_GH = 46; // ГРУЗ исходной высоты (тумблер переехал в плашку ПЕЧАТЬ), БАНК
+let _logMeasureSig = '', _logMeasureW = 0;   // кэш ширины лога событий (measureText) — пересчёт только при смене содержимого лога
 function hudLeftBottom(hasBank) { return HUD_GY + HUD_GH + 6 + (hasBank ? HUD_BANK_GH + 6 : 0); }            // низ стека → якорь для виджетов ниже (радар)
 // Тумблер «копить ресурс» (низ плашки ПЕЧАТЬ) — стандартная ВКЛ/ВЫКЛ-логика как у тумблера ПУТЬ:
 // пилюля + ЗАЛИТЫЙ глиф/акцент = ВКЛ (копим), КОНТУР/тускло = ВЫКЛ (сдаём городу). Подпись = режим.
@@ -266,44 +285,46 @@ function drawBorerStatus(ctx, game, W, H) {
   const u = game.unit; if (!u || !u.stats || !u.stats.screw) return;
   const max = game.borerMax ? game.borerMax() : 2;
   const deployed = (game.borers && game.borers.length) || 0, carried = Math.max(0, max - deployed);
-  const x = 14, y = H - 96;
+  const depleted = (game.borers || []).reduce((n, b) => n + (b.depleted ? 1 : 0), 0);   // разряженные щиты (лежат, ждут подзарядки)
+  const active = deployed - depleted;                          // слоты по состояниям: [несомые][в ходу][РАЗРЯД]
+  let x, y;   // зона bl (низ-лево): стекается НАД панелью печати, если та активна (иначе — у самого низа). Раскладка — hud_layout.js
+  if (typeof HudLayout !== 'undefined') { const box = HudLayout.slot('bl', 140, 44); x = box.x + 2; y = box.y + 8; }
+  else { x = 14; y = H - 96; }
   ctx.save(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter; ctx.fillText(STR.hud.borer.title, x, y);
   const iy = y + 9, iw = 26, ih = 12, gap = 7, r = ih / 2;
-  for (let i = 0; i < max; i++) {                              // первые `carried` слотов — несомые, остальные — в ходу
-    const ix = x + i * (iw + gap), out = i >= carried, cx0 = ix + r, cx1 = ix + iw - r, cyc = iy + r;
+  const dead = depleted > 0 && Math.sin(performance.now() / 220) > 0;   // РАЗРЯД мигает (зов о подзарядке, как «!» у щита в мире)
+  for (let i = 0; i < max; i++) {                              // порядок слотов: несомые → в ходу → РАЗРЯД (красный)
+    const ix = x + i * (iw + gap), cx0 = ix + r, cx1 = ix + iw - r, cyc = iy + r;
+    const st = i < carried ? 'carry' : (i < carried + active ? 'run' : 'dead');   // состояние слота
     ctx.beginPath();
     ctx.moveTo(cx0, iy); ctx.lineTo(cx1, iy); ctx.arc(cx1, cyc, r, -Math.PI / 2, Math.PI / 2);
     ctx.lineTo(cx0, iy + ih); ctx.arc(cx0, cyc, r, Math.PI / 2, Math.PI * 1.5); ctx.closePath();
-    ctx.fillStyle = out ? 'rgba(154,208,160,0.08)' : 'rgba(154,208,160,0.85)'; ctx.fill();
-    ctx.strokeStyle = out ? 'rgba(154,208,160,0.45)' : '#cfeccf'; ctx.lineWidth = 1.3; ctx.stroke();
-    ctx.fillStyle = out ? 'rgba(207,236,207,0.5)' : '#16241a'; ctx.beginPath(); ctx.arc(cx1 - 1.5, cyc, 1.6, 0, 6.283); ctx.fill();
+    ctx.fillStyle = st === 'carry' ? 'rgba(154,208,160,0.85)' : st === 'dead' ? 'rgba(208,64,47,0.16)' : 'rgba(154,208,160,0.08)'; ctx.fill();
+    ctx.strokeStyle = st === 'carry' ? '#cfeccf' : st === 'dead' ? (dead ? '#ff6a4a' : '#d0402f') : 'rgba(154,208,160,0.45)'; ctx.lineWidth = 1.3; ctx.stroke();
+    ctx.fillStyle = st === 'carry' ? '#16241a' : st === 'dead' ? '#ff6a4a' : 'rgba(207,236,207,0.5)'; ctx.beginPath(); ctx.arc(cx1 - 1.5, cyc, 1.6, 0, 6.283); ctx.fill();
   }
   ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.ash;
-  ctx.fillText(STR.hud.borer.counts(carried, deployed), x, iy + ih + 11);
+  ctx.fillText(STR.hud.borer.counts(carried, active, depleted), x, iy + ih + 11);   // В ХОДУ = активные (без разряженных) — совпадает с зелёными слотами
   ctx.restore();
 }
 
 function drawHUD(ctx, world, unit, inv, dbg, W, H) {
-  const depth = Math.max(0, unit.tileY - CAVE_FLOOR_Y);
-
-  // ===== TOP-LEFT: статус юнита (gold) — без энергии (упрощённая модель) =====
+  // ===== TOP-LEFT: статус юнита (gold) — КОМПАКТНО: только шапка + HP (глубина/скорость/страта убраны, высота ≈ блока таймера) =====
   const vx = HUD_VX, vy = HUD_VY, vw = HUD_VW, vh = HUD_VH;
   let cy = techPanel(ctx, vx, vy, vw, vh, { accent: PAL.gold, label: STR.hud.unit.title, serial: 'TR-014' });
-  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = PAL.pewter; ctx.font = `7px ${FONT_MONO}`;
-  ctx.fillText(STR.hud.unit.depthLine(world.layerName(unit.tileY), depth, unit.effectiveSpeed().toFixed(1)), vx + 11, cy + 8);
   const bx = vx + 11, bw = vw - 22, bh = 9;
-  hudBar(ctx, bx, cy + 24, bw, bh, unit.hp / unit.stats.maxHp, STR.hud.unit.hp, `${Math.round(unit.hp)}/${unit.stats.maxHp}`, 'hp');
+  hudBar(ctx, bx, cy + 8, bw, bh, unit.hp / unit.stats.maxHp, STR.hud.unit.hp, `${Math.round(unit.hp)}/${unit.stats.maxHp}`, 'hp');
 
-  // ===== TOP-LEFT (под статусом): груз (toxic) — фигурки ресурсов + счётчик + тумблер копить/отдавать =====
+  // ===== TOP-LEFT (под статусом): груз (toxic) — фигурки ресурсов + счётчик; сворачивается язычком (dockShift) =====
   const gy = HUD_GY, gh = HUD_GH, used = inv.cargoUsed(), cap = inv.cargoCapacity();
-  const gcy = techPanel(ctx, vx, gy, vw, gh, { accent: PAL.toxic, label: STR.hud.cargo.title, serial: `${used}/${cap}`, bolts: false });
+  const cgx = (typeof HudLayout !== 'undefined') ? HudLayout.dockShift('cargo', vx, gy, vw, gh, PAL.toxic) : vx;   // slid-x при сворачивании
+  const gcy = techPanel(ctx, cgx, gy, vw, gh, { accent: PAL.toxic, label: STR.hud.cargo.title, serial: `${used}/${cap}`, bolts: false });
   const counts = inv.cargoCounts(), keys = Object.keys(RESOURCE_DEFS);
   const cellW = (vw - 24) / keys.length, ry = gcy + 9;
   ctx.textBaseline = 'middle';
   keys.forEach((key, i) => {
-    const n = counts[key] || 0, sx = vx + 14 + cellW * i;
+    const n = counts[key] || 0, sx = cgx + 14 + cellW * i;
     ctx.globalAlpha = n > 0 ? 1 : 0.32; paintResource(ctx, key, sx + 6, ry, 6, 7); ctx.globalAlpha = 1;
     ctx.fillStyle = n > 0 ? PAL.chalk : PAL.ash; ctx.font = `bold 11px ${FONT_MONO}`; ctx.textAlign = 'left';
     ctx.fillText(`${n}`, sx + 17, ry);
@@ -312,12 +333,13 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
 
   // ===== БАНК ГОРОДА (узел ГОРОД·Счётчик ресурсов): сданные ресурсы — gated `metaHas('amb_hub')` в game =====
   if (dbg.bank) {
-    const by = gy + gh + 6, bgh = HUD_BANK_GH;   // авто-сдвиг под (потяжелевшую) плашку ГРУЗ
-    const bcy = techPanel(ctx, vx, by, vw, bgh, { accent: PAL.amber, label: STR.hud.bank.title, bolts: false });
+    const by = gy + gh + 6, bgh = HUD_BANK_GH;   // авто-сдвиг под плашкой ГРУЗ
+    const bkx = (typeof HudLayout !== 'undefined') ? HudLayout.dockShift('bank', vx, by, vw, bgh, PAL.amber) : vx;   // slid-x при сворачивании
+    const bcy = techPanel(ctx, bkx, by, vw, bgh, { accent: PAL.amber, label: STR.hud.bank.title, bolts: false });
     const bry = bcy + 9;
     ctx.textBaseline = 'middle';
     keys.forEach((key, i) => {
-      const n = dbg.bank[key] || 0, sx = vx + 14 + cellW * i;
+      const n = dbg.bank[key] || 0, sx = bkx + 14 + cellW * i;
       ctx.globalAlpha = n > 0 ? 1 : 0.32; paintResource(ctx, key, sx + 6, bry, 6, 7); ctx.globalAlpha = 1;
       ctx.fillStyle = n > 0 ? PAL.chalk : PAL.ash; ctx.font = `bold 11px ${FONT_MONO}`; ctx.textAlign = 'left';
       ctx.fillText(`${n}`, sx + 17, bry);
@@ -366,18 +388,22 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
   // ===== BOTTOM-RIGHT угол: лог событий — ВСЕГДА виден (пустое состояние на старте) =====
   {
     const rx = W - 12, last = (dbg.log && dbg.log.length) ? dbg.log.slice(-3) : null;
+    const logMaxW = Math.min(250, W * 0.42);                    // КАП ширины лога — держит его в правом углу, вне печати/панели действий
     ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
     ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.gold; ctx.fillText(STR.hud.log.title, rx, H - 54);
-    if (last) {
-      last.forEach((e, i) => {
-        ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter;
-        ctx.fillText(STR.hud.log.entry(e.cycle, e.text), rx, H - 40 + i * 13);
-      });
-    } else {
-      ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.ash;
-      ctx.fillText(STR.hud.log.empty, rx, H - 40);
-    }
+    if (last) last.forEach((e, i) => { ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter; ctx.fillText(_logTrunc(ctx, STR.hud.log.entry(e.cycle, e.text), logMaxW), rx, H - 40 + i * 13); });
+    else { ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.ash; ctx.fillText(STR.hud.log.empty, rx, H - 40); }
     ctx.textAlign = 'left';
+    // ширина лога для mark() — measureText КЭШИРУЕТСЯ по сигнатуре содержимого (лог меняется редко → не мерим каждый кадр); учитываем обрезку
+    const sig = last ? last.map((e) => e.cycle + ':' + e.text).join('|') : '';
+    if (sig !== _logMeasureSig) {
+      ctx.font = `8px ${FONT_MONO}`; let mw = ctx.measureText(STR.hud.log.title).width;
+      if (last) last.forEach((e) => { ctx.font = `7px ${FONT_MONO}`; mw = Math.max(mw, ctx.measureText(_logTrunc(ctx, STR.hud.log.entry(e.cycle, e.text), logMaxW)).width); });
+      else { ctx.font = `7px ${FONT_MONO}`; mw = Math.max(mw, ctx.measureText(STR.hud.log.empty).width); }
+      _logMeasureSig = sig; _logMeasureW = mw;
+    }
+    // лог занимает низ-право → панель действий (drawActionBar) обходит его при центрировании
+    if (typeof HudLayout !== 'undefined') HudLayout.mark(rx - _logMeasureW - 4, H - 62, _logMeasureW + 8, 52, 'event-log');
   }
 
   // ===== BOTTOM: подсказка управления =====

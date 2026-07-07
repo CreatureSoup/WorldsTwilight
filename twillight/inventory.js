@@ -19,6 +19,7 @@ const SLOT_META = {
   scanner: { kind: 'sensor', label: STR.inventory.category.scanner.slot, lx:  0.5,  ly: -1.1 },   // вверх-ВПРАВО: не лезет на пустой круг доп-слота (тот вверху-слева)
   cargo:   { kind: 'hold',   label: STR.inventory.category.cargo.slot,   lx: -1,    ly:  0   },   // влево
   aux:     { kind: 'aux',    label: STR.inventory.category.aux.slot,     lx: -1.3, ly: -0.6 },   // доп-слот (экран помех) — влево-ВВЕРХ (не лезть на трюм); показ гейтнут _categoryActive
+  turret:  { kind: 'turret', label: STR.inventory.category.turret.slot,  lx:  1.2, ly: -0.7 },   // авто-турель (только у «Канонира») — вправо-ВВЕРХ
   // engine НЕ показываем на сборке: двигатель — параметр КОРПУСА (стат остаётся, слот/галерея/выноска скрыты).
 };
 
@@ -50,8 +51,8 @@ class Inventory {
     const optional = HULL_DEFS[this.hull].optional || [];
     for (const slot of HULL_DEFS[this.hull].slots) {
       if (optional.includes(slot)) continue;   // доп-слот по умолчанию ПУСТ (опциональный)
-      for (const key in MODULE_DEFS) if (MODULE_DEFS[key].category === slot
-        && (!MODULE_DEFS[key].unlock || (typeof metaHas === 'function' && metaHas(MODULE_DEFS[key].unlock)))) { this.modules[slot] = key; break; }   // дефолт — первый НЕзагейченный вариант
+      for (const key in MODULE_DEFS) if (MODULE_DEFS[key].category === slot && this._moduleFitsHull(key)
+        && (!MODULE_DEFS[key].unlock || (typeof metaHas === 'function' && metaHas(MODULE_DEFS[key].unlock)))) { this.modules[slot] = key; break; }   // дефолт — первый НЕзагейченный вариант, подходящий корпусу
     }
   }
   // Сохранить/восстановить ПОСЛЕДНЮЮ сборку между забегами (`save.build`): по умолчанию ставится то, что было
@@ -65,16 +66,43 @@ class Inventory {
     if (!b.modules) return;
     for (const slot in b.modules) {                        // переставляем сохранённый модуль, ЕСЛИ он валиден для слота и открыт
       const m = b.modules[slot], def = MODULE_DEFS[m];
-      if (def && def.category === slot && (!def.unlock || (typeof metaHas === 'function' && metaHas(def.unlock))) && this._categoryActive(slot)) this.modules[slot] = m;   // доп-слот восстанавливаем только если он открыт (ядро core)
+      if (def && def.category === slot && this._moduleFitsHull(m) && (!def.unlock || (typeof metaHas === 'function' && metaHas(def.unlock))) && this._categoryActive(slot)) this.modules[slot] = m;   // доп-слот восстанавливаем только если он открыт (ядро core) и подходит корпусу
     }
   }
+  // Модуль подходит текущему корпусу? `hullOnly` ограничивает вариант конкретным корпусом (осадный луч — только «Канонир»).
+  _moduleFitsHull(type) { const d = MODULE_DEFS[type]; return !d || !d.hullOnly || d.hullOnly === this.hull; }
   // Слот показывается на сборке? Обязательные — всегда; опциональные (доп-слот) — если установлен ИЛИ есть доступный модуль.
   _categoryActive(cat) {
     if (!(HULL_DEFS[this.hull].optional || []).includes(cat)) return true;   // обязательные слоты — всегда
     if (!(typeof metaHas === 'function' && metaHas('core'))) return false;   // ДОП-СЛОТ открывает СТАРТОВЫЙ узел ЯДРО (core): нет ядра → слот скрыт, доп-модули ставить некуда
     if (this.modules[cat]) return true;
-    return Object.keys(MODULE_DEFS).some((k) => MODULE_DEFS[k].category === cat && (!MODULE_DEFS[k].unlock || (typeof metaHas === 'function' && metaHas(MODULE_DEFS[k].unlock))));
+    return Object.keys(MODULE_DEFS).some((k) => MODULE_DEFS[k].category === cat && this._moduleFitsHull(k) && (!MODULE_DEFS[k].unlock || (typeof metaHas === 'function' && metaHas(MODULE_DEFS[k].unlock))));
   }
+  // ---- выбор КОРПУСА (на экране сборки) ----
+  // Доступные корпуса: «Тор» всегда; «Канонир» — после узла print_gun. «Скиталец» — легаси (в выбор не даём).
+  availableHulls() {
+    const list = ['core'];
+    if (typeof metaHas === 'function' && metaHas('print_gun') && HULL_DEFS.gun) list.push('gun');
+    return list;
+  }
+  setHull(h) {
+    if (!HULL_DEFS[h] || h === this.hull) return;
+    this.hull = h; this.defaultBuild();
+    this._plRig = null; this._plSig = null;   // сброс кэша нога-рига (габарит/ноги зависят от корпуса)
+    this.scrollY = 0;
+  }
+  // Раскладка кнопок выбора КОРПУСА: нижняя полоса ЛЕВОЙ колонки (под превью, `hullBand`), делится поровну
+  // между доступными корпусами. Скрыт при одном доступном корпусе. Геометрия — из this.layout (computeLayout выше).
+  computeHullTabs() {
+    const hulls = this.availableHulls();
+    if (hulls.length < 2) return [];   // один корпус — селектор скрыт
+    const L = this.layout; if (!L || !L.hullBand) return [];
+    const b = L.hullBand, gap = 10, n = hulls.length, tw = (b.w - gap * (n - 1)) / n;
+    let x = b.x;
+    return hulls.map((h) => { const r = { hull: h, x: Math.round(x), y: b.y, w: Math.round(tw), h: b.h }; x += tw + gap; return r; });
+  }
+  hullTabAt(x, y) { for (const t of this.computeHullTabs()) if (this.inRect(x, y, t)) return t; return null; }
+
   reset() { this.loadBuild(); this.resetCargo(); this.unit = null; this.drag = null; this.scrollY = 0; }   // сборка ПЕРЕНОСИТСЯ между забегами (прошлый забег = дефолт)
   resetCargo() { for (const k in this.cargo) this.cargo[k] = 0; }
 
@@ -83,9 +111,11 @@ class Inventory {
     const hull = HULL_DEFS[this.hull], optional = hull.optional || [];
     const s = { maxHp: hull.hp, moveSpeed: 0, digMult: 0, scanR: 0, capacity: 0, healRate: 0, noiseResist: 0, printer: 0, printReach: 0,
                 canDig: false, canMove: false };
+    if (hull.builtinDrill) { s.digMult += hull.builtinDrill; s.canDig = true; s.builtinDrill = true; }   // «Канонир»: встроенный бур-кольцо (нет слота бура)
     for (const cat in this.modules) {
       const t = this.modules[cat]; if (!t) continue;
       const m = MODULE_DEFS[t]; if (!m) continue;
+      if (!this._moduleFitsHull(t)) continue;   // модуль не для этого корпуса (осадный на «Тор») — не учитываем
       if (m.digMult)  { s.digMult += m.digMult;  s.canDig = true; }
       if (m.impulse)  { s.impulse = true; s.altDrill = true; s.canDig = true; }   // импульсный бур: пассивно не грызёт, но «умеет копать» (рендер бура + волна)
       if (m.kinetic)  { s.kinetic = true; s.altDrill = true; s.canDig = true;   // кинетический бур: обычный grind с разгоном (unit.js)
@@ -101,10 +131,10 @@ class Inventory {
       if (m.noiseResist) s.noiseResist += m.noiseResist; // экран помех (доп-слот)
       if (m.printer) s.printer += m.printer;             // модуль печати (доп-слот)
       if (m.printReach) s.printReach = Math.max(s.printReach, m.printReach);   // базовый радиус печати
-      if (m.hack) s.hack = true;                         // модуль взлома (доп-слот): взлом/пробуждение города (hack.js)
+      if (m.hack) { s.hack = true; if (typeof metaHas === 'function' && metaHas('kart_stun')) s.jam = true; }   // МОДУЛЬ ВЗЛОМА (доп-слот): взлом/пробуждение города (hack.js) + узел kart_stun даёт ВЗЛОМ ЮНИТОВ (jam.js) — отдельного модуля НЕТ
       if (m.siege) s.siege = true;                       // осадный модуль (доп-слот): пробойный луч по гнезду (siege.js)
       if (m.stealth) s.stealth = true;                   // стелс-модуль (доп-слот): невидимость (stealth.js)
-      if (m.jam) s.jam = true;                           // взлом юнитов (доп-слот): импульс-глушение врагов (jam.js)
+      if (m.turret) s.turret = true;                     // авто-турель канонира (слот turret) — cannon.js
     }
     // Готов к старту, когда заняты все ОБЯЗАТЕЛЬНЫЕ слоты (опциональные — доп-слот — можно пустыми).
     const req = hull.slots.filter((cat) => !optional.includes(cat));
@@ -134,17 +164,21 @@ class Inventory {
   computeLayout(W, H) {
     const headerH = 90;
     const bx = Math.round(W * 0.04), by = headerH, bw = Math.round(W * 0.54);
-    const bh = Math.round(H - headerH - 200);
+    const statsH = 84, colGap = 8;
+    const btnH = 48, btnY = H - 22 - btnH;   // ОБЩАЯ нижняя полоса кнопок: СТАРТ (под галереей, справа) / выбор КОРПУСА (под превью, слева)
+    // блупринт растёт вниз так, чтобы СВОДКА встала на 12px над полосой кнопок (by + bh + gap + statsH = btnY − 12)
+    const bh = (btnY - 12) - statsH - colGap - by;
     // центр рига чуть НИЖЕ середины панели: модули/бур торчат вверх сильнее, чем ноги вниз
     const blueprint = { x: bx, y: by, w: bw, h: bh, cx: bx + bw / 2, cy: by + bh / 2 + Math.round(bh * 0.06) };
-    const stats = { x: bx, y: by + bh + 8, w: bw, h: 84 };
+    const stats = { x: bx, y: by + bh + colGap, w: bw, h: statsH };
     const back = { x: bx, y: 20, w: 40, h: 36 };   // «← назад» — лаконичная стрелка, как в мете/кодексе
     const lx = bx + bw + 18, ly = by;
     const lw = Math.max(280, W - lx - Math.round(W * 0.04));
-    const lh = bh + 8 + 84;
+    const lh = (btnY - 12) - by;   // галерея — до 12px над полосой кнопок
     const list = { x: lx, y: ly, w: lw, h: lh };
-    const start = { x: bx, y: H - 64, w: bw, h: 50 };
-    this.layout = { blueprint, stats, list, start, back, W, H };
+    const start = { x: lx, y: btnY, w: lw, h: btnH };   // СТАРТ — под галереей, той же ширины
+    const hullBand = { x: bx, y: btnY, w: bw, h: btnH };   // выбор КОРПУСА — под превью (бывшее место старта)
+    this.layout = { blueprint, stats, list, start, back, hullBand, W, H };
     return this.layout;
   }
   inRect(x, y, r) { return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; }
@@ -157,11 +191,13 @@ class Inventory {
       hull: this.hull, dx: 1, dy: 0, faceX: 1, state: IDLE, crouchT: 0, noAnim: false, px: 0, py: 0,
       modules: this.modules,   // слот→модуль: превью показывает спрайт конкретного варианта
       stats: {
-        canDig:   allOn || !!this.modules.drill,
+        canDig:   allOn || !!this.modules.drill || !!(HULL_DEFS[this.hull] && HULL_DEFS[this.hull].builtinDrill),   // «Канонир»: бур встроен
         canMove:  allOn || !!this.modules.engine,
         scanR:    (allOn || this.modules.scanner) ? 1 : 0,
         capacity: (allOn || this.modules.cargo)   ? 1 : 0,
         noiseResist: (allOn || this.modules.aux)  ? 1 : 0,   // доп-слот: деталь видна при установленном модуле
+        turret:   (allOn || this.modules.turret)  ? 1 : 0,   // авто-турель (слот turret канонира)
+        screw: !!(this.modules.drill && typeof MODULE_DEFS !== 'undefined' && MODULE_DEFS[this.modules.drill] && MODULE_DEFS[this.modules.drill].screw),   // ВИНТОВОЙ бур: превью прячет деталь-бур и рисует ЩИТ (drawMountedBorer)
       },
     };
   }
@@ -170,14 +206,24 @@ class Inventory {
   blueprintScale(L) {
     const rig = resolveUnitRig(0, 0, this._dummyUnit(true), 0), def = UNIT_DEFS[this.hull] || {};
     let maxR = rig.R * 1.5;
-    if (def.kind === 'ring') {   // кольцо: габарит по выносу модулей (rig.parts тут NaN), + ноги
+    if (def.kind === 'wheel') {   // моно-колесо: габарит = кольцо-зубья/корпус (СПРАЙТЫ крупнее геометрии) + модули/турель ПО ВЫНОСУ + их спрайты
+      maxR = Math.max(maxR, (def.toothR || WHEEL_TOOTH_R) * 1.1 * rig.R);
+      for (const key of ['wheel:tooth', 'wheel:body']) { const sp = (typeof PART_SPRITES !== 'undefined') && PART_SPRITES[key]; if (sp && sp.w) maxR = Math.max(maxR, Math.hypot(sp.w, sp.h) / 2); }
+      for (const p of def.parts) {
+        if (p.kind === 'leg') continue;
+        const sp = (typeof PART_SPRITES !== 'undefined') && (PART_SPRITES[this.hull + ':' + p.id] || PART_SPRITES[p.id]);   // спрайт детали (крупнее геометрии)
+        const half = (sp && sp.w) ? Math.hypot(sp.w, sp.h) / 2 : rig.R * (p.kind === 'turret' ? 2 : 0.8);
+        maxR = Math.max(maxR, (p.rad || 0) * rig.R + half);
+      }
+    } else if (def.kind === 'ring') {   // кольцо: габарит по выносу модулей (rig.parts тут NaN), + ноги
       for (const p of def.parts) if (p.kind !== 'leg') maxR = Math.max(maxR, ((p.rad || def.ringR || 1) + 1.1) * rig.R);
     } else {
       for (const p of rig.parts) maxR = Math.max(maxR, Math.hypot(p.x, p.y) + rig.R);
     }
     for (const lg of rig.legs) for (const sg of lg.segs) maxR = Math.max(maxR, Math.hypot(sg.lx, sg.ly), Math.hypot(sg.jx, sg.jy));
     const b = L.blueprint, half = Math.min(b.w, b.h - 30) / 2;
-    return Math.max(1, half * 1.22 / maxR);   // 1.22: крупно, но модули/бур не режутся кромкой панели (1.55 обрезал верх)
+    const fill = (def.kind === 'wheel') ? 1.28 : 1.22;   // колесо: крупнее в панели (maxR по полудиагонали спрайтов даёт запас)
+    return Math.max(1, half * fill / maxR);   // 1.22: крупно, но модули/бур не режутся кромкой панели (1.55 обрезал верх)
   }
   // t — общее время для idle-анимации (чтобы кольца гнёзд следовали за деталями).
   _rigTime() { return performance.now() / 1000; }
@@ -228,8 +274,8 @@ class Inventory {
     const b = L.blueprint, S = this.blueprintScale(L), def = UNIT_DEFS[this.hull];
     const out = [];
     const push = (cat, x, y) => out.push({ category: cat, label: SLOT_META[cat].label, lx: SLOT_META[cat].lx, ly: SLOT_META[cat].ly, x, y });
-    if (def && def.kind === 'ring') {
-      const R = (TILE - 8) / 2, bo = (this._plRig && this._plRig.bodyOff) || { x: 0, y: 0 };   // тот же сдвиг корпуса на щупальцах, что в превью
+    if (def && (def.kind === 'ring' || def.kind === 'wheel')) {   // кольцо/колесо: модули по ang/rad вокруг центра
+      const R = (TILE - 8) / 2, bo = (this._plRig && this._plRig.bodyOff) || { x: 0, y: 0 };   // сдвиг корпуса на щупальцах (у колеса ног нет → 0)
       for (const cat in SLOT_META) {
         if (!this._categoryActive(cat)) continue;   // доп-слот скрыт, пока нет модуля
         const p = def.parts.find((pp) => pp.kind === SLOT_META[cat].kind); if (!p) continue;
@@ -256,7 +302,7 @@ class Inventory {
   CARD_H() { return 116; }
   computeCards() {
     const L = this.layout; if (!L) return { cards: [], headers: [], contentH: 0 };
-    const labels = { drill: STR.inventory.category.drill.gallery, engine: STR.inventory.category.engine.gallery, scanner: STR.inventory.category.scanner.gallery, cargo: STR.inventory.category.cargo.gallery, aux: STR.inventory.category.aux.gallery };
+    const labels = { drill: STR.inventory.category.drill.gallery, engine: STR.inventory.category.engine.gallery, scanner: STR.inventory.category.scanner.gallery, cargo: STR.inventory.category.cargo.gallery, aux: STR.inventory.category.aux.gallery, turret: STR.inventory.category.turret.gallery };
     const cw = this.CARD_W(), ch = this.CARD_H(), cgap = 10, hdrH = 22, rowGap = 18;
     const x0 = L.list.x + 14, y0 = L.list.y + 38 - this.scrollY;
     const cards = [], headers = [];
@@ -267,7 +313,7 @@ class Inventory {
       headers.push({ label: labels[cat] || cat.toUpperCase(), x: x0, y: cy, w: L.list.w - 28 });
       cy += hdrH;
       // варианты слота; гейтнутые (`unlock`) показываются только при открытом узле СЕТИ ПАМЯТИ
-      const mods = Object.keys(MODULE_DEFS).filter((k) => MODULE_DEFS[k].category === cat
+      const mods = Object.keys(MODULE_DEFS).filter((k) => MODULE_DEFS[k].category === cat && this._moduleFitsHull(k)
         && (!MODULE_DEFS[k].unlock || (typeof metaHas === 'function' && metaHas(MODULE_DEFS[k].unlock))));
       // ПЕРЕНОС по рядам: когда вариантов больше, чем влезает по ширине (напр. 4 бура) — крайние НЕ уезжают
       // за панель (и остаются кликабельны). Лишняя высота уходит в вертикальный скролл (maxScroll).
@@ -295,6 +341,8 @@ class Inventory {
   pointerDown(x, y) {
     const L = this.layout; if (!L) return;
     this.mouse = { x, y };
+    const ht = this.hullTabAt(x, y);
+    if (ht) { this.setHull(ht.hull); return; }   // смена корпуса
     if (this.inRect(x, y, L.back)) { if (this.onBack) this.onBack(); return; }
     if (this.inRect(x, y, L.start)) { if (this.getStats().valid && this.onStart) this.onStart(); return; }
     const card = this.cardAt(x, y);

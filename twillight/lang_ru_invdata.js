@@ -13,6 +13,7 @@ i18nRegister('ru', {
       scanner: { slot: 'СКАНЕР',   gallery: 'СКАНЕРЫ' },
       cargo:   { slot: 'ТРЮМ',     gallery: 'ТРЮМЫ' },
       aux:     { slot: 'ДОП-СЛОТ', gallery: 'ДОП-СЛОТ' },
+      turret:  { slot: 'ТУРЕЛЬ',   gallery: 'ТУРЕЛИ' },
     },
   },
 });

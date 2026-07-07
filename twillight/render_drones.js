@@ -1,11 +1,16 @@
 'use strict';
 
-// Рендер ДРОНОВ-КОМПАНЬОНОВ (game.drone). Маленький летун: корпус-капсула (тон по типу) + ротор-черта + ядро-глаз +
-// несомый груз / канал взлома (hacker). ПОВЕРХ тумана (виден в темноте). Перф: без filter/shadowBlur; 'lighter' точечно.
+// Рендер ДРОНОВ-КОМПАНЬОНОВ (game.drones[] — по одному на дрон-реликт, до кап-слота). Маленький летун: корпус-капсула
+// (тон по типу) + ротор-черта + ядро-глаз + несомый груз / канал взлома (hacker). ПОВЕРХ тумана (виден в темноте).
+// Перф: без filter/shadowBlur; 'lighter' точечно.
 const DRONE_COL = { collector: '#9ad0a0', courier: '#5fd0e0', battery: '#f0c84a', scout: '#7fb0e0', hacker: '#c06ee6' };
 
 function drawDrones(ctx, game, camera) {
-  const d = game.drone; if (!d) return;
+  if (!game.drones || !game.drones.length) return;
+  for (const d of game.drones) _drawDrone(ctx, camera, d);
+}
+
+function _drawDrone(ctx, camera, d) {
   const x = Math.round(camera.screenX(d.px)), y = Math.round(d.py - camera.y);
   const col = DRONE_COL[d.kind] || '#cfe0e0', bob = Math.sin(d.bob * 4) * 1.5;
 

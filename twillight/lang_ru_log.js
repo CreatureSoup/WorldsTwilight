@@ -57,6 +57,11 @@ i18nRegister('ru', {
     techExtracted: (name) => 'ТЕХНОЛОГИЯ ИЗВЛЕЧЕНА: ' + name,
     artifactDataGiven: 'ДАННЫЕ АРТЕФАКТА ПЕРЕДАНЫ ГОРОДУ',
     artifactRecycled: 'АРТЕФАКТ ПЕРЕРАБОТАН В РЕСУРС',
+    containerOpened: (n, res) => 'КОНТЕЙНЕР ВСКРЫТ: +' + n + ' ' + res,
+    artifactReroll: 'РЕЛИКТ ПЕРЕ-АНАЛИЗИРОВАН — НОВЫЕ ТЕХНОЛОГИИ',
+    // economy.js (реликт power_plant / узел amb_split)
+    powerBurn: 'ЭЛЕКТРОСТАНЦИЯ · ЖЖЁТ ОРГАНИКУ ДЛЯ ФОРЫ',
+    crystalSplit: (s) => 'РАСЩЕПЛЕНИЕ КРИСТАЛЛА · +' + s + 'С ТАЙМЕРА',
     // borers.js
     borerReturned: 'БУР-ЩИТ ВОЗВРАЩЁН',
     borerDepleted: 'БУР-ЩИТ РАЗРЯЖЕН · НУЖНА ПОДЗАРЯДКА',

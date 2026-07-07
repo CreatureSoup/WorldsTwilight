@@ -11,4 +11,5 @@ function loadSave() {
       JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'));
   } catch { return { bestDug: 0, runs: 0, meta: 0, metaUnlocks: {}, codex: null, storyMode: false, epoch: ep }; }
 }
-function writeSave(s) { try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch { /* ignore */ } }
+// ⚠️ ТЕСТОВЫЙ ПОЛИГОН (sandbox.js) НИЧЕГО не персистит: в сэндбоксе запись сейва заглушена (единая точка защиты).
+function writeSave(s) { if (typeof window !== 'undefined' && window.game && window.game.sandbox) return; try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch { /* ignore */ } }

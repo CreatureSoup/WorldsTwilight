@@ -24,8 +24,9 @@ Object.assign(Game.prototype, {
     }
 
     if (!this.screwActive() || !this.unit) return;
-    // ГЛАВНОЕ действие (Пробел): забрать ближайший щит в радиусе, иначе запустить новый (только в поле, не в печати)
-    if (this.mode === 'playing' && !this.atBase() && !this.printMode && this.input.pressed(KEY_PRIMARY)) {
+    // ГЛАВНОЕ действие (Пробел): забрать ближайший щит в радиусе, иначе запустить новый. ⚠️ ТОЛЬКО стоя (`unit.state===IDLE`) и НЕ от
+    // клика по кнопке действия (`_actionHeld`) — иначе Пробел ложно срабатывает В ДВИЖЕНИИ (тот же фикс, что у активации города).
+    if (this.mode === 'playing' && !this.atBase() && !this.printMode && this.unit.state === IDLE && !this._actionHeld && this.input.pressed(KEY_PRIMARY)) {
       const u = this.unit;
       let near = null, nd = Infinity;
       for (const b of this.borers) { const d = Math.hypot(wrapDeltaPx(b.px, u.px), b.py - u.py); if (d < nd) { nd = d; near = b; } }

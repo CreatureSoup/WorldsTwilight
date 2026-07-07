@@ -44,11 +44,7 @@ function drawPrintGhost(ctx, game, camera) {
 
 function drawStructure(ctx, s, cx, cy) {
   if (s.dying) { drawStructDeath(ctx, s, cx, cy); return; }
-  if (s.hitT > 0) {   // удар-флэш: аддитивная вспышка при получении урона
-    const f = s.hitT / HIT_FLASH_TIME;
-    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5 * f;
-    ctx.fillStyle = '#ff9a4a'; ctx.beginPath(); ctx.arc(cx, cy, TILE * (0.55 + (1 - f) * 0.4), 0, 6.283); ctx.fill(); ctx.restore();
-  }
+  // удар-флэш-круг при уроне УБРАН — фидбэк урона ТОЛЬКО искры (effects.hit → render_fx). s.hitT ещё тикает (задел).
   const b = s.def.b, building = s.state === 'building';
   // Активные «садятся» на ПОВЕРХНОСТЬ по face (пол/потолок/стена): смещаются НА ВИДИМУЮ КРОМКУ породы (эрозия `STRUCT_EDGE_INSET`,
   // единое правило — как стопы юнита/шесты кабеля), иначе парят по сетке тайла над неровной кромкой. Стена/шипы (solid) — без смещения.

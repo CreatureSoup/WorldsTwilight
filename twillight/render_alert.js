@@ -8,8 +8,10 @@
 // Состояние/клик/клавиша — в game.js. Перф: прямой Canvas2D без filter/офскринов (spec_render).
 // Кромочных стрелок-указателей здесь НЕТ намеренно (метим только то, что реально на виду/в радиусе).
 
-// Прямоугольник HUD-тумблера (левый столбец, под «ГРУЗ») — общий для отрисовки и хит-теста клика.
-function alertHudRect() { return { x: 10, y: 118, w: 188, h: 24 }; }
+// Прямоугольник HUD-тумблера (зона tl, стек под фикс-панелями) — общий для отрисовки и хит-теста клика.
+// Кэш последнего слота (позиция динамическая, hud_layout.js): клик читает то, что реально нарисовано.
+let _alertRect = null;
+function alertHudRect() { return _alertRect || { x: 10, y: 118, w: 188, h: 24 }; }
 
 // Голо-дребезг: детерминирован по сиду/времени (без Math.random в кадре-цикле).
 function _alertFlicker(t, seed) {
@@ -19,7 +21,8 @@ function _alertFlicker(t, seed) {
 
 // HUD-тумблер: LED + подпись + переключатель-капсула + счётчик враждебных юнитов.
 function drawAlertToggle(ctx, on, threats, t) {
-  const r = alertHudRect();
+  const r = (typeof HudLayout !== 'undefined') ? HudLayout.slotDock('tl', 188, 24, 'alert', on ? PAL.toxic : PAL.bronze) : { x: 10, y: 118, w: 188, h: 24 };
+  _alertRect = r;
   techPanel(ctx, r.x, r.y, r.w, r.h, { accent: on ? PAL.toxic : PAL.bronze, bolts: false });
   const midY = r.y + r.h / 2;
   ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
@@ -28,16 +31,7 @@ function drawAlertToggle(ctx, on, threats, t) {
   ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = on ? PAL.chalk : PAL.pewter;
   ctx.fillText(STR.hud.alert.title, r.x + 22, midY + 0.5);
   const sw = 30, sh = 14, sx = r.x + r.w - 12 - sw, sy = midY - sh / 2;
-  ctx.fillStyle = on ? 'rgba(200,226,90,0.16)' : PAL.earth; ctx.fillRect(sx, sy, sw, sh);
-  ctx.strokeStyle = on ? PAL.toxic : PAL.bronze; ctx.lineWidth = 1; ctx.strokeRect(sx + 0.5, sy + 0.5, sw - 1, sh - 1);
-  ctx.font = `7px ${FONT_MONO}`; ctx.textBaseline = 'middle';
-  if (on) {                                   // надпись слева, бегунок справа
-    ctx.fillStyle = PAL.toxic; ctx.textAlign = 'left'; ctx.fillText(STR.hud.toggle.on, sx + 5, sy + sh / 2 + 0.5);
-    ctx.fillStyle = PAL.toxic; ctx.fillRect(sx + sw - 9, sy + 2, 7, sh - 4);
-  } else {                                    // бегунок слева, надпись справа
-    ctx.fillStyle = PAL.ash; ctx.fillRect(sx + 2, sy + 2, 7, sh - 4);
-    ctx.fillStyle = PAL.ash; ctx.textAlign = 'right'; ctx.fillText(STR.hud.toggle.off, sx + sw - 4, sy + sh / 2 + 0.5);
-  }
+  hudToggleSwitch(ctx, sx, sy, on);   // переиспользуемый переключатель (hud.js)
   if (on && threats > 0) {                     // счётчик враждебных юнитов
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     ctx.font = `bold 9px ${FONT_MONO}`; ctx.fillStyle = PAL.bloodBright;

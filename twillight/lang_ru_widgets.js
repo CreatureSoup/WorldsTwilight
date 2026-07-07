@@ -66,5 +66,22 @@ i18nRegister('ru', {
       on:  'ВКЛ',
       off: 'ВЫКЛ',
     },
+
+    // ── ЭКОНОМИКА ГОРОДА (render_economy.js, реликты converter / power_plant) ──
+    econ: {
+      convTitle:  'КОНВЕРТЕР',
+      convOff:    'ВЫКЛ',
+      convHint:   'КЛИК · СМЕНА РЕЦЕПТА',
+      convNeed:   'НЕ ХВАТАЕТ РЕСУРСА',
+      powTitle:   'ЭЛЕКТРОСТАНЦИЯ',
+      powRate:    (s) => s + 'С / ОРГАНИКА',
+      powBurn:    (s) => 'ФОРА · ' + s + 'С',
+      powIdle:    'РЕЗЕРВ ГОТОВ',
+      powNoFuel:  'НЕТ ОРГАНИКИ',
+      splitTitle: 'РАСЩЕПИТЕЛЬ',
+      splitRate:  (s) => '+' + s + 'С / КРИСТАЛЛ',
+      splitNoFuel:'НЕТ КРИСТАЛЛА',
+      splitPop:   (s) => '+' + s + 'С',
+    },
   },
 });

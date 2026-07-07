@@ -1,5 +1,21 @@
 'use strict';
 
+// ── МЕДЛЕННЫЙ ПОВОРОТ СТВОЛА «ЧЕРЕЗ ВЕРХ» (Батч 8) — общий для ВСЕХ пушек (печатные турели/рейл/СВЧ + городские турели cityturret.js). ──
+// Пушки стоят на земле и целятся В ВЕРХНЕЙ ПОЛУСФЕРЕ; вращаются НЕ мгновенно (TURRET_TURN_RATE), и при перекладке с борта на борт
+// идут ЧЕРЕЗ ВЕРХ (straight-up), а не через низ (ствол не «ныряет» в землю/базу). Стреляют только когда навелись (TURRET_FIRE_AIM_TOL).
+function normAng(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
+function _arcHitsDown(cur, d) {   // пройдёт ли дуга от cur на d через straight-DOWN (+π/2)?
+  const a = normAng(Math.PI / 2 - cur);
+  return d > 0 ? (a > 1e-4 && a < d - 1e-4) : (a < -1e-4 && a > d + 1e-4);
+}
+function aimOverTop(cur, tgt, maxStep) {   // повернуть cur к tgt на ≤maxStep, огибая низ (через верх)
+  let d = normAng(tgt - cur);
+  if (_arcHitsDown(cur, d)) d = d > 0 ? d - 2 * Math.PI : d + 2 * Math.PI;   // короткий путь ныряет вниз → идём длинным (через верх)
+  if (Math.abs(d) <= maxStep) return normAng(tgt);
+  return normAng(cur + Math.sign(d) * maxStep);
+}
+function turretAimed(cur, tgt) { return Math.abs(normAng(tgt - cur)) < TURRET_FIRE_AIM_TOL; }
+
 // Structures — печатаемые игроком сооружения (логика без Canvas; рендер — render_structure.js).
 // Энергомодель повторяет город: РЕАКТОР В ЮНИТЕ. Пассивные (стена/шипы) энергии не требуют. Активные
 // (турель/батарея) тратят энергию по работе и подзаряжаются юнитом в радиусе. БАТАРЕЯ — буфер-релей:
@@ -64,7 +80,7 @@ class Structures {
         case 'spike': this._spikeTick(s, dt, enemies); break;
         case 'turret': this._turretTick(s, dt, world, enemies); break;
         case 'railgun': this._railTick(s, dt, world, enemies); break;
-        case 'microwave': this._mwTick(s, dt, enemies); break;
+        case 'microwave': this._mwTick(s, dt, world, enemies); break;
         case 'emp': this._empTick(s, dt, enemies); break;
         case 'repulsor': this._repulseTick(s, dt, enemies); break;
         case 'jammer': this._jamTick(s, dt, enemies); break;
@@ -92,8 +108,9 @@ class Structures {
       if (d < bd && this._los(world, s, e)) { bd = d; best = e; }
     }
     if (!best) return;
-    s.aimAng = Math.atan2(best.py - s.py, wrapDeltaPx(best.px, s.px));   // дельта s→цель (wrapDeltaPx(a,b)=a−b)
-    if (s.fireCd <= 0 && s.energy >= s.def.eShot) {
+    const tgt = Math.atan2(best.py - s.py, wrapDeltaPx(best.px, s.px));   // дельта s→цель (wrapDeltaPx(a,b)=a−b)
+    s.aimAng = aimOverTop(s.aimAng, tgt, TURRET_TURN_RATE * dt);          // медленный поворот через верх
+    if (turretAimed(s.aimAng, tgt) && s.fireCd <= 0 && s.energy >= s.def.eShot) {   // стреляет ТОЛЬКО когда навёлся
       s.fireCd = s.def.fireCd; s.energy -= s.def.eShot; s.flash = 0.06;
       best.damage(s.def.dmg);
       this.tracers.push({ x1: s.px, y1: s.py, x2: best.px, y2: best.py, life: 0 });
@@ -106,8 +123,9 @@ class Structures {
     let best = null, bd = s.def.range + 0.5;
     for (const e of enemies) { if (e.dying || e.dead || e.friendly) continue; const d = Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE; if (d < bd && this._los(world, s, e)) { bd = d; best = e; } }
     if (!best) return;
-    s.aimAng = Math.atan2(best.py - s.py, wrapDeltaPx(best.px, s.px));
-    if (s.fireCd <= 0 && s.energy >= s.def.eShot) {
+    const tgt = Math.atan2(best.py - s.py, wrapDeltaPx(best.px, s.px));
+    s.aimAng = aimOverTop(s.aimAng, tgt, TURRET_TURN_RATE * dt);          // медленный поворот через верх
+    if (turretAimed(s.aimAng, tgt) && s.fireCd <= 0 && s.energy >= s.def.eShot) {
       s.fireCd = s.def.fireCd; s.energy -= s.def.eShot; s.flash = 0.12;
       const ex = s.px + Math.cos(s.aimAng) * s.def.range * TILE, ey = s.py + Math.sin(s.aimAng) * s.def.range * TILE;
       for (const e of enemies) { if (e.dying || e.dead || e.friendly) continue; if (this._segDist(s.px, s.py, ex, ey, e.px, e.py) < TILE * 0.6) e.damage(s.def.dmg); }
@@ -141,7 +159,8 @@ class Structures {
   // КУРЬЕР-ТЕРМИНАЛ — ЛОГИСТИКА (не боевая, энергии не требует). Юнит ВНЕ базы рядом ссыпает груз в склад по единице;
   // контейнер полон (def.store) → game отлепляет ДРОН (courier.js). active2 — идёт ссыпка (рендер: индикатор приёма).
   _courierTick(s, dt, game) {
-    if (s.store == null) { s.store = { iron: 0, organic: 0, crystal: 0 }; s.stored = 0; s.depCd = 0; }
+    if (s.store == null) { s.store = { iron: 0, organic: 0, crystal: 0 }; s.stored = 0; s.depCd = 0; s.droneOut = false; s.launchCd = 0; }
+    if (s.launchCd > 0) s.launchCd -= dt;   // перестройка дрона после потери
     s.active2 = false;
     const u = game.unit, inv = game.inventory;
     if (u && inv && !game.atBase() && inv.cargoUsed() > 0 && s.stored < s.def.store) {
@@ -154,24 +173,26 @@ class Structures {
         }
       }
     }
-    if (s.stored >= s.def.store && game._launchCourier) game._launchCourier(s);   // контейнер полон → дрон в путь
+    // Контейнер полон И дрон НА СТАНЦИИ (не в рейсе) И не идёт перестройка → отправляем дрон (естественный кулдаун = рейс туда-обратно).
+    if (s.stored >= s.def.store && !s.droneOut && s.launchCd <= 0 && game._launchCourier) game._launchCourier(s);
   }
 
   // СВЧ — непрерывный КОНУС урона/с по всем врагам в секторе перед турелью (тратит энергию, пока бьёт).
-  _mwTick(s, dt, enemies) {
+  _mwTick(s, dt, world, enemies) {
     s.active2 = false;
     if (s.energy <= 0) return;
     let best = null, bd = s.def.range + 0.5;
-    for (const e of enemies) { if (e.dying || e.dead || e.friendly) continue; const d = Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE; if (d < bd) { bd = d; best = e; } }
+    for (const e of enemies) { if (e.dying || e.dead || e.friendly) continue; const d = Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE; if (d < bd && this._los(world, s, e)) { bd = d; best = e; } }
     if (!best) return;
-    s.aimAng = Math.atan2(best.py - s.py, wrapDeltaPx(best.px, s.px)); s.active2 = true;
+    const tgt = Math.atan2(best.py - s.py, wrapDeltaPx(best.px, s.px));
+    s.aimAng = aimOverTop(s.aimAng, tgt, TURRET_TURN_RATE * dt); s.active2 = true;   // раструб доводится медленно через верх; конус бьёт по фактическому aimAng (лаг = реализм)
     s.energy = Math.max(0, s.energy - s.def.eRate * dt);
     for (const e of enemies) {
       if (e.dying || e.dead || e.friendly) continue;
       const dx = wrapDeltaPx(e.px, s.px), dy = e.py - s.py;
       if (Math.hypot(dx, dy) / TILE > s.def.range) continue;
       const da = Math.abs(((Math.atan2(dy, dx) - s.aimAng + Math.PI) % (2 * Math.PI)) - Math.PI);
-      if (da <= s.def.cone) e.damage(s.def.dps * dt);
+      if (da <= s.def.cone && this._los(world, s, e)) e.damage(s.def.dps * dt);   // сквозь породу — не бьёт
     }
   }
 
@@ -185,18 +206,20 @@ class Structures {
     for (const e of inR) e.stunT = Math.max(e.stunT || 0, s.def.stun);
   }
 
-  // Отталкиватель — по кулдауну импульс: ОТБРАСЫВАЕТ врагов из радиуса наружу (сбивает заход).
+  // Отталкиватель — импульс по кулдауну: пока в радиусе ПУСТО, ничего не делает; враг вошёл (и кулдаун истёк) → ОДНА волна
+  // ПЛАВНО отбрасывает всех в радиусе НА ДИСТАНЦИЮ РАДИУСА наружу (не телепорт: кнокбэк тикает в enemy.update) → кулдаун.
   _repulseTick(s, dt, enemies) {
     s.fireCd -= dt;
-    if (s.fireCd > 0 || s.energy < s.def.eShot) return;
+    if (s.fireCd > 0 || s.energy < s.def.eShot) return;   // на кулдауне / нет энергии — молчит
     const inR = this._inRadius(s, enemies);
-    if (!inR.length) return;
+    if (!inR.length) return;                              // в радиусе пусто — не срабатывает (не «постоянно»)
     s.energy -= s.def.eShot; s.fireCd = s.def.cooldown; s.pulse = 0.001;
+    const pushDist = s.def.radius * TILE;                 // смещение = РАДИУС действия структуры
     for (const e of inR) {
-      const dx = wrapDeltaPx(e.px, s.px), dy = e.py - s.py, d = Math.hypot(dx, dy) || 1, push = s.def.push * TILE;
-      e.px = wrapPx(e.px + dx / d * push); e.py += dy / d * push;
-      e.tileX = wrapX(Math.round((e.px - TILE / 2) / TILE)); e.tileY = Math.round((e.py - TILE / 2) / TILE);
-      e.state2 = IDLE; e.commit = null; e.cstate = null;   // сбить текущее движение/таран
+      const dx = wrapDeltaPx(e.px, s.px), dy = e.py - s.py, d = Math.hypot(dx, dy) || 1;
+      e.knockVx = (dx / d) * (pushDist / REPULSE_PUSH_DUR); e.knockVy = (dy / d) * (pushDist / REPULSE_PUSH_DUR);
+      e.knockT = REPULSE_PUSH_DUR;                        // плавный отброс наружу за REPULSE_PUSH_DUR сек
+      e.state2 = IDLE; e.commit = null; e.cstate = null;  // сбить текущее движение/таран
     }
   }
 

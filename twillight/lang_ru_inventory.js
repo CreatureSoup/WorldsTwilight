@@ -10,9 +10,10 @@ i18nRegister('ru', {
     header: {
       kicker: '// СБОРКА ЮНИТА · АКТИВНА',
       title: 'ЧЕРТЁЖ',
-      controls: 'ВЫБЕРИ МОДУЛЬ В ГАЛЕРЕЕ — ОН ВСТАНЕТ В СЛОТ · ENTER · В ШАХТУ',
+      controls: 'ВЫБЕРИ МОДУЛЬ В ГАЛЕРЕЕ — ОН ВСТАНЕТ В СЛОТ · ENTER · В МИР',
     },
     blueprint: { label: '// ЮНИТ · СКИТАЛЕЦ' },
+    hullKicker: 'КОРПУС',
     callout: { empty: 'МОДУЛЬ НЕ УСТАНОВЛЕН' },
     stats: {
       label: '// СВОДКА',
@@ -33,7 +34,7 @@ i18nRegister('ru', {
       installed: '✓ УСТАНОВЛЕН',
     },
     start: {
-      go: 'В ШАХТУ ▶',
+      go: 'НАЧАТЬ СБОРКУ В МИРЕ',
       missing: (list) => 'УСТАНОВИ: ' + list,
       cat: { drill: 'бур', engine: 'двигатель', scanner: 'сканер', cargo: 'трюм' },
     },

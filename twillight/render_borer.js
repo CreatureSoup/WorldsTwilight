@@ -32,10 +32,33 @@ function drawScrewTrail(ctx, world, camera) {
   ctx.restore();
 }
 
+// СОСТАВНОЙ АССЕТ проходческого щита (редактор → module_assets.js): две части — КРЕПЛЕНИЕ (`borer:mount`, сзади) +
+// БУР-ЩИТ (`borer:shield`, спереди). Оба в каноническом кадре (вперёд=+X). Масштаб `k` — под фактический калибр щита
+// (автономный TILE·0.3 / несомый TILE·0.27). При бурении поверх — процедурные искры-крошка (общий фидбэк). Есть хоть одна
+// часть → ассет-режим, иначе процедурный корпус ниже.
+function _borerAsset(ctx, mount, shield, alongH, perpH, spin, drilling, shieldOnly) {
+  const k = perpH / (TILE * 0.3);
+  const blit = (sp) => { if (!sp || !sp.img) return; ctx.save(); if (sp.rot) ctx.rotate(sp.rot * Math.PI / 180); ctx.drawImage(sp.img, -sp.px * k, -sp.py * k, sp.w * k, sp.h * k); ctx.restore(); };
+  if (!shieldOnly) blit(mount);   // shieldOnly (АВТОНОМНЫЙ деплой-щит): крепление остаётся ПОРТОМ на юните — не «едет» с проходческим щитом
+  blit(shield);
+  if (drilling) _borerSparks(ctx, alongH, perpH, spin);
+}
+// Искры-крошка у фрезы (мерцают по фазе — дёшево, без частиц). Общее для процедурного и ассет-режимов.
+function _borerSparks(ctx, alongH, perpH, spin) {
+  const s = spin + performance.now() * 0.02, hr = perpH * 0.82, hx = alongH * 0.35;
+  const a0 = ctx.globalAlpha; ctx.fillStyle = '#eafff0';
+  for (let i = 0; i < 3; i++) { const a = s * 1.7 + i * 2.1, rr = hr * (0.6 + 0.35 * Math.sin(s * 3 + i)); ctx.globalAlpha = a0 * (0.45 + 0.4 * Math.sin(s * 4 + i * 2)); ctx.beginPath(); ctx.arc(hx + alongH * 0.5 + Math.cos(a) * rr, Math.sin(a) * rr, 1.4, 0, 6.283); ctx.fill(); }
+  ctx.globalAlpha = a0;
+}
+
 // Корпус щита в локальных координатах (ось +x = направление хода): проходческий щит — УЗКИЙ вдоль хода
 // (`alongH`), ВЫСОКИЙ поперёк (`perpH` ≈ калибр) + вращающаяся фреза-диск спереди. `drilling` → анимация
 // работы (фреза вращается быстрее + искры-крошка). Общий для автономных и несомого «магазина».
-function _shieldBody(ctx, alongH, perpH, spin, drilling) {
+// ⚠️ Если загружен ассет (`borer:mount`/`borer:shield` в PART_SPRITES) — рисуем СПРАЙТЫ, иначе процедурно (фолбэк).
+function _shieldBody(ctx, alongH, perpH, spin, drilling, shieldOnly) {
+  const P = (typeof PART_SPRITES !== 'undefined') && PART_SPRITES;
+  const mount = P && P['borer:mount'], shield = P && P['borer:shield'];
+  if (mount || shield) { _borerAsset(ctx, mount, shield, alongH, perpH, spin, drilling, shieldOnly); return; }
   const r = Math.min(alongH, perpH) * 0.7;
   ctx.beginPath();                                   // корпус: узкий по ходу, высокий поперёк
   ctx.moveTo(-alongH + r, -perpH); ctx.lineTo(alongH - r, -perpH); ctx.arcTo(alongH, -perpH, alongH, -perpH + r, r);
@@ -50,41 +73,46 @@ function _shieldBody(ctx, alongH, perpH, spin, drilling) {
   ctx.strokeStyle = drilling ? '#f0fff4' : '#cfeccf'; ctx.lineWidth = drilling ? 2 : 1.5;
   for (let i = 0; i < 4; i++) { const a = s + i * Math.PI / 2; ctx.beginPath(); ctx.moveTo(hx, 0); ctx.lineTo(hx + Math.cos(a) * hr, Math.sin(a) * hr); ctx.stroke(); }
   ctx.fillStyle = '#e6f6e6'; ctx.beginPath(); ctx.arc(alongH * 0.92, 0, 2, 0, 6.283); ctx.fill();   // острие-носик
-  if (drilling) {                                    // искры-крошка у фрезы (мерцают по фазе — дёшево, без частиц)
-    const a0 = ctx.globalAlpha; ctx.fillStyle = '#eafff0';
-    for (let i = 0; i < 3; i++) { const a = s * 1.7 + i * 2.1, rr = hr * (0.6 + 0.35 * Math.sin(s * 3 + i)); ctx.globalAlpha = a0 * (0.45 + 0.4 * Math.sin(s * 4 + i * 2)); ctx.beginPath(); ctx.arc(hx + alongH * 0.5 + Math.cos(a) * rr, Math.sin(a) * rr, 1.4, 0, 6.283); ctx.fill(); }
-    ctx.globalAlpha = a0;
-  }
+  if (drilling) _borerSparks(ctx, alongH, perpH, spin);   // искры-крошка у фрезы (общий хелпер)
 }
 
 // Автономные буры-щиты: проходческий щит (высокий поперёк, узкий вдоль хода) с фрезой по направлению
 // проходки. Рисуется ПОВЕРХ тумана (игрок видит/отзывает щит в темноте). `b.drilling` → анимация работы.
 function drawBorers(ctx, game, camera) {
   if (!game.borers || !game.borers.length) return;
+  const s = (typeof unitDrawScale === 'function' && game.unit) ? unitDrawScale(game.unit) : 1;   // деплой-щит ЗАПУЩЕН юнитом → его калибр (совпадает с несомым/сборкой, иначе крупнее юнита)
+  // Без узла «Сканеры на щитах» (mast_ds_scan) щит НЕ рисуется поверх тумана — только в разведанных тайлах (как остальной мир).
+  // С узлом щит сам снимает туман вокруг себя (updateBorers) → всегда виден.
+  const seeInFog = typeof metaHas === 'function' && metaHas('mast_ds_scan');
   ctx.save(); ctx.lineCap = 'round';
   for (const b of game.borers) {
+    if (!seeInFog && game.world && !game.world.isSeen(b.tileX, b.tileY)) continue;   // в тумане без узла-сканера — скрыт
     const cx = camera.screenX(b.px), cy = b.py - camera.y;
     ctx.save(); ctx.globalAlpha = b.depleted ? 0.5 : 1;   // РАЗРЯЖЕН → корпус тусклее (неактивен)
-    ctx.translate(cx, cy); ctx.rotate(Math.atan2(b.dy, b.dx));   // ось щита = направление проходки
-    _shieldBody(ctx, TILE * 0.15, TILE * 0.3, b.spin, b.drilling);
+    ctx.translate(cx, cy); ctx.rotate(Math.atan2(b.dy, b.dx)); ctx.scale(s, s);   // ось = направление проходки; размер = масштаб юнита
+    _shieldBody(ctx, TILE * 0.15, TILE * 0.3, b.spin, b.drilling, true);   // shieldOnly: ТОЛЬКО бур-щит (крепление — порт на юните, не «едет»)
     ctx.restore();
-    if (b.recharging) {   // ПОДЗАРЯДКА: аддитивное пульс-кольцо (анимация «юнит заряжает щит»)
-      const t = performance.now() / 1000;
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.4 + 0.3 * Math.sin(t * 12);
-      ctx.strokeStyle = '#9ad0a0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, TILE * 0.46, 0, 6.283); ctx.stroke(); ctx.restore();
-    }
-    if (b.maxCharge) {   // ИНДИКАТОР ЗАРЯДА: тонкая полоска над щитом (зелёный→янтарь→красный), мигающий «!» при разряде
-      const f = Math.max(0, Math.min(1, (b.charge || 0) / b.maxCharge));
-      const gy = cy - TILE * 0.52, gw = TILE * 0.5;
-      ctx.globalAlpha = 1; ctx.lineWidth = 2.4; ctx.lineCap = 'butt';
-      ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.beginPath(); ctx.moveTo(cx - gw / 2, gy); ctx.lineTo(cx + gw / 2, gy); ctx.stroke();
-      ctx.strokeStyle = b.depleted ? '#d0402f' : (f < 0.3 ? '#e0a040' : '#9ad0a0');
-      if (f > 0) { ctx.beginPath(); ctx.moveTo(cx - gw / 2, gy); ctx.lineTo(cx - gw / 2 + gw * f, gy); ctx.stroke(); }
-      ctx.lineCap = 'round';
-      if (b.depleted && !b.recharging && Math.sin(performance.now() / 140) > 0) {   // зов о подзарядке
-        ctx.fillStyle = '#ff6a4a'; ctx.font = `bold 9px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-        ctx.fillText('!', cx, gy - 2);
+    if (b.recharging || b.maxCharge) {   // индикаторы у щита: позиции в масштабе s (жмутся к маленькому щиту), штрихи/шрифт — читаемые (÷s), БЕЗ поворота
+      ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s);
+      if (b.recharging) {   // ПОДЗАРЯДКА: аддитивное пульс-кольцо (анимация «юнит заряжает щит»)
+        const t = performance.now() / 1000;
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.4 + 0.3 * Math.sin(t * 12);
+        ctx.strokeStyle = '#9ad0a0'; ctx.lineWidth = 2 / s; ctx.beginPath(); ctx.arc(0, 0, TILE * 0.46, 0, 6.283); ctx.stroke(); ctx.restore();
       }
+      if (b.maxCharge) {   // ИНДИКАТОР ЗАРЯДА: тонкая полоска над щитом (зелёный→янтарь→красный), мигающий «!» при разряде
+        const f = Math.max(0, Math.min(1, (b.charge || 0) / b.maxCharge));
+        const gy = -TILE * 0.52, gw = TILE * 0.5;
+        ctx.globalAlpha = 1; ctx.lineWidth = 2.4 / s; ctx.lineCap = 'butt';
+        ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.beginPath(); ctx.moveTo(-gw / 2, gy); ctx.lineTo(gw / 2, gy); ctx.stroke();
+        ctx.strokeStyle = b.depleted ? '#d0402f' : (f < 0.3 ? '#e0a040' : '#9ad0a0');
+        if (f > 0) { ctx.beginPath(); ctx.moveTo(-gw / 2, gy); ctx.lineTo(-gw / 2 + gw * f, gy); ctx.stroke(); }
+        ctx.lineCap = 'round';
+        if (b.depleted && !b.recharging && Math.sin(performance.now() / 140) > 0) {   // зов о подзарядке
+          ctx.fillStyle = '#ff6a4a'; ctx.font = `bold ${9 / s}px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+          ctx.fillText('!', 0, gy - 2 / s);
+        }
+      }
+      ctx.restore();
     }
   }
   ctx.restore();
@@ -92,7 +120,7 @@ function drawBorers(ctx, game, camera) {
 
 // Несомый «следующий» щит из магазина: торчит из порта юнита и ПОВОРАЧИВАЕТСЯ ВМЕСТЕ С ЮНИТОМ (как простой
 // бур — по доводке кольца `_ringAim` / взгляду). Рисуется ДО юнита (задняя половина уходит под кольцо).
-function drawCarriedBorer(ctx, game, camera) {
+function drawCarriedBorer(ctx, game, camera, bodyOff) {
   const u = game.unit;
   if (!u || !u.stats || !u.stats.screw) return;
   const max = game.borerMax ? game.borerMax() : (typeof SCREW_BORERS_BASE !== 'undefined' ? SCREW_BORERS_BASE : 2);
@@ -100,13 +128,50 @@ function drawCarriedBorer(ctx, game, camera) {
   if (carried <= 0) return;                          // нечему высовываться
   const aim = u._ringAim || 0;                       // вертикаль (±π/2) — из доводки кольца; горизонт — по faceX
   const ang = (Math.abs(aim) < 0.5) ? (u.faceX === -1 ? Math.PI : 0) : aim;
-  const off = TILE * 0.5;
+  const B = BORER_ON_UNIT;                            // ЕДИНЫЙ калибр (совпадает со сборкой/редактором)
+  const s = (typeof unitDrawScale === 'function') ? unitDrawScale(u) : 1;   // ⚠️ масштаб юнита: кольцо рисуется в drawScale, щит ДОЛЖЕН ужиматься ВМЕСТЕ → иначе в игре крупнее/дальше, чем в редакторе (тот при full R)
+  const bx = bodyOff ? bodyOff.x : 0, by = bodyOff ? bodyOff.y : 0;   // лаг корпуса на щупальцах — тот же, что у кольца (drawRingUnit opts.dx/dy)
   ctx.save(); ctx.lineCap = 'round';
-  ctx.translate(camera.screenX(u.px) + Math.cos(ang) * off, u.py - camera.y + Math.sin(ang) * off);
-  ctx.rotate(ang);
+  ctx.translate(camera.screenX(u.px) + bx + Math.cos(ang) * B.off * s, u.py - camera.y + by + Math.sin(ang) * B.off * s);
+  ctx.rotate(ang); ctx.scale(s, s);
   ctx.globalAlpha = 0.95;
-  _shieldBody(ctx, TILE * 0.14, TILE * 0.27, performance.now() * 0.0012, false);   // лёгкий idle-винт у пристыкованного
+  _shieldBody(ctx, B.alongH, B.perpH, performance.now() * 0.0012, false);   // лёгкий idle-винт у пристыкованного
   ctx.restore();
+}
+
+// ЕДИНЫЙ калибр «щита НА ЮНИТЕ» — ОДИН источник для игры (drawCarriedBorer), сборки (drawMountedBorer) и редактор-превью
+// (drawBorerOnUnit). Иначе `k=perpH/(TILE·0.3)` разный → оффсеты ассета читаются по-разному → авторская подгонка «не передаётся».
+const BORER_ON_UNIT = { alongH: TILE * 0.14, perpH: TILE * 0.27, off: TILE * 0.5 };
+// Щит ВИНТОВОГО бура НА ЮНИТЕ в ЛОКАЛЬНЫХ координатах (центр юнита = cx,cy в текущем transform, aim — взгляд). Для
+// СТАТИЧНЫХ превью (экран сборки) где нет деплой-состояния и `drawCarriedBorer` не вызывается — показывает «установленный
+// винтовой бур = щит» вместо скрытой детали-бура. Тот же калибр BORER_ON_UNIT, что drawCarriedBorer → совпадает с игрой.
+function drawMountedBorer(ctx, cx, cy, aim) {
+  if (typeof _shieldBody !== 'function') return;
+  const B = BORER_ON_UNIT;
+  ctx.save(); ctx.lineCap = 'round';
+  ctx.translate(cx + Math.cos(aim) * B.off, cy + Math.sin(aim) * B.off); ctx.rotate(aim);
+  _shieldBody(ctx, B.alongH, B.perpH, performance.now() * 0.0012, false);
+  ctx.restore();
+}
+// Составной бур-щит, ВПИСАННЫЙ в бокс boxW×boxH (центр композиции = текущий origin) — для ИКОНОК/ГАЛЕРЕИ (не калибр юнита!).
+// Меряет РЕАЛЬНЫЙ bbox спрайтов mount+shield → масштаб-под-бокс + центрирование → не вылезает и не смещён (в отличие от
+// прямого `_shieldBody` с калибр-зависимым `k`, который на большой иконке раздувал ассет). Нет ассетов → процедурный фолбэк.
+function drawBorerFit(ctx, boxW, boxH) {
+  if (typeof _shieldBody !== 'function') return;
+  const P = (typeof PART_SPRITES !== 'undefined') && PART_SPRITES;
+  const mount = P && P['borer:mount'], shield = P && P['borer:shield'];
+  if (mount || shield) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;   // bbox в НЕмасштабированных коорд. (как в _borerAsset, k=1)
+    for (const sp of [mount, shield]) { if (!sp || !sp.img) continue; x0 = Math.min(x0, -sp.px); y0 = Math.min(y0, -sp.py); x1 = Math.max(x1, -sp.px + sp.w); y1 = Math.max(y1, -sp.py + sp.h); }
+    const bw = (x1 - x0) || 1, bh = (y1 - y0) || 1, fit = Math.min(boxW / bw, boxH / bh);
+    ctx.save(); ctx.scale(fit, fit); ctx.translate(-(x0 + x1) / 2, -(y0 + y1) / 2);   // вписать + центрировать bbox
+    const blit = (sp) => { if (!sp || !sp.img) return; ctx.save(); if (sp.rot) ctx.rotate(sp.rot * Math.PI / 180); ctx.drawImage(sp.img, -sp.px, -sp.py, sp.w, sp.h); ctx.restore(); };
+    blit(mount); blit(shield);   // порядок как _borerAsset: крепление ПОД щитом
+    ctx.restore();
+  } else {
+    const ph = Math.min(boxH * 0.42, boxW * 0.26);   // процедурный фолбэк, вписанный в бокс
+    ctx.save(); ctx.lineCap = 'round'; _shieldBody(ctx, ph * 0.52, ph, 0.7, false); ctx.restore();
+  }
 }
 
 // Узел «Навигация по бурам»: вокруг юнита на большом радиусе — стрелки-указатели на КАЖДЫЙ запущенный

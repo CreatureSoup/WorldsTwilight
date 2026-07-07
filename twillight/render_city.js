@@ -97,10 +97,11 @@ function drawCity(ctx, city, W) {
   const midX = padX + emD + gap;
   const midW = cw - midX - rightW - padX;     // ширина под надпись + сегментный бар
 
-  // Якорь — у левого края «коридора» (правее панели юнита), а не по центру,
-  // чтобы капсула не лезла на панель задания справа.
-  const x = 210;
-  const y = 8;
+  // Якорь — у левого края «коридора» (правее панели юнита), а не по центру, чтобы капсула не лезла на панель
+  // задания справа. Зона tc (hud_layout.js) закреплена на этот же x210 → файрволл/win-таймер стекаются НИЖЕ.
+  const box = (typeof HudLayout !== 'undefined') ? HudLayout.slot('tc', cw, ch) : { x: 210, y: 8 };
+  const x = box.x;
+  const y = box.y;
 
   // === Фаза, мягкий пульс ===
   const phase = _cityPhase(city);

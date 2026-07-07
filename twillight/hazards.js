@@ -100,7 +100,7 @@ Object.assign(Game.prototype, {
   // ПРЫГУН: достал юнита (в радиусе прыжка) → виснет на буре = дебафф бурения на N тайлов проходки; не достал → подыхает.
   _robotLatch(r) {
     if (this._robotDist(r) > LATCH_JUMP_R || !this.unit) return;   // не достал — подох (просто оседает)
-    this.unit.latchTiles = LATCH_TILES;
+    this.unit.latchTiles = LATCH_TILES; this.unit.latchT = LATCH_TIME;   // сброс: по проходке (latchTiles) ИЛИ по времени (latchT)
     if (!this.debug) this.logEvent(STR.log.robotLatch);
   },
   // ГЛУШИЛКА: джаммер-импульс вырубает сканер (снятие тумана) на время.

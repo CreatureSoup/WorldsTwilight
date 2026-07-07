@@ -119,4 +119,9 @@ Object.assign(Game.prototype, {
     this.radarSweep.resType = RADAR_TYPES[(i + 1) % RADAR_TYPES.length];
     this.radarSweep.cache = null;
   },
+  radarSetType(type) {   // прямой выбор типа (клик по кнопке виджета переключателя)
+    if (!this.unit || !this.unit.stats || !this.unit.stats.radar || this.unit.stats.radarSpectrum || RADAR_TYPES.indexOf(type) < 0) return;
+    if (this.radarSweep.resType === type) return;
+    this.radarSweep.resType = type; this.radarSweep.cache = null;
+  },
 });

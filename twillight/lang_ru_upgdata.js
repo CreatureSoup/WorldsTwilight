@@ -52,6 +52,8 @@ i18nRegister('ru', {
                     fmt: (v) => Math.round(v) + ' HP/с' },
       cable:      { label: 'ДЛИНА ШЛЕЙФА', sub: 'Дальность энергошлейфа',
                     fmt: (v) => Math.round(v) + ' тайл' },
+      turretdmg:  { label: 'УРОН ТУРЕЛЕЙ', sub: 'Урон авто-турелей базы' },
+      splitreturn:{ label: 'РАСЩЕПЛЕНИЕ', sub: 'Больше таймера за расщеплённый кристалл' },
     },
     gadgets: {
       magnet: { label: 'АВТО-СБОРЩИК', sub: 'Радиус подбора ресурса +1' },

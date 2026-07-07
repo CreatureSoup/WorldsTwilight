@@ -60,6 +60,7 @@ class Enemy {
     this.dead = false;
     this.dying = false; this.deathT = 0; this._fx = false;   // уничтожение: фаза анимации (обломки/искры) до чистки
     this.stunT = 0; this.slowT = 0;   // ЭМИ-стан (заморозка) / глушилка-замедление (структуры игрока)
+    this.knockT = 0; this.knockVx = 0; this.knockVy = 0;   // ОТБРОС отталкивателем (плавное смещение по скорости)
     this.state2 = IDLE; this.fromX = x; this.fromY = y; this.toX = x; this.toY = y; this.progress = 0;
     this.dx = 0; this.dy = 1; this.drilling = false;
     this.dug = null;                 // выкопанная жила {x,y,type}: game роняет лутом (копатель не «съедает» ресурс)
@@ -156,6 +157,15 @@ class Enemy {
     this.drilling = false;
     const slowMul = this.slowT > 0 ? JAM_SLOW : 1;   // глушилка замедляет всё движение/копку
     if (this.slowT > 0) this.slowT = Math.max(0, this.slowT - dt);
+    // ОТБРОС отталкивателем: ПЛАВНОЕ смещение по скорости (не телепорт), приоритет над всеми состояниями; упор в породу — стоп на краю.
+    if (this.knockT > 0) {
+      this.knockT -= dt;
+      const nx = wrapPx(this.px + this.knockVx * dt), ny = this.py + this.knockVy * dt;
+      const ntx = wrapX(Math.round((nx - TILE / 2) / TILE)), nty = Math.round((ny - TILE / 2) / TILE);
+      if (isSolid(world.tileAt(ntx, nty))) { this.knockT = 0; }   // впереди порода — не вдавливаемся, гасим отброс
+      else { this.px = nx; this.py = ny; this.tileX = ntx; this.tileY = nty; }
+      return;
+    }
     // ОХОТНИК в боевой фазе: рывок/отскок — свободное движение по px (без тайл-локомоции); телеграф — стоит.
     if (this.cstate === 'charge' || this.cstate === 'recover') {
       this.px = wrapPx(this.px + this.cvx * slowMul * dt); this.py += this.cvy * slowMul * dt;

@@ -35,6 +35,9 @@ function _strat(y) {
 }
 function backColor(y)  { return _strat(y).back; }
 function gapColor(y)   { return _strat(y).gap; }
+// Фон УКРЕПЛЁННОГО винтового хода (AIR-тайлы с `t.screw`): холодный бетонно-стальной СЕРЫЙ — отличается от тёплого
+// backColor обычной пустоты (проходческий щит облицевал стенку). Чуть темнеет с глубиной, но остаётся серым.
+function screwBackColor(y) { const d = Math.min(1, Math.max(0, y / MAP_H)); const v = Math.round(74 - d * 26); return `rgb(${v - 6},${v - 3},${v + 4})`; }
 function shadeColor(tone, y) { return _strat(y).sh[tone]; }
 
 function tileHash(x, y) {
@@ -44,8 +47,29 @@ function tileHash(x, y) {
   return (h >>> 0) / 4294967296;
 }
 
-// Осколки породы (плоские, с лёгким градиентом, без контура) + паутина трещин,
-// проступающая прогрессивно от стороны входа бура (соседний воздух) вглубь тайла.
+// Рекурсивная ветка трещины с ФИКСИРОВАННОЙ геометрией (зигзаг-сегменты + форки, сужение к острому кончику).
+// ⚠️ Трещины РАСТУТ, а не «выдвигаются»: геометрия детерминирована (tileHash), а `frontDist` (= prog·maxReach) — фронт
+// ПРОРАСТАНИЯ по накопленной длине от корня `dist`. Уже открытые сегменты НЕ двигаются; на фронте прорастают новые
+// (и появляются форки, когда фронт дошёл до точки ветвления). Клип последнего сегмента у фронта = «трещина ползёт».
+function _crackBranch(ctx, px, py, ang, segLen, w, depth, dist, frontDist, x, y, sd) {
+  if (depth <= 0 || dist >= frontDist) return;
+  for (let s = 0; s < 2; s++) {
+    if (dist >= frontDist) return;
+    ang += (tileHash(x + sd + s * 5, y - sd + s * 3) - 0.5) * 0.95;          // резкий зигзаг (фикс по сиду)
+    const draw = Math.min(segLen, frontDist - dist);                        // частичный сегмент у фронта → «прорастание»
+    const nx = px + Math.cos(ang) * draw, ny = py + Math.sin(ang) * draw;
+    ctx.lineWidth = Math.max(0.4, w);
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(nx, ny); ctx.stroke();
+    px = nx; py = ny; dist += draw; w *= 0.62;                              // сужение → острый кончик
+    if (depth > 1 && tileHash(x * 7 + sd + s, y * 11 - s) < 0.62) {          // ФОРК (фикс): прорастает, когда фронт дошёл сюда
+      const side = (tileHash(x + s * 3, y + sd) < 0.5) ? 1 : -1;
+      _crackBranch(ctx, px, py, ang + side * (0.55 + tileHash(sd + 1, s) * 0.7), segLen * 0.9, w * 0.9, depth - 1, dist, frontDist, x, y, sd * 3 + s + 7);
+    }
+  }
+}
+
+// Осколки породы (плоские, с лёгким градиентом, без контура) + разлом-трещины бурения,
+// проступающие прогрессивно от стороны входа бура (соседний воздух) вглубь тайла.
 function drawChunks(ctx, world, camera, W, H) {
   const ox = Math.round(camera.x), oy = Math.round(camera.y);
   const x0 = Math.floor(camera.x / TILE), y0 = Math.max(0, Math.floor(camera.y / TILE));
@@ -89,34 +113,28 @@ function drawChunks(ctx, world, camera, W, H) {
         grad.addColorStop(1, shadeColor(tone, y));
         ctx.fillStyle = grad;
         ctx.fill();
-        // паутина трещин на самом осколке: глубина осколка вдоль оси бурения
-        // задаёт порог появления (ближние к входу трескаются раньше дальних).
-        if (prog > 0) {
-          const lx = Math.min(1, Math.max(0, hx * 1.1 - 0.05));
-          const ly = Math.min(1, Math.max(0, hy * 1.1 - 0.05));
-          let depth;
-          if (ey < 0) depth = ly; else if (ey > 0) depth = 1 - ly;
-          else if (ex < 0) depth = lx; else depth = 1 - lx;
-          const lp = Math.min(1, Math.max(0, (prog - depth * 0.7) / 0.3));
-          if (lp > 0.04) {
-            const web = 3 + Math.floor(lp * 2);
-            ctx.strokeStyle = `rgba(7,4,2,${0.3 + lp * 0.55})`;
-            ctx.lineWidth = Math.max(0.8, r * 0.1);
-            const a0 = tileHash(x * 5 + k, y * 9 + k) * 6.283;
-            for (let b = 0; b < web; b++) {
-              const ang = a0 + b * (6.283 / web) + (tileHash(x + b + k, y - b) - 0.5) * 0.7;
-              const len = r * (0.35 + lp * 0.85);
-              let px = cx, py = cy;
-              ctx.beginPath(); ctx.moveTo(px, py);
-              for (let s = 1; s <= 2; s++) {
-                px += Math.cos(ang) * len / 2 + (tileHash(x + s + b + k, y - s) - 0.5) * r * 0.3;
-                py += Math.sin(ang) * len / 2 + (tileHash(x - s, y + s + b + k) - 0.5) * r * 0.3;
-                ctx.lineTo(px, py);
-              }
-              ctx.stroke();
-            }
-          }
+      }
+      // ТРЕЩИНЫ БУРЕНИЯ: ЕДИНЫЙ разлом НА ВЕСЬ ТАЙЛ (не по осколкам), ПОВЕРХ кладки; растёт ОТ СТЕНКИ входа бура вглубь по prog
+      // (юнит постепенно разрушает породу от той грани, где бурит). Общий для всех буров с этой анимацией.
+      if (prog > 0) {
+        const tsx = x * TILE - ox, tsy = y * TILE - oy;
+        let o0x, o0y, gx, gy;                                       // точка входа на кромке (0..1 по тайлу) + направление РОСТА внутрь
+        if (ey < 0) { o0x = 0.5; o0y = 0; gx = 0; gy = 1; }          // воздух сверху → трещина ВНИЗ
+        else if (ey > 0) { o0x = 0.5; o0y = 1; gx = 0; gy = -1; }    // воздух снизу → ВВЕРХ
+        else if (ex < 0) { o0x = 0; o0y = 0.5; gx = 1; gy = 0; }     // воздух слева → ВПРАВО
+        else { o0x = 1; o0y = 0.5; gx = -1; gy = 0; }                // воздух справа → ВЛЕВО
+        const px0 = tsx + o0x * TILE, py0 = tsy + o0y * TILE, baseAng = Math.atan2(gy, gx);
+        ctx.strokeStyle = `rgba(6,3,2,${(0.35 + prog * 0.5).toFixed(3)})`;
+        ctx.lineCap = 'butt';                                        // острые кончики (не круглые)
+        // ФИКС геометрия (кол-во веток/глубина/длина сегмента НЕ зависят от prog) → трещины растут, а не выдвигаются;
+        // `frontDist`=prog·maxReach — фронт прорастания; `w0` РАСТЁТ с prog → существующие трещины ТОЛСТЕЮТ.
+        const segLen = TILE * 0.2, maxReach = TILE * 1.25, frontDist = prog * maxReach;
+        const mains = 3, depth = 4, w0 = Math.max(1.6, TILE * 0.105 * (0.4 + prog * 0.7));   // толще корень (≈×3.5), сужается к кончикам
+        for (let m = 0; m < mains; m++) {
+          const spread = ((m / (mains - 1)) - 0.5) * 1.25;
+          _crackBranch(ctx, px0, py0, baseAng + spread, segLen, w0, depth, 0, frontDist, x, y, m * 13 + 3);
         }
+        ctx.lineCap = 'round';
       }
     }
 }
@@ -381,7 +399,7 @@ function drawWorld(ctx, world, unit, camera, debug) {
       if (t.type === BORDER) ctx.fillStyle = '#05070a';
       else if (t.type === INDESTRUCT) ctx.fillStyle = '#191d26';
       else if (t.type === AIR && y < SURFACE_ROWS) ctx.fillStyle = '#16202c';
-      else if (t.type === AIR) ctx.fillStyle = backColor(y);
+      else if (t.type === AIR) ctx.fillStyle = t.screw ? screwBackColor(y) : backColor(y);   // винтовой ход — серый фон
       else ctx.fillStyle = gapColor(y);
       ctx.fillRect(sx, sy, TILE + 1, TILE + 1);
       if (t.type === INDESTRUCT) { // плита-основание: банты сверху/снизу
@@ -407,7 +425,7 @@ function drawWorld(ctx, world, unit, camera, debug) {
   // квадратная кромка исчезает, остаётся только рваная эрозийная линия (её рисует raggedEdge ниже, внутрь породы).
   for (let y = y0; y <= y1; y++)
     for (let x = x0; x <= x1; x++)
-      if (airU(x, y)) { ctx.fillStyle = backColor(y); ctx.fillRect(x * TILE - ox, y * TILE - oy, TILE + 1, TILE + 1); }
+      if (airU(x, y)) { ctx.fillStyle = world.tileAt(x, y).screw ? screwBackColor(y) : backColor(y); ctx.fillRect(x * TILE - ox, y * TILE - oy, TILE + 1, TILE + 1); }
 
   // 2b) жилы ресурса в породе
   drawResourceVeins(ctx, world, ox, oy, x0, y0, x1, y1);

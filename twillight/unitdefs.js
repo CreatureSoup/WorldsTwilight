@@ -55,6 +55,30 @@ const UNIT_DEFS = {
     legHub: { f: 0, s: 0, dropY: 0.6 },
     cables: [],
   },
+  // Канонир «Моно-колесо»: НОВЫЙ ТИП (kind:'wheel'). ВНЕШНЕЕ кольцо-зубья (`toothR`) — встроенный бур, ВРАЩАЕТСЯ по
+  // ходу/бурению (render_wheel). ВНУТРЕННЯЯ втулка-реактор (`ringR`) неподвижна; модули крепятся на втулку (ang°+rad, в R),
+  // НЕ доворачиваются к бурению (колесо всенаправленно). НОГ НЕТ. Турель (`kind:'turret'`) — на верху втулки, поворотная
+  // (render_wheel по `unit._turretAim`). Рендер — render_wheel.js. drawScale ужат: колесо-диск должен влезать в ~тайл.
+  gun: {
+    kind: 'wheel',
+    ringR: 0.78,                      // втулка-реактор (внутреннее кольцо)
+    toothR: WHEEL_TOOTH_R,            // внешнее кольцо-зубья (встроенный бур)
+    toothZ: 0, bodyZ: 6,             // z кольца-зубьев и корпуса-кольца — участвуют в ОБЩЕЙ z-сортировке с реактором(10)/модулями(20) → перекрытие слоёв настраивается
+    drawScale: 0.55,                  // диск ужат под ~тайл (радиус 1.62R крупнее кольца)
+    bob: { amp: 0.05, spd: 2.0 },     // лёгкое «дыхание» — нужно resolveUnitRig/blueprintScale (хоть ног нет)
+    parts: [
+      { id: 'reactor', kind: 'reactor', ang: 0, rad: 0, z: 10, proc: true },   // втулка-реактор (центр, не вращается)
+      // модули на ВТУЛКЕ (внутри колеса), фикс. углы (без доворота к бурению). Верх (ang −90) отдан турели.
+      { id: 'engine', kind: 'engine', ang: 45,   rad: 0.72, z: 20, need: 'engine',  proc: true },
+      { id: 'aux',    kind: 'aux',    ang: -38,  rad: 0.72, z: 20, need: 'aux',     proc: true },
+      { id: 'sensor', kind: 'sensor', ang: -142, rad: 0.72, z: 20, need: 'scanner', proc: true },
+      { id: 'hold',   kind: 'hold',   ang: 135,  rad: 0.72, z: 20, need: 'cargo',   proc: true },
+      // турель на верху втулки — render_wheel рисует мачту+ствол по `unit._turretAim` (поворотная как городская)
+      { id: 'turret', kind: 'turret', ang: -90,  rad: 0.5,  z: 40, need: 'turret',  proc: true },
+    ],
+    legHub: { f: 0, s: 0, dropY: 0.6 },   // ног нет, но resolveUnitRig/ANIM.bob читают legHub — обязателен
+    cables: [],
+  },
   scout: {
     bob: { amp: 0.11, spd: 2.2 },
     parts: [

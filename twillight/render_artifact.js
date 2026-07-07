@@ -122,52 +122,98 @@ function _artWrap(ctx, text, maxW) {
   if (cur) lines.push(cur); return lines;
 }
 
-// Модалка выбора (mode 'artifact'): затемнение + панель + 3 карты. Подсветка game.artifactSel.
-// Hit-rect'ы кладём в game._artifactRects (для ЛКМ — artifact.js artifactClick).
+// Модалка выбора (mode 'artifact'): затемнение + панель + N карт (техно из a._offer + данные + переработка) + кнопка
+// ПОВТОРНЫЙ АНАЛИЗ (узел kart_reroll). Техно-карта показывает СЛОТ и ЗАНЯТОСТЬ (used/cap, цвет по свободе). Подсветка
+// game.artifactSel. Hit-rect'ы: game._artifactRects (карты) + game._artifactRerollRect (кнопка) — ЛКМ в artifact.js.
 function drawArtifactModal(ctx, game, W, H) {
   const a = game.pendingArtifact; if (!a) return;
+  const offer = a._offer || [a.tech];
   ctx.save();
   ctx.fillStyle = 'rgba(8,7,6,0.74)'; ctx.fillRect(0, 0, W, H);
-  const pw = 760, ph = 380, px = (W - pw) / 2, py = (H - ph) / 2;
+  // карты: техно×N (из offer) · ДАННЫЕ · ПЕРЕРАБОТКА
+  const choices = offer.map((def) => {
+    const used = game._artifactSlotUsed(def.slot), cap = game._artifactSlotCap(def.slot);
+    return { label: STR.world.artifact.tech.label, sub: def.name, desc: def.desc, accent: ART_ACCENT, icon: 'tech', slot: def.slot, used, cap, locked: used >= cap };
+  });
+  choices.push({ label: STR.world.artifact.data.label, sub: STR.world.artifact.data.sub, desc: STR.world.artifact.data.desc, accent: PAL.cobalt || '#5a8fd6', icon: 'data' });
+  choices.push({ label: STR.world.artifact.scrap.label, sub: STR.world.artifact.scrap.sub, desc: STR.world.artifact.scrap.desc, accent: PAL.toxic || '#c8e25a', icon: 'scrap' });
+  game._artifactChoiceCount = choices.length;   // game.js читает для навигации ← →
+
+  const N = choices.length, gap = 20, canReroll = typeof metaHas === 'function' && metaHas('kart_reroll');
+  const pw = Math.min(W - 40, N * 218 + (N - 1) * gap + 44), ph = canReroll ? 424 : 380;   // ширина адаптивна к числу карт, клампится к экрану
+  const px = (W - pw) / 2, py = (H - ph) / 2;
   const cy = (typeof techPanel === 'function') ? techPanel(ctx, px, py, pw, ph, { accent: ART_ACCENT, label: STR.world.artifact.tag, serial: 'RELIC' }) : py + 30;
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = PAL.chalk; ctx.font = `700 26px ${FONT_DISPLAY}`;
   ctx.fillText(STR.world.artifact.prompt, W / 2, cy + 24);
   ctx.fillStyle = PAL.ash; ctx.font = `9px ${FONT_MONO}`;
-  ctx.fillText(STR.world.artifact.hint, W / 2, cy + 42);
+  ctx.fillText(STR.world.artifact.hint + (canReroll ? '  ·  ' + STR.world.artifact.reroll.hint : ''), W / 2, cy + 42);
 
-  const def = a.tech, locked = !game.artifactSlotFree(def.slot);   // слот занят → техно недоступна (DK: без смены)
-  const choices = [
-    { label: STR.world.artifact.tech.label, sub: def.name, desc: def.desc, accent: ART_ACCENT, icon: 'tech', slot: def.slot, locked },
-    { label: STR.world.artifact.data.label, sub: STR.world.artifact.data.sub, desc: STR.world.artifact.data.desc, accent: PAL.cobalt || '#5a8fd6', icon: 'data' },
-    { label: STR.world.artifact.scrap.label, sub: STR.world.artifact.scrap.sub, desc: STR.world.artifact.scrap.desc, accent: PAL.toxic || '#c8e25a', icon: 'scrap' },
-  ];
-  const gap = 22, cardW = (pw - 44 - gap * 2) / 3, cardH = 210, cardY = cy + 62, x0 = px + 22;
-  const rects = [];
-  for (let i = 0; i < choices.length; i++) {
+  const cardW = (pw - 44 - gap * (N - 1)) / N, cardH = 210, cardY = cy + 62, x0 = px + 22;
+  const rects = [], GRN = PAL.toxic || '#9ad06a', RED = PAL.rust || '#c0402f';
+  for (let i = 0; i < N; i++) {
     const c = choices[i], cx = x0 + i * (cardW + gap), sel = game.artifactSel === i;
     rects.push({ x: cx, y: cardY, w: cardW, h: cardH });
     ctx.save();
-    if (c.locked) ctx.globalAlpha = 0.4;                          // слот занят — карта приглушена (выбор недоступен)
+    const anim = game._artChoose;
+    if (anim) {   // АНИМАЦИЯ ВЫБОРА (после клика/Enter): невыбранные сворачиваются в точку центра модалки + гаснут, выбранная разгорается
+      const p = Math.min(1, anim.t / anim.dur), e = p * p * (3 - 2 * p), ccx = cx + cardW / 2, ccy = cardY + cardH / 2;
+      if (i === anim.idx) { const gl = 1 + 0.05 * Math.sin(anim.t * 22); ctx.translate(ccx, ccy); ctx.scale(gl, gl); ctx.translate(-ccx, -ccy); }
+      else { const s = Math.max(0.001, 1 - e); ctx.translate(ccx + (W / 2 - ccx) * e, ccy); ctx.scale(s, s); ctx.translate(-ccx, -ccy); ctx.globalAlpha = 1 - e; }
+    }
+    if (c.locked) ctx.globalAlpha *= 0.4;                         // слот занят — карта приглушена (выбор недоступен)
     _artRoundRect(ctx, cx, cardY, cardW, cardH, 8);
     ctx.fillStyle = sel ? 'rgba(255,255,255,0.05)' : 'rgba(13,12,10,0.6)'; ctx.fill();
     ctx.strokeStyle = sel && !c.locked ? c.accent : 'rgba(122,112,94,0.6)'; ctx.lineWidth = sel && !c.locked ? 2.5 : 1.2; ctx.stroke();
     _artIcon(ctx, c.icon, cx + cardW / 2, cardY + 42, c.accent);
     ctx.textAlign = 'center';
     ctx.fillStyle = sel ? PAL.chalk : PAL.bone; ctx.font = `700 15px ${FONT_DISPLAY}`;
-    ctx.fillText(c.label, cx + cardW / 2, cardY + 90);
+    ctx.fillText(c.label, cx + cardW / 2, cardY + 88);
     ctx.fillStyle = c.accent; ctx.font = `bold 11px ${FONT_MONO}`;
-    ctx.fillText(c.sub, cx + cardW / 2, cardY + 109);
-    if (c.slot) { ctx.fillStyle = PAL.pewter; ctx.font = `9px ${FONT_MONO}`; ctx.fillText(STR.artifact.slotTag(STR.artifact.slot[c.slot]), cx + cardW / 2, cardY + 124); }   // слот-тег техно
+    ctx.fillText(c.sub, cx + cardW / 2, cardY + 106);
+    // СЛОТ + ЗАНЯТОСТЬ (задача 1): «СЛОТ · ТИП · used/cap» + СВОБОДЕН/ЗАНЯТ (цвет по свободе). Учитывает узлы-слоты (cap=2).
+    if (c.slot) {
+      ctx.fillStyle = PAL.pewter; ctx.font = `9px ${FONT_MONO}`;
+      ctx.fillText(STR.artifact.slotUse(STR.artifact.slot[c.slot], c.used, c.cap), cx + cardW / 2, cardY + 121);
+      ctx.fillStyle = c.locked ? RED : GRN; ctx.font = `bold 9px ${FONT_MONO}`;
+      ctx.fillText(c.locked ? STR.artifact.slotFull : STR.artifact.slotFree, cx + cardW / 2, cardY + 133);
+    }
     ctx.fillStyle = PAL.pewter; ctx.font = `11px ${FONT_MONO}`; ctx.textAlign = 'left';
     const lines = _artWrap(ctx, c.desc, cardW - 26);
-    lines.forEach((ln, k) => ctx.fillText(ln, cx + 13, cardY + 142 + k * 15));
+    lines.forEach((ln, k) => ctx.fillText(ln, cx + 13, cardY + (c.slot ? 150 : 140) + k * 15));
     ctx.textAlign = 'center';
-    if (c.locked) { ctx.fillStyle = PAL.rust || '#c0402f'; ctx.font = `bold 10px ${FONT_MONO}`; ctx.fillText('✕ ' + STR.artifact.slotFull, cx + cardW / 2, cardY + cardH - 14); }
-    else if (sel) { ctx.fillStyle = c.accent; ctx.font = `bold 10px ${FONT_MONO}`; ctx.fillText('▸ ' + STR.world.artifact.select, cx + cardW / 2, cardY + cardH - 14); }
+    if (!c.locked && sel) { ctx.fillStyle = c.accent; ctx.font = `bold 10px ${FONT_MONO}`; ctx.fillText('▸ ' + STR.world.artifact.select, cx + cardW / 2, cardY + cardH - 12); }
+    if (anim && i === anim.idx) {   // ВЫБРАННАЯ разгорается — аддитивный акцент-глоу поверх, ярче к концу анимации
+      const p = Math.min(1, anim.t / anim.dur);
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.12 + 0.4 * p; ctx.fillStyle = c.accent;
+      _artRoundRect(ctx, cx, cardY, cardW, cardH, 8); ctx.fill();
+    }
     ctx.restore();
   }
   game._artifactRects = rects;
+
+  // ── КНОПКА «ПОВТОРНЫЙ АНАЛИЗ» (узел kart_reroll): сменить предложенные техно за кристаллы, N сбросов за забег ──
+  game._artifactRerollRect = null;
+  if (canReroll) {
+    const left = game.artifactRerollsLeft(), crystals = (game.inventory && game.inventory.cargo.crystal) || 0, can = game.artifactCanReroll();
+    const bw = Math.min(320, pw - 44), bh = 34, bx = W / 2 - bw / 2, by = cardY + cardH + 16;
+    game._artifactRerollRect = { x: bx, y: by, w: bw, h: bh };
+    ctx.save();
+    if (!can) ctx.globalAlpha = 0.5;
+    _artRoundRect(ctx, bx, by, bw, bh, 6);
+    ctx.fillStyle = 'rgba(13,12,10,0.7)'; ctx.fill();
+    ctx.strokeStyle = can ? ART_ACCENT : 'rgba(122,112,94,0.6)'; ctx.lineWidth = can ? 2 : 1.2; ctx.stroke();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = can ? PAL.chalk : PAL.pewter; ctx.font = `bold 12px ${FONT_MONO}`;
+    ctx.fillText('⟲ ' + STR.world.artifact.reroll.label, bx + 14, by + bh / 2);
+    let status, scol;
+    if (left <= 0) { status = STR.world.artifact.reroll.none; scol = RED; }
+    else if (crystals < ARTIFACT_REROLL_COST) { status = STR.world.artifact.reroll.poor(ARTIFACT_REROLL_COST); scol = RED; }
+    else { status = STR.world.artifact.reroll.cost(ARTIFACT_REROLL_COST) + '  ·  ' + STR.world.artifact.reroll.left(left); scol = ART_ACCENT; }
+    ctx.textAlign = 'right'; ctx.fillStyle = scol; ctx.font = `10px ${FONT_MONO}`;
+    ctx.fillText(status, bx + bw - 14, by + bh / 2);
+    ctx.restore();
+  }
   ctx.restore();
 }
 

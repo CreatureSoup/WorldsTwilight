@@ -6,7 +6,9 @@
 // все три → пробой (красный). Виден под капсулой гибернации, только при атаке (`firewall.visible()`).
 // Перф: только штрихи/клипы, БЕЗ filter/shadowBlur/офскринов. Гейт/позиция — `game.drawScene`.
 function drawFirewall(ctx, fw, W, t) {
-  const segs = FIREWALL_SEGMENTS, ww = 360, hh = 70, x = 210, y = 56;
+  const segs = FIREWALL_SEGMENTS, ww = 360, hh = 70;
+  const box = (typeof HudLayout !== 'undefined') ? HudLayout.slot('tc', ww, hh) : { x: 210, y: 56 };   // зона tc: под капсулой города (hud_layout.js)
+  const x = box.x, y = box.y;
   const alarm = 0.5 + 0.5 * Math.abs(Math.sin(t * 5)), br = fw.breached;
   ctx.save();
   ctx.fillStyle = 'rgba(13,10,14,0.9)'; ctx.fillRect(x, y, ww, hh);

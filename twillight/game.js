@@ -98,8 +98,11 @@ class Game {
       else if (this.mode === 'menu' || this.mode === 'paused' || this.mode === 'gameover') this.menuClick(x, y);
       else if (this.mode === 'artifact') this.artifactClick(x, y);
       else if (this.mode === 'playing' && !this.debug) {   // ЛКМ: подтвердить размещение печати / панель печати / HUD-тумблеры (УГРОЗЫ / ПУТЬ)
-        if (this.actionBarClick(x, y)) {}   // кнопка активного действия (низ-центр) → инжект хоткея
+        if (typeof HudLayout !== 'undefined' && HudLayout.dockClick(x, y)) {}   // язычок сворачивания левого виджета (проверяем ПЕРВЫМ — левее тела виджета)
+        else if (this.sandbox && this.sandboxSpawnClick && this.sandboxSpawnClick(x, y)) {}   // ПОЛИГОН: кнопка спавна врага (справа)
+        else if (this.actionBarClick(x, y)) {}   // кнопка активного действия (низ-центр) → инжект хоткея
         else if (this.printMode === 'place') this.printConfirm();
+        else if (this._econClick(x, y)) {}   // чипы экономики города (конвертер/электростанция)
         else if (!this.printClick(x, y) && !this.radarSwitchClick(x, y) && !this.alertClick(x, y) && !this.beaconClick(x, y)) this.navClick(x, y);
       }
       // во время забега инвентарь не открывается — сборка модулей только перед стартом
@@ -167,6 +170,7 @@ class Game {
 
   // навигация по меню с клавиатуры: WASD/стрелки — выбор, Space/Enter — нажать
   menuNav() {
+    if (this.mode === 'menu' && this.input.pressed('KeyT') && this.startSandbox) { this.startSandbox('objects'); return; }   // ТЕСТОВЫЙ ПОЛИГОН (sandbox.js)
     const bs = this.menuButtons();
     if (!bs.length) return;
     if (this.input.pressed('KeyW', 'ArrowUp', 'KeyA', 'ArrowLeft')) this.menuSel = (this.menuSel - 1 + bs.length) % bs.length;
@@ -220,7 +224,8 @@ class Game {
     this.shots.clear();
     this.structures.clear();   // новый забег — печатных структур нет
     this.couriers = [];        // новый забег — курьер-дронов в полёте нет (vault_courier)
-    this.drone = null;         // дрон-компаньон (реликт дрон-слота) — пересоздаётся _syncDrone из _applyArtifacts
+    this.drones = [];          // дрон-компаньоны (реликты дрон-слота, до кап-слота) — пересоздаются _syncDrone из _applyArtifacts
+    if (this._cityTurretsInit) this._cityTurretsInit();   // ТУРЕЛИ ГОРОДА (узлы amb_turret*): расставляются по кол-ву узлов (cityturret.js)
     this.blightBeacons = [];   // новый забег — маяков скверны нет (скверносей расставляет в забеге)
     this.acidClouds = []; this.seismicWaves = [];   // ловушки: активные эффекты (кислотные облака / сейсмо-волны) — чисто на старте
     this.scanJamT = 0;   // дебафф глушилки сканера (останок-робот) — чисто на старте (паутина/прыгун на unit, сбрасываются с новым телом)
@@ -234,8 +239,9 @@ class Game {
     this._winTimer = null; this._winCut = null;   // победа через взлом: большой таймер перехвата → кат-сцена (kart_hackcity)
     this._lifeUsed = false;   // print_life: резервное тело ещё не использовано
     if (this._cableInit) this._cableInit();   // print_cable: трейлинг-кабель чист на старте забега
-    this.pendingArtifact = null; this.artifactSel = 0;   // артефакты: модалка/выбор
+    this.pendingArtifact = null; this.artifactSel = 0; this._artChoose = null;   // артефакты: модалка/выбор/анимация
     this.artifactSlots = { city: [], unit: [], drone: [] };   // установленные техно по слотам (ЗАЛОЧЕНО на забег); сброс на старте
+    this.artifactRerolls = 0;   // «повторный анализ» реликта (узел kart_reroll): израсходовано за забег; лимит artifactRerollMax()
     this.hoardCargo = false;   // тумблер ГРУЗ: по умолчанию отдаём ресурс городу
     this.loot = new Loot();
     this.falling = new FallingRocks();   // нестабильная порода → падающие валуны
@@ -246,6 +252,7 @@ class Game {
     this._discDone = false; this._discT = 0;                           // состояние опроса находок (сброс на забег)
     this.fx.clear(); this.dust.clear();
     this.cycle.reset();
+    if (this._econReset) this._econReset();   // ЭКОНОМИКА ГОРОДА (реликты синтез/конвертер/электростанция): сброс состояния забега (economy.js) — после cycle.reset (детект смены цикла с n=1)
     this._epochBase = Math.floor(this.save.epoch || EPOCH_START);   // забег стартует с ТЕКУЩЕГО глобального цикла (первый цикл = эпоха, не 1)
     this.enemies = [];
     this.lastCycleN = 0;
@@ -294,6 +301,7 @@ class Game {
     writeSave(this.save);
   }
   endRun() {
+    if (this.sandbox && this.exitSandbox) this.exitSandbox();   // ТЕСТОВЫЙ ПОЛИГОН: снять флаг + восстановить сейв из снимка (in-memory дрейф runs откатывается; диск не трогался)
     if (this._epochBase) { this.save.epoch = this._epochBase + (this.cycle.n - 1) + this.cycle.frac(); this._epochBase = 0; writeSave(this.save); }   // глобальный цикл += прожитые забегом циклы → меню продолжит тикать отсюда
     this.unit = null; this.world = null; this.city = null; this.loot = null; this.falling = null;
     this.navPath = null;
@@ -409,11 +417,10 @@ class Game {
     if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) { this.alertView = !this.alertView; return true; }
     return false;
   }
-  // Клик в забеге: чип переключателя типа ресурса РАДАРА (если радар установлен и не полный спектр).
+  // Клик в забеге: кнопки типа ресурса РАДАРА (3 сегмента; клик по кнопке = выбрать её тип). Если радар установлен и не полный спектр.
   radarSwitchClick(x, y) {
-    if (typeof radarSwitchVisible !== 'function' || !radarSwitchVisible(this) || typeof radarSwitchRect !== 'function') return false;
-    const r = radarSwitchRect();
-    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) { this.radarCycleType(); return true; }
+    if (typeof radarSwitchVisible !== 'function' || !radarSwitchVisible(this) || typeof radarSwitchButtons !== 'function') return false;
+    for (const b of radarSwitchButtons()) if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { this.radarSetType(b.type); return true; }
     return false;
   }
   _addShake(mag) { this.shakeMag = Math.min(SHAKE_MAX, Math.max(this.shakeMag || 0, mag)); this.shakeT = SHAKE_TIME; }
@@ -462,9 +469,11 @@ class Game {
     if (typeof drawArtifacts === 'function') drawArtifacts(ctx, this.world, this.camera);   // артефакты-реликты в породе (под туманом, как серверы)
     if (typeof drawRobots === 'function') drawRobots(ctx, this, this.camera);   // останки роботов (погребённые под туманом; активные — поверх)
     if (typeof drawMines === 'function') drawMines(ctx, this, this.camera);     // старые мины (мигают перед взрывом)
+    if (typeof drawContainers === 'function') drawContainers(ctx, this, this.camera);   // контейнеры-хранилища: крейт + анимация взлома (под туманом, в прокопанном ходе)
     if (typeof drawBlightBeacons === 'function') drawBlightBeacons(ctx, this.blightBeacons, this.camera);   // маяки скверны (под туманом, до врагов/структур)
     drawEnemies(ctx, this.enemies, this.camera);
     if (typeof drawStructures === 'function') drawStructures(ctx, this.structures, this.camera);   // печатные структуры (в мире, под туманом)
+    if (typeof drawCityTurrets === 'function') drawCityTurrets(ctx, this, this.camera);   // ТУРЕЛИ ГОРОДА (узлы amb_turret*): авто-оборона базы
     if (typeof drawCityShield === 'function') drawCityShield(ctx, this, this.camera);   // ЩИТ ГОРОДА (артефакт city_shield): купол над базой
     if (typeof drawShots === 'function') drawShots(ctx, this.shots, this.camera);   // трассеры выстрелов врагов (снайпер)
     drawLoot(ctx, this.loot, this.camera);
@@ -489,13 +498,21 @@ class Game {
     if (typeof drawDrones === 'function') drawDrones(ctx, this, this.camera);   // дрон-компаньон (реликт дрон-слота): ПОВЕРХ тумана
     if (typeof drawTraps === 'function') drawTraps(ctx, this, this.camera);   // ловушки: кислотное облако-шиммер + сейсмо-волна-линза (поверх тумана — опасность видна)
     if (typeof drawJets === 'function') drawJets(ctx, this, this.camera);   // ПРЫЖКОВЫЕ ДВИЖКИ (артефакт): выхлоп из-под юнита в полёте
-    if (typeof drawCarriedBorer === 'function') drawCarriedBorer(ctx, this, this.camera);   // несомый «следующий» щит торчит из юнита (рисуется ДО юнита → задняя половина уходит под корпус)
+    const _wheelHull = this.unit && typeof UNIT_DEFS !== 'undefined' && UNIT_DEFS[this.unit.hull] && UNIT_DEFS[this.unit.hull].kind === 'wheel';
+    const tOff = (this.debugTentacles && !_wheelHull) ? tentacleBodyOffset() : null;   // корпус едет на щупальцах (лаг корпуса) — нужен и щиту, чтобы не отставать от кольца; у колеса ног нет
+    if (typeof drawCarriedBorer === 'function') drawCarriedBorer(ctx, this, this.camera, tOff);   // несомый «следующий» щит торчит из юнита (рисуется ДО юнита → задняя половина уходит под корпус); tOff → приклеен к корпусу
     if (this.printMode === 'place' && typeof drawPrintGhost === 'function') drawPrintGhost(ctx, this, this.camera);   // голограмма размещения печати (поверх тумана — это UI)
     if (typeof partsHull === 'function' && this.unit) partsHull(this.unit.hull);   // спрайты по типу корпуса (ноги+кольцо+детали)
-    const tOff = this.debugTentacles ? tentacleBodyOffset() : null;   // корпус едет на щупальцах
     const ringDef = this.unit && typeof UNIT_DEFS !== 'undefined' && UNIT_DEFS[this.unit.hull];
     const isRing = !!(ringDef && ringDef.kind === 'ring');
-    if (isRing) {
+    const isWheel = !!(ringDef && ringDef.kind === 'wheel');
+    if (isWheel) {
+      // МОНО-КОЛЕСО «Канонир»: ног/щупалец нет, лага корпуса нет — колесо на месте юнита, турель поверх.
+      // Клип по видимому воздуху → колесо ЗА породой (как щупальца), не вылезает на камень.
+      ctx.save(); clipVisibleAir(ctx, this.world, this.camera);
+      if (typeof drawWheelUnit === 'function') drawWheelUnit(ctx, this.world, this.unit, this.camera, { scale: unitDrawScale(this.unit), dy: (typeof wheelGroundDy === 'function' ? wheelGroundDy(this.unit) : 0) });   // колесо садится на пол (не парит)
+      ctx.restore();
+    } else if (isRing) {
       // КОЛЬЦО: ноги (щупальца) рисуются ПОД кольцом/модулями (клип по видимому воздуху → не «вылезает»),
       // затем кластер кольца+модулей ПОВЕРХ. Кластер вращается к направлению бурения, ноги — нет.
       if (this.debugTentacles && this.unit) { ctx.save(); clipVisibleAir(ctx, this.world, this.camera); drawTentacles(ctx, this.camera); ctx.restore(); }
@@ -506,6 +523,7 @@ class Game {
         ctx.save(); clipVisibleAir(ctx, this.world, this.camera); drawTentacles(ctx, this.camera); ctx.restore();
       }
     }
+    if (isWheel && typeof drawUnitTurretFx === 'function') drawUnitTurretFx(ctx, this, this.camera);   // трассеры авто-турели канонира
     if (this.unit && this.unit.hitT > 0) {   // удар-флэш ЮНИТА: красная аддитивная вспышка поверх корпуса
       const f = this.unit.hitT / HIT_FLASH_TIME, ux = this.camera.screenX(this.unit.px), uy = this.unit.py - this.camera.y;
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.4 * f; ctx.fillStyle = '#ff5040';
@@ -536,15 +554,19 @@ class Game {
     if (this.debug && typeof drawHazardDebug === 'function') drawHazardDebug(ctx, this, this.camera);   // ДЕБАГ: маркеры артефактов/роботов/мин (туман выкл)
     ctx.restore();   // конец смещённого тряской мирового слоя — HUD/CRT рисуются без тряски
     if (this._cinematic) return;   // КИНОРЕЖИМ (tools/teaser.js — тизер): рисуем ТОЛЬКО мир, без HUD/CRT-рамки/виджетов
+    if (typeof HudLayout !== 'undefined') HudLayout.begin(this.designW, this.designH);   // сброс зон-слотов HUD на кадр (дизайн-система «виджеты не наслаиваются» — hud_layout.js)
+    if (this.sandbox && this.drawSandboxLabels) this.drawSandboxLabels(ctx, this.camera);   // ТЕСТОВЫЙ ПОЛИГОН: debug-подписи типов над объектами
     drawCrtOverlay(ctx, this.designW, this.designH);   // виньетка + скан-лайны поверх мира (HUD крупнее)
     drawHUD(ctx, this.world, this.unit, this.inventory, { fps: this.fps, delivered: this.deliveredTotal, cycle: this.cycle, cycleNum: this.cycleLabel(), scan: this.activeScan || (this.scanEnemy ? { data: this.scanEnemy.scan } : null), scanDoneT: this._scanDoneT, scanMsg: this._scanMsg, log: this.eventLog, bank: (typeof metaHas === 'function' && metaHas('amb_hub')) ? this.upgrades.bank : null, hoard: this.hoardCargo }, this.designW, this.designH);
+    if (typeof HudLayout !== 'undefined' && typeof hudLeftBottom === 'function')
+      HudLayout.reserve('tl', HUD_VW, hudLeftBottom(typeof metaHas === 'function' && metaHas('amb_hub')) - HUD_VY);   // застолбить фикс-панели (ЮНИТ/ГРУЗ/БАНК) → условные виджеты зоны tl стекаются НИЖЕ них
     if (typeof drawWavePredict === 'function') drawWavePredict(ctx, this, 580, 24);   // ПРОГНОЗ ВОЛН (узел amb_predict): графический таймер + глиф угрозы, под «ЦИКЛ N»
     if (this.mode === 'playing' && !this.debug && typeof drawDebuffBadge === 'function') drawDebuffBadge(ctx, this, this.designW, this.designH);   // мигающая плашка активных дебаффов (паутина/прыгун/глушилка)
     if (this.mode === 'playing' && !this.debug && this._alertActive() && typeof drawAlertToggle === 'function')
       drawAlertToggle(ctx, this.alertView, this._alertThreats(), performance.now() / 1000);   // HUD-тумблер (виден при владении узлом)
     if (this.mode === 'playing' && !this.debug && typeof drawPrintHud === 'function') drawPrintHud(ctx, this, this.designW, this.designH);   // панель печати структур / подсказка режима
     if (this.mode === 'playing' && !this.debug && typeof drawBorerStatus === 'function') drawBorerStatus(ctx, this, this.designW, this.designH);   // винтовой бур: статус щитов (несом/в ходу)
-    if (this.mode === 'playing' && !this.debug && this._winTimer && typeof drawWinTimer === 'function') drawWinTimer(ctx, this, this.designW);   // ПЕРЕХВАТ РЕАКТОРА: большой таймер победы (kart_hackcity)
+    if (this.mode === 'playing' && !this.debug && typeof drawEconomyWidgets === 'function') drawEconomyWidgets(ctx, this, this.designW, this.designH);   // ЭКОНОМИКА ГОРОДА: чипы конвертера/электростанции (реликты converter/power_plant)
     if (typeof drawActionBar === 'function') drawActionBar(ctx, this, this.designW, this.designH);   // панель активных действий (низ-центр): дубль хоткеев кнопками
     if (this.mode === 'playing' && !this.debug && typeof metaHas === 'function' && metaHas('amb_nav') && typeof drawNavToggle === 'function')
       drawNavToggle(ctx, this.navView, this.designW);   // лаконичный HUD-тумблер ПУТЬ (под маячком, если он есть; виден при владении узлом amb_nav)
@@ -554,11 +576,13 @@ class Game {
     // ⚠️ НЕ УДАЛЯТЬ ПОКА: виджет кулдауна сканера временно ОТКЛЮЧЁН — кулдаун теперь показывает заливка иконок в
     // панели активных действий (drawActionBar). Код виджета (drawScanCooldown/scanCdInfo, render_scanners.js) оставлен.
     // if (typeof drawScanCooldown === 'function') drawScanCooldown(ctx, this, this.designW);
-    if (this.mode === 'playing' && !this.debug && this.radar && this._contamActive() && typeof drawRadarCompass === 'function')
-      drawRadarCompass(ctx, this.radar, 10, (typeof hudLeftBottom === 'function' ? hudLeftBottom(typeof metaHas === 'function' && metaHas('amb_hub')) : 118) + 6);   // под левым стеком HUD (ГРУЗ/БАНК)
-    if (this.mode === 'playing' && !this.debug && this.dataCompass && this.artifactHas('data_detector') && typeof drawDataCompass === 'function') {   // ДЕТЕКТОР ДАННЫХ (реликт города) — стек ПОД детектором загрязнения
-      const baseY = (typeof hudLeftBottom === 'function' ? hudLeftBottom(typeof metaHas === 'function' && metaHas('amb_hub')) : 118) + 6;
-      drawDataCompass(ctx, this.dataCompass, 10, baseY + (this._contamActive() ? RADAR_H + 6 : 0));
+    if (this.mode === 'playing' && !this.debug && this.radar && this._contamActive() && typeof drawRadarCompass === 'function') {   // ДЕТЕКТОР ЗАГРЯЗНЕНИЯ: слот зоны tl (стек под фикс-панелями)
+      const s = (typeof HudLayout !== 'undefined') ? HudLayout.slotDock('tl', RADAR_W, RADAR_H, 'contam', PAL.amber) : { x: 10, y: (typeof hudLeftBottom === 'function' ? hudLeftBottom(metaHas('amb_hub')) : 118) + 6 };
+      drawRadarCompass(ctx, this.radar, s.x, s.y);
+    }
+    if (this.mode === 'playing' && !this.debug && this.dataCompass && this.artifactHas('data_detector') && typeof drawDataCompass === 'function') {   // ДЕТЕКТОР ДАННЫХ (реликт города): слот зоны tl (стек ПОД детектором загрязнения)
+      const s = (typeof HudLayout !== 'undefined') ? HudLayout.slotDock('tl', DATADET_W, DATADET_H, 'datadet', PAL.cobalt) : { x: 10, y: ((typeof hudLeftBottom === 'function' ? hudLeftBottom(metaHas('amb_hub')) : 118) + 6) + (this._contamActive() ? RADAR_H + 6 : 0) };
+      drawDataCompass(ctx, this.dataCompass, s.x, s.y);
     }
     drawCity(ctx, this.city, this.designW);
     if (this.mode === 'playing' && !this.debug && this.atBase()) {   // подсказка действия под капсулой таймера (в зоне города)
@@ -569,7 +593,12 @@ class Game {
     }
     if (this.mode === 'playing' && !this.debug && this.firewall && this.firewall.visible() && typeof drawFirewall === 'function')
       drawFirewall(ctx, this.firewall, this.designW, performance.now() / 1000);   // виджет взлома файрволла (под капсулой, только при атаке)
+    if (this.mode === 'playing' && !this.debug && this._winTimer && typeof drawWinTimer === 'function') drawWinTimer(ctx, this, this.designW);   // ПЕРЕХВАТ РЕАКТОРА: таймер победы (kart_hackcity) — ПОСЛЕ капсулы/файрволла: слот зоны tc стекается под ними
     if (this.mode === 'playing' && !this.debug && typeof drawBigHint === 'function') drawBigHint(ctx, this.hints, this.designW, this.designH);   // крупная сюжетная подсказка
+    if (this.sandbox && this.drawSandboxHud) this.drawSandboxHud(ctx, this.designW, this.designH);   // ТЕСТОВЫЙ ПОЛИГОН: баннер хоткеев (низ-центр)
+    if (this.sandbox && this.drawSandboxSpawnPanel) this.drawSandboxSpawnPanel(ctx, this.designW, this.designH);   // ПАНЕЛЬ СПАВНА ВРАГОВ (справа)
+    if (typeof HudLayout !== 'undefined') HudLayout.drawDockTabs(ctx);   // язычки сворачивания левых виджетов — ПОВЕРХ них
+    if (typeof HudLayout !== 'undefined') HudLayout.validate();   // DEV-сеть (гибрид D): ворчит на наложения HUD-виджетов, дедуп в validate() (только при смене набора — без спама)
     if (this.debug) {
       ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = `13px ${FONT_MONO}`; ctx.fillStyle = '#ffd24a';
       ctx.fillText('DEBUG: камера свободна (WASD), туман выкл, юнит в безопасности — B выкл · R +10 ресурсов', this.designW / 2, this.designH - 48);
@@ -653,6 +682,7 @@ class Game {
       if (this.input.pressed('KeyG') && typeof metaHas === 'function' && metaHas('amb_beacon')) this.beaconView = !this.beaconView;   // ГОРОД (маячок): вкл/выкл
       if (this.input.pressed('KeyC')) this.radarCycleType();   // РАДАР: переключить тип ресурса (no-op без радара/при полном спектре)
       if (this.input.pressed('KeyT')) this.debugTentacles = !this.debugTentacles;   // прототип щупалец
+      if (this.sandbox && this.updateSandboxInput) this.updateSandboxInput();   // ТЕСТОВЫЙ ПОЛИГОН: R сброс, F тумблер обезвреживания
       this.updatePrint(dt);   // ПЕЧАТЬ: размещение/печать структур, лок юнита, Esc-отмена (до unit.update — кадр уважит frozenPrint)
       this.updateImpulse(dt);   // ИМПУЛЬСНЫЙ БУР: заряд Пробелом/выстрел-волна (до unit.update — кадр уважит frozenImpulse)
       this.updateBorers(dt);    // ВИНТОВОЙ БУР: автономные щиты-проходчики (запуск/возврат по Пробелу)
@@ -664,8 +694,13 @@ class Game {
       this.updateDash(dt);      // РЫВОК (артефакт): доп-действие → unit.dashing (до unit.update — авто-проходка по воздуху)
       this.updateHarpoon(dt);   // ГАРПУН (артефакт): доп-действие → притяг к стене через dash-машинерию (до unit.update)
       this.unit.update(dt, this.input, this.world);
-      if (this.debugTentacles) updateTentacles(dt, this.unit, this.world);
-      if (typeof updateRingAim === 'function' && UNIT_DEFS[this.unit.hull] && UNIT_DEFS[this.unit.hull].kind === 'ring') updateRingAim(dt, this.unit);   // доворот кластера кольца к направлению бурения
+      const _hullKind = UNIT_DEFS[this.unit.hull] && UNIT_DEFS[this.unit.hull].kind;
+      if (this.debugTentacles && _hullKind !== 'wheel') updateTentacles(dt, this.unit, this.world);   // у колеса ног нет
+      if (typeof updateRingAim === 'function' && _hullKind === 'ring') updateRingAim(dt, this.unit);   // доворот кластера кольца к направлению бурения
+      if (_hullKind === 'wheel') {
+        if (typeof updateWheelSpin === 'function') updateWheelSpin(dt, this.unit);   // качение колеса + раскрутка бура
+        if (typeof this.updateUnitTurret === 'function') this.updateUnitTurret(dt);  // авто-турель канонира (cannon.js)
+      }
       if (this.unit.dug) {
         const d = this.unit.dug, n = d.amount || 1;
         for (let i = 0; i < n; i++) this.loot.spawn(wrapX(d.x + (n > 1 ? Math.round((Math.random() - 0.5) * 2.2) : 0)), d.y, d.type);   // богатый тайл (1..3) → несколько дропов
@@ -697,6 +732,7 @@ class Game {
       this.updateHazards(dt);    // погребённые опасности: останки роботов (стрельба) + старые мины (взрыв); откоп → срабатывание
       this.updateBlight(dt);     // маяки скверны (скверносей): добивание бурением → снятие очага помех
       this.updateTraps(dt);      // ловушки: срабатывание свежевыкопанных + тик активных (кислота DoT / сейсмо-волна / рассеивание)
+      this.updateContainers(dt); // контейнеры-хранилища: юнит рядом + узел kart_hackbox → взлом-таймер → дроп ресурсов
       this.falling.update(dt, this.world, this.unit);   // нестабильная порода: срыв валунов + урон
       if (this.visions) this.visions.update(dt, this.unit, this.designW, this.designH);   // видения в темноте
       if (this.hints) this.hints.update(dt);
@@ -711,9 +747,11 @@ class Game {
       this.fx.update(dt);
       this.camera.follow(this.unit, dt);
       this.dust.drill(dt, this.unit);                         // пыль бурения (от блока к юниту)
+      if (this.borers) for (const b of this.borers) this.dust.borerDrill(dt, b);   // ВИНТОВЫЕ ЩИТЫ: та же крошка/пыль у фрезы, что у дефолтного бура
       this.dust.ambient(dt, this.world, this.camera);         // редкая фоновая пыль/камушки с потолка (после follow — камера актуальна)
       this.dust.update(dt);
       if (this.scanJamT > 0) { this.scanJamT = Math.max(0, this.scanJamT - dt); if (this.scanJamT <= 0 && !this.debug) this.logEvent(STR.log.robotJamOff); }   // ДЕБАФФ глушилка: спад → восстановление сканера
+      if (this.unit.latchT > 0) { this.unit.latchT -= dt; if (this.unit.latchT <= 0 && this.unit.latchTiles > 0) { this.unit.latchTiles = 0; if (!this.debug) this.logEvent(STR.log.robotLatchOff); } }   // ДЕБАФФ прыгун: авто-отвал по времени (не только по проходке)
       if (this.scanJamT <= 0) this.world.reveal(this.unit.tileX, this.unit.tileY, Math.max(1, Math.round(this.unit.stats.scanR || SCANNER_R)));   // ЧЕСТНЫЕ целые тайлы (1/2/3); при глушении — туман НЕ снимается
       this._updateNavPath(dt);   // НАВИГАЦИЯ: пересчёт реального пути A* к базе (троттлинг внутри)
       const atBase = this.atBase();
@@ -735,6 +773,7 @@ class Game {
       const siphoned = this.enemies.some((e) => e.type === 'raider' && e.draining && !e.dead);   // рейдер сосёт реактор → дозарядка на базе на паузе
       this._cableUpdate(dt);   // print_cable/print_batt: трейлинг-кабель за юнитом (прокладка/сматывание/длина/обрушение/якоря) → this.cable
       if (this._cableAnchorInput) this._cableAnchorInput();   // Энергорелеи: доп-действие якоря шлейфа на батарею
+      if (this._updateEconomy) this._updateEconomy(dt);   // ЭКОНОМИКА ГОРОДА (economy.js): синтез/конвертер на смену цикла + электростанция жжёт органику (ДО city.update — держит контуры пока горит резерв)
       this.city.update(dt, atBase, siphoned, !!(this.cable && this.cable.powered));
       this.cycle.update(dt * this._waveSlowFactor());   // макро-таймер эскалации (взлом-саботаж гнёзд ЗАМЕДЛЯЕТ — wildcity.js)
       this.updateEnemies(dt);  // волны диких гнёзд
@@ -746,19 +785,21 @@ class Game {
       this.updateDataDetector(dt);      // ДЕТЕКТОР ДАННЫХ (реликт города): пеленг к ближайшему серверу с данными (game.dataCompass → drawDataCompass)
       this.updateDrones(dt);            // ДРОН-КОМПАНЬОН (реликт дрон-слота): collector/courier/battery/scout/hacker (game.drone)
       this.structures.update(dt, this);   // печатные структуры: турели бьют врагов, подзарядка от юнита, гибель
+      if (this._updateCityTurrets) this._updateCityTurrets(dt);   // ТУРЕЛИ ГОРОДА (узлы amb_turret*): авто-оборона базы (cityturret.js)
       this.updateCouriers(dt);            // курьер-дроны (vault_courier): полёт к базе, перехват врагами, сдача груза
       this._hitFxPass(dt);   // удар-фидбэк: детект урона по юниту/врагам/структурам ЗА КАДР → искры + флэш + тряска
       // ФАЙРВОЛЛ: активные взломщики у базы заполняют сегменты; узел amb_fw замедляет; ЮНИТ на взлом НЕ влияет (защита — убить хакеров)
       const hackers = this.enemies.reduce((n, e) => n + (e.hacking ? 1 : 0), 0);
       this.firewall.update(dt, hackers, typeof metaHas === 'function' && metaHas('amb_fw'));
       if (this.firewall.justSeg && !this.debug) this.logEvent(STR.log.fwSegment(this.firewall.segDone, FIREWALL_SEGMENTS));
-      if (this.dugTiles > (this.save.bestDug || 0)) { this.save.bestDug = this.dugTiles; writeSave(this.save); }
-      if (this.unit.hp <= 0) {
-        if (typeof metaHas === 'function' && metaHas('print_life') && !this._lifeUsed) this._reprintBody();   // print_life: ОДИН раз за забег — перепечатка тела вместо гибели
+      if (!this.sandbox && this.dugTiles > (this.save.bestDug || 0)) { this.save.bestDug = this.dugTiles; writeSave(this.save); }
+      if (this.unit.hp <= 0) {   // ⚠️ сэндбокс — ПЕРВОЙ веткой этого же if (не отдельным if перед цепочкой): иначе else-if ниже (Esc/Пробел) не выполнятся в полигоне
+        if (this.sandbox) this._sandboxRespawn();   // ТЕСТОВЫЙ ПОЛИГОН: бессмертие — hp≤0 → респаун у базы, без гейм-овера
+        else if (typeof metaHas === 'function' && metaHas('print_life') && !this._lifeUsed) this._reprintBody();   // print_life: ОДИН раз за забег — перепечатка тела вместо гибели
         else { this.overReason = 'unit'; this.mode = 'gameover'; }
       }
-      else if (this.city.dead) { this.overReason = 'city'; this.mode = 'gameover'; }
-      else if (this.firewall.breached) { this.overReason = 'hack'; this.mode = 'gameover'; }
+      else if (!this.sandbox && this.city.dead) { this.overReason = 'city'; this.mode = 'gameover'; }   // в полигоне город/файрволл НЕ завершают забег → цепочка идёт к вводу
+      else if (!this.sandbox && this.firewall.breached) { this.overReason = 'hack'; this.mode = 'gameover'; }
       else if (this.input.pressed('Escape') && !this.printMode && !this._printEsc) this.mode = 'paused';   // Esc в печати — отмена (см. updatePrint), не пауза
       else if (this.input.pressed(KEY_PRIMARY) && atBase && this.unit.state === IDLE && !this.printMode && !this._actionHeld) { this.upgrades.sel = 0; this.upgrades.scrollY = 0; this.mode = 'upgrades'; }   // апгрейды у базы — ГЛАВНОЕ действие (Пробел); ТОЛЬКО стоя (не в движении); НЕ от клика по кнопке действия (`_actionHeld`)
       this._checkArtifacts();   // откопал артефакт рядом → модалка выбора (переключит mode на 'artifact')
@@ -817,10 +858,17 @@ class Game {
       if (this.input.pressed('Enter', 'NumpadEnter', 'Space')) this.onInventoryStart(); // «В шахту» — пробел/ввод равнозначны
       drawInventory(ctx, this.inventory, this.designW, this.designH);
     } else if (this.mode === 'artifact') {
-      // модалка артефакта: мир заморожен (как пауза), выбор обязателен (Esc не отменяет)
-      if (this.input.pressed('KeyA', 'ArrowLeft', 'KeyW', 'ArrowUp')) this.artifactSel = (this.artifactSel + 2) % 3;
-      else if (this.input.pressed('KeyD', 'ArrowRight', 'KeyS', 'ArrowDown')) this.artifactSel = (this.artifactSel + 1) % 3;
-      if (this.input.pressed('Enter', 'NumpadEnter', 'Space')) this.artifactChoose(this.artifactSel);
+      // модалка артефакта: мир заморожен (как пауза), выбор обязателен (Esc не отменяет). Число карт — динамическое (2/3 техно + данные + переработка).
+      if (this._artChoose) {   // АНИМАЦИЯ выбора: остальные карты сворачиваются в центр, выбранная разгорается → по концу применяем эффект
+        this._artChoose.t += dt;
+        if (this._artChoose.t >= this._artChoose.dur) { const idx = this._artChoose.idx; this._artChoose = null; this._artifactResolve(idx); }
+      } else {
+        const nC = this._artifactChoiceCount || 3;   // ставит рендер (drawArtifactModal) = offer.length + 2
+        if (this.input.pressed('KeyA', 'ArrowLeft', 'KeyW', 'ArrowUp')) this.artifactSel = (this.artifactSel + nC - 1) % nC;
+        else if (this.input.pressed('KeyD', 'ArrowRight', 'KeyS', 'ArrowDown')) this.artifactSel = (this.artifactSel + 1) % nC;
+        if (this.input.pressed('KeyR')) this._artifactReroll();   // ПОВТОРНЫЙ АНАЛИЗ (узел kart_reroll; no-op без узла/сбросов/кристалла)
+        if (this.input.pressed('Enter', 'NumpadEnter', 'Space')) this.artifactChoose(this.artifactSel);
+      }
       this.drawScene();
       if (typeof drawArtifactModal === 'function') drawArtifactModal(ctx, this, this.designW, this.designH);
     } else if (this.mode === 'paused') {

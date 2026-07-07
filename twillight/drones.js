@@ -1,27 +1,32 @@
 'use strict';
 
-// ДРОНЫ-КОМПАНЬОНЫ — реликты ДРОН-слота (домешан в Game.prototype, ПОСЛЕ game). ОДИН активный дрон за забег (1 слот).
-// Установлен дрон-артефакт → _syncDrone заводит компаньона game.drone {kind,...}; updateDrones ведёт его по типу.
+// ДРОНЫ-КОМПАНЬОНЫ — реликты ДРОН-слота (домешан в Game.prototype, ПОСЛЕ game). ПО ОДНОМУ на установленный дрон-реликт
+// (дрон-слот базово 1; узел меты kart_slot_drone даёт +1 → до двух дронов сразу). Каждый компаньон — запись в game.drones[]
+// (поле srcId = id реликта-источника); _syncDrone реконсилирует список со слотом; updateDrones ведёт каждого по его типу.
 // Типы: collector (пылесос дропа→трюм), courier (трюм→город), battery (питание→ТАЙМЕР города, НЕ структуры),
 // scout (разведка тумана/гнёзд), hacker (деплой по кнопке → канал взлома гнезда → саботаж → смерть → кулдаун).
 // Дрон летает НАД рельефом (как курьер-структура), поверх тумана. Рендер — render_drones.js.
 Object.assign(Game.prototype, {
-  _droneKind() { const sl = this.artifactSlots; return (sl && sl.drone && sl.drone.length) ? (DRONE_KIND[sl.drone[0]] || null) : null; },
+  _droneOfKind(kind) { return (this.drones || []).find((d) => d.kind === kind) || null; },   // первый компаньон типа (для доп-действия хакера / actionbar)
 
-  // Синхронизация компаньона со слотом (зовётся из _applyArtifacts): установлен дрон-артефакт → завести; иной/снят → пересоздать/убрать.
+  // Синхронизация компаньонов со слотом (зовётся из _applyArtifacts): на каждый установленный дрон-реликт — свой компаньон; снятый реликт → убрать.
   _syncDrone() {
-    const kind = this._droneKind();
-    if (!kind) { this.drone = null; return; }
-    if (!this.drone || this.drone.kind !== kind) {
+    if (!this.drones) this.drones = [];
+    const ids = (this.artifactSlots && this.artifactSlots.drone) || [];
+    this.drones = this.drones.filter((d) => ids.indexOf(d.srcId) >= 0);   // реликт снят → компаньон уходит
+    for (const id of ids) {
+      const kind = DRONE_KIND[id]; if (!kind || this.drones.some((d) => d.srcId === id)) continue;
       const u = this.unit;
-      this.drone = { kind, px: u ? u.px : 0, py: u ? (u.py - TILE) : 0, state: 'idle', carry: null, carryMap: null, t: 0, cd: 0, target: null, bob: 0, fx: 0 };
+      this.drones.push({ srcId: id, kind, px: u ? u.px + (Math.random() * 2 - 1) * TILE : 0, py: u ? (u.py - TILE) : 0, state: 'idle', carry: null, carryMap: null, t: 0, cd: 0, target: null, bob: Math.random() * 6.28, fx: 0 });
     }
   },
 
   updateDrones(dt) {
-    const d = this.drone, u = this.unit; if (!d || !u || this.mode !== 'playing') return;
-    d.bob += dt; if (d.cd > 0) d.cd = Math.max(0, d.cd - dt); if (d.fx > 0) d.fx = Math.max(0, d.fx - dt);
-    const fn = this['_drone_' + d.kind]; if (fn) fn.call(this, dt, d, u);
+    const u = this.unit; if (!this.drones || !this.drones.length || !u || this.mode !== 'playing') return;
+    for (const d of this.drones) {
+      d.bob += dt; if (d.cd > 0) d.cd = Math.max(0, d.cd - dt); if (d.fx > 0) d.fx = Math.max(0, d.fx - dt);
+      const fn = this['_drone_' + d.kind]; if (fn) fn.call(this, dt, d, u);
+    }
   },
 
   // Лететь к (tx,ty) — вернуть true на месте (тор по X). Над рельефом (без коллизий породы).
@@ -118,7 +123,7 @@ Object.assign(Game.prototype, {
 
   // ХАКЕР: компаньон-деплой. idle — орбита, готов. Кнопка → летит к ближайшему гнезду → канал взлома → саботаж → смерть → кулдаун → новый.
   _droneDeployHack() {   // зов из доп-действия (actionbar инжектит хоткей)
-    const d = this.drone; if (!d || d.kind !== 'hacker' || d.state !== 'idle' || d.cd > 0) return false;
+    const d = this._droneOfKind('hacker'); if (!d || d.state !== 'idle' || d.cd > 0) return false;
     const nw = this.nearestWild ? this.nearestWild(this.unit.px, this.unit.py, DRONE_HACK_RANGE) : null;
     const w = nw && nw.wild;                                  // nearestWild → {wild,dist,hx,hy}; берём сырое гнездо
     if (!w || w.disabled) return false;

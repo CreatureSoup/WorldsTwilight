@@ -27,6 +27,7 @@ function unitHasPart(unit, need) {
   if (need === 'scanner') return (s.scanR || 0) > 0;
   if (need === 'cargo')   return (s.capacity || 0) > 0;
   if (need === 'aux')     return (s.noiseResist || 0) > 0 || (s.printer || 0) > 0;   // доп-слот: деталь видна, когда модуль (экран помех ИЛИ принтер) установлен
+  if (need === 'turret')  return !!s.turret;        // авто-турель канонира (слот turret)
   return true;
 }
 

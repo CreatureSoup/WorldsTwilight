@@ -97,6 +97,7 @@ function drawRingUnit(ctx, world, unit, camera, opts) {
   items.sort((a, b) => (a.z || 0) - (b.z || 0));
   for (const p of items) {
     if (p.kind === 'reactor') { drawRingCore(ctx, 0, 0, def.ringR * R, t, def, unit.reactorOn !== false); continue; }   // центр, не вращается
+    if (p.kind === 'drill' && unit.stats && unit.stats.screw) continue;   // ВИНТОВОЙ бур: его вид — ЩИТ (drawCarriedBorer в игре / drawMountedBorer на сборке), а НЕ деталь-бур; иначе дублировался бы дженерик-бур
     const a = (p.ang || 0) * Math.PI / 180 + aim;
     let dist = (p.rad || 0) * R;
     if (p.kind === 'drill') dist += ANIM.drillWob(t, unit);   // «долбёжка»: бур ходит вдоль оси крепления к породе

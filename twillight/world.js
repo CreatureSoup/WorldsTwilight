@@ -18,6 +18,7 @@ class World {
     this.radSources = [];                       // очаги сильной радиации (помехи интерфейсу)
     this.servers = [];                          // старые серверы в породе — источники данных
     this.artifacts = [];                        // большие погребённые объекты — откопал → модалка (технология/данные/переработка)
+    this.containers = [];                       // контейнеры-хранилища — откопал + узел kart_hackbox → взлом → ресурсы (containers.js)
     this.unstableTriggers = [];                 // очередь «потеряла опору» (setAir → клетка сверху), читает falling.js
     this.generate();
   }
@@ -209,6 +210,27 @@ class World {
     };
     for (let i = 0; i < SERVER_COUNT; i++) place(bands[i % bands.length]);   // ГЛУБОКИЕ серверы
     const up = this._upperBand(); for (let i = 0; i < SERVER_UP; i++) place(up);   // ВЕРХНЯЯ страта (архивы данных)
+    return list;
+  }
+  // КОНТЕЙНЕРЫ-ХРАНИЛИЩА: тайл ПОРОДЫ с маркером `t.container` (всегда копается); вскрытие требует узла `kart_hackbox`
+  // (containers.js). Каждый несёт НЕБОЛЬШОЙ ревард — случайный тип ресурса × 2..4. Посев как у серверов (глубокие + верхние).
+  genContainers() {
+    const H = MAP_H, list = [], RES = Object.keys(CONTAINER_LOOT), totW = RES.reduce((s, k) => s + CONTAINER_LOOT[k].weight, 0);
+    const bands = [[Math.round(H * 0.4), Math.round(H * 0.6)], [Math.round(H * 0.64), Math.round(H * 0.96)]];
+    const avoid = this.caverns.concat(this.wilds).concat([{ cx: (CAVE_X0 + CAVE_X1) / 2, cy: CAVE_FLOOR_Y }]);
+    const pickType = () => { let n = this.rand() * totW; for (const k of RES) { n -= CONTAINER_LOOT[k].weight; if (n <= 0) return k; } return RES[0]; };   // взвешено по редкости
+    const make = (x, y) => { const type = pickType(), L = CONTAINER_LOOT[type]; return { tx: wrapX(x), ty: y, dug: false, breach: 0, opened: false, type, amount: L.min + Math.floor(this.rand() * (L.max - L.min + 1)) }; };
+    const place = (band) => {
+      for (let tries = 0; tries < 120; tries++) {
+        const x = Math.floor(this.rand() * MAP_W), y = band[0] + Math.floor(this.rand() * (band[1] - band[0] + 1));
+        if (this.inCave(x, y) || this.inCavern(x, y) || this.inWild(x, y) || this.inBackdrop(x, y) || this._blockedSeedRow(y)) continue;
+        const farCity = avoid.every((a) => this.torDist(x, a.cx) >= 5 || Math.abs(y - a.cy) >= 6);
+        const farC = list.every((c) => this.torDist2D(x, y, c.tx, c.ty) >= CONTAINER_MIN_DIST);
+        if (farCity && farC) { list.push(make(x, y)); return; }
+      }
+    };
+    for (let i = 0; i < CONTAINER_COUNT; i++) place(bands[i % bands.length]);   // ГЛУБОКИЕ
+    const up = this._upperBand(); for (let i = 0; i < CONTAINER_UP; i++) place(up);   // ВЕРХНЯЯ страта
     return list;
   }
   // Артефакты: продолговатый регион ПОРОДЫ (2×1 ИЛИ 1×2 — ориентация случайна, маркер `t.artifact`),
@@ -474,7 +496,10 @@ class World {
     this.traps = this.genTraps(this.robots);                   // ловушки (вкл. мину как тип) держат дистанцию ОТ роботов И друг от друга
     for (const tr of this.traps) { const t = this.tiles[tr.ty * MAP_W + wrapX(tr.tx)]; t.type = ROCK; t.hardness = this.hardnessForY(tr.ty) * (tr.type === 'mine' ? 1.1 : 1); t.dig = 0; t.resource = null; t.dens = 1; t.trap = tr; }
     this.mines = this.traps.filter((tr) => tr.type === 'mine');   // фильтр-ссылка (ТЕ ЖЕ объекты) — для drawMines/drawHazardDebug
-    this.genUnstable();   // нестабильная порода (после серверов/артефактов/роботов/мин/ЛОВУШЕК/фундамента — их не помечаем)
+    // Контейнеры-хранилища: тайл ПОРОДЫ с маркером `t.container` (всегда копается). ДО genUnstable — их тайлы не помечаем.
+    this.containers = this.genContainers();
+    for (const c of this.containers) { const t = this.tiles[c.ty * MAP_W + wrapX(c.tx)]; t.type = ROCK; t.hardness = this.hardnessForY(c.ty) * 1.1; t.dig = 0; t.resource = null; t.dens = 1; t.container = c; }
+    this.genUnstable();   // нестабильная порода (после серверов/артефактов/роботов/мин/ЛОВУШЕК/КОНТЕЙНЕРОВ/фундамента — их не помечаем)
   }
   // Помечаем часть породы НИЖЕ города как «нестабильную» (падающие валуны) — НЕ большими кластерами,
   // а МЕЛКИМИ группами по 1-3 соседних тайла, разбросанными так, чтобы покрытие было ~20%. Только где
@@ -534,9 +559,22 @@ class World {
     if (y >= MAP_H) return { type: BORDER, hardness: 0, resource: null, dig: 0, dens: 0 };
     return this.tiles[y * MAP_W + wrapX(x)];
   }
+  // Прямая видимость по тайлам (ПИКСЕЛЬНЫЕ координаты): дискретизируем линию источник→цель, любой ТВЁРДЫЙ тайл между
+  // ними → нет видимости. Тор по X, стартовый/финальный тайлы не считаем. Общий гейт стрельбы (снайпер/мортира/
+  // турели города) — чтобы не били сквозь породу. Печатные турели/СВЧ используют свой Structures._los (та же модель).
+  hasLineOfSight(x0, y0, x1, y1) {
+    const dx = wrapDeltaPx(x1, x0) / TILE, dy = (y1 - y0) / TILE;
+    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy)));
+    const tx0 = Math.floor(x0 / TILE), ty0 = Math.floor(y0 / TILE);
+    for (let i = 1; i < steps; i++) {
+      const tx = Math.round(tx0 + dx * (i / steps)), ty = Math.round(ty0 + dy * (i / steps));
+      if (isSolid(this.tileAt(tx, ty))) return false;
+    }
+    return true;
+  }
   setAir(x, y, noTrigger) {
     const t = this.tileAt(x, y);
-    if (t.type === ROCK) { if (t.server) t.server.dug = true; if (t.artifact) t.artifact.dug = true; if (t.robot) t.robot.dug = true; if (t.trap) t.trap.dug = true; t.type = AIR; t.hardness = 0; t.dig = 0; t.resource = null; t.dug = true; } // dug=прорытый ход (не природная пустота) — враги избегают своих ходов; сервер → «хлам»; артефакт → откопан (модалка по близости юнита)
+    if (t.type === ROCK) { if (t.server) t.server.dug = true; if (t.artifact) t.artifact.dug = true; if (t.robot) t.robot.dug = true; if (t.trap) t.trap.dug = true; if (t.container) t.container.dug = true; t.type = AIR; t.hardness = 0; t.dig = 0; t.resource = null; t.dug = true; } // dug=прорытый ход (не природная пустота) — враги избегают своих ходов; сервер → «хлам»; артефакт → откопан (модалка по близости юнита)
     if (noTrigger) return;             // ВИНТОВОЙ бур: укреплённый ход — НЕ осыпает породу/валуны сверху
     const a = this.tileAt(x, y - 1);   // клетка СВЕРХУ потеряла опору? нестабильная/валун — в очередь на срыв (falling.js)
     if (a.type === ROCK && (a.unstable || a.boulder)) this.unstableTriggers.push({ x: wrapX(x), y: y - 1 });

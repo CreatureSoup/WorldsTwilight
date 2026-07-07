@@ -29,7 +29,7 @@ const ACTION_DEFS = [
   { stat: 'dash',       key: 'digit', icon: 'dash',  col: '#7fd0e0', active: (g) => !!(g.unit && g.unit.dashing),                  fill: (g) => g.dash ? Math.max(0, 1 - g.dash.cd / DASH_CD) : 1 },   // артефакт рывок
   { stat: 'harpoon',    key: 'digit', icon: 'harpoon', col: '#e0b070', active: (g) => !!((g.harpoon && g.harpoon.t > 0) || (g.unit && g.unit.dashing)), fill: (g) => g.harpoon ? Math.max(0, 1 - g.harpoon.cd / HARPOON_CD) : 1 },   // артефакт гарпун
   { stat: 'xray',       key: 'digit', icon: 'xray',  col: '#8fd0c0', active: (g) => !!(g.xray && g.xray.t > 0),                    fill: (g) => g.xray ? Math.max(0, 1 - g.xray.cd / XRAY_CD) : 1 },   // артефакт рентген
-  { stat: 'droneHack',  key: 'digit', icon: 'dronehack', col: '#c06ee6', active: (g) => !!(g.drone && g.drone.kind === 'hacker' && g.drone.state !== 'idle'), fill: (g) => (g.drone && g.drone.kind === 'hacker') ? Math.max(0, 1 - g.drone.cd / (g._artScaled('drone_hacker') || DRONE_HACK_CD)) : 1 },   // дрон-хакер: деплой
+  { stat: 'droneHack',  key: 'digit', icon: 'dronehack', col: '#c06ee6', active: (g) => { const d = g._droneOfKind && g._droneOfKind('hacker'); return !!(d && d.state !== 'idle'); }, fill: (g) => { const d = g._droneOfKind && g._droneOfKind('hacker'); return d ? Math.max(0, 1 - d.cd / (g._artScaled('drone_hacker') || DRONE_HACK_CD)) : 1; } },   // дрон-хакер: деплой
   { stat: 'cableAnchor', metaNeed: 'print_batt', key: 'digit', icon: 'anchor', col: '#7fd0e0', active: (g) => !!(g._cableNearBattery && g._cableNearBattery()), fill: (g) => (g._cableNearBattery && g._cableNearBattery()) ? 1 : 0 },   // Энергорелеи: якорь шлейфа на батарею (актив в радиусе)
 ];
 

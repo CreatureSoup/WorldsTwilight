@@ -36,6 +36,10 @@ const META_RADIUS = { core: 62, hub: 42, mid: 33, out: 29, cap: 50 };
 // читаемость (наложения, выход за холст, «втягивание» дочернего узла к ядру). minDist — мин. расстояние
 // центров (подписи висят ПОД узлом); margin — отступ узла от кромки холста.
 const META_LAYOUT = { minDist: 160, margin: 30 };
+// Дизайн-система: угол РЯДА реликт-слотов (kart_slot_*) — «полок» на ОДНОЙ ПРЯМОЙ под общим родителем kart_dual.
+// `deg` — направление ряда (⟂ радиали родителя 113.8° → 23.8°): узлы веерятся симметрично, минимум окклюзии проводом.
+// `gap` — шаг вдоль ряда (≥ minDist), `reach` — вынос первого узла радиально за родителя. Прямая задаётся ЗДЕСЬ, не «на глаз».
+const META_SLOT_ROW = { deg: 23.8, gap: 200, reach: 330 };
 
 function _metaBuildGraph() {
   const nodes = [], edges = [];
@@ -75,6 +79,7 @@ function _metaBuildGraph() {
   // Сенсорный веер: обнаружение угроз · экран помех · РАДАР (→полный спектр) · ЭХО-СКАНЕР (→дальность).
   // mast_sr (Детектор загрязнения) переехал в ветвь МИР (к Дешифратору). Координаты — констрейнт-солвер (minDist≥173).
   un('mast_sa', 'out', 900, -76, STR.meta.node.mast_sa.name, STR.meta.node.mast_sa.sub, 'quiet', STR.meta.node.mast_sa.desc);
+  un('mast_hpbar', 'out', 1090, -80, STR.meta.node.mast_hpbar.name, STR.meta.node.mast_hpbar.sub, 'detector', STR.meta.node.mast_hpbar.desc);   // дочерний к mast_sa: обнаружил угрозу → читаешь её HP (полоски над врагами)
   un('mast_rad', 'out', 905, -65, STR.meta.node.mast_rad.name, STR.meta.node.mast_rad.sub, 'detector', STR.meta.node.mast_rad.desc);
   un('mast_rad_spec', 'out', 1095, -69, STR.meta.node.mast_rad_spec.name, STR.meta.node.mast_rad_spec.sub, 'resonance', STR.meta.node.mast_rad_spec.desc);
   un('mast_ech', 'out', 905, -51, STR.meta.node.mast_ech.name, STR.meta.node.mast_ech.sub, 'bomb', STR.meta.node.mast_ech.desc);
@@ -90,6 +95,7 @@ function _metaBuildGraph() {
   edges.push(['mast_ds', 'mast_ds_life', 'wire'], ['mast_ds_life', 'mast_ds_b1', 'wire'], ['mast_ds_b1', 'mast_ds_b2', 'wire']);   // винтовой бур → ВРЕМЯ РАБОТЫ (заряд щита) → +1 → +1 автономный бур (макс 4)
   edges.push(['mast_ds', 'mast_ds_nav', 'wire'], ['mast_ds_nav', 'mast_ds_scan', 'wire']);   // 2-я ветка винтового: навигация по щитам → сканеры на щитах
   edges.push(['mast_sens', 'mast_sa', 'wire'], ['mast_sens', 'mast_rad', 'wire'], ['mast_sens', 'mast_ech', 'wire']);   // mast_sh переехал в МИР (к Детектору)
+  edges.push(['mast_sa', 'mast_hpbar', 'wire']);   // обнаружение угроз → полоски HP врагов (сенсорный интел)
   edges.push(['mast_rad', 'mast_rad_spec', 'wire'], ['mast_ech', 'mast_ech_len', 'wire']);   // радар→полный спектр; эхо→дальность волны
 
 
@@ -100,21 +106,38 @@ function _metaBuildGraph() {
   // висела на короткой «ноге» провода и не читалась как ветвление. Координаты — констрейнт-солвер (см. ветку МИР).
   const C = META_SECTORS[2];
   const cn = (id, kind, r, deg, name, sub, icon, desc) => { const p = _polar(r, deg); nodes.push({ id, kind, sector: 2, accent: C.accent, sys: C.sys, slabel: C.label, x: p[0], y: p[1], name, sub, icon, desc, cost: META_TC[kind] }); };
+  // РЕДИЗАЙН ЖЁЛТОГО ДОМА (Батч 9): самая нагруженная ветвь — «Контуры» (3 линии) — в СЕРЕДИНУ (41-65°, много места);
+  // менее нагруженные — по КРАЯМ: батареи+расщепление — нижний край (18-30°), маячок+нав+предикт+оповещение — верхний (71-82°).
+  // Так подавление/аннигиляция ушли от фиолетовой ветки (были 91°), а регенерация/реконструкция разгрузились. Координаты — окти-солвер.
   cn('amb_hub',    'hub', 360, 54, STR.meta.node.amb_hub.name, STR.meta.node.amb_hub.sub, 'coin', STR.meta.node.amb_hub.desc);
-  cn('amb_batt',   'mid', 540, 28, STR.meta.node.amb_batt.name, STR.meta.node.amb_batt.sub, 'sun', STR.meta.node.amb_batt.desc);
-  cn('amb_charge', 'out', 880, 26, STR.meta.node.amb_charge.name, STR.meta.node.amb_charge.sub, 'fast', STR.meta.node.amb_charge.desc);
-  cn('amb_fw',     'out', 1140, 22, STR.meta.node.amb_fw.name, STR.meta.node.amb_fw.sub, 'decode', STR.meta.node.amb_fw.desc);
-  cn('amb_dock',   'mid', 660, 41, STR.meta.node.amb_dock.name, STR.meta.node.amb_dock.sub, 'stab', STR.meta.node.amb_dock.desc);
-  cn('amb_beacon', 'mid', 672, 58.7, STR.meta.node.amb_beacon.name, STR.meta.node.amb_beacon.sub, 'map', STR.meta.node.amb_beacon.desc);   // МАЯЧОК ГОРОДА: стрелка-указатель (тумблер ГОРОД); от него — путь и предикт
-  cn('amb_nav',    'out', 895, 64, STR.meta.node.amb_nav.name, STR.meta.node.amb_nav.sub, 'map', STR.meta.node.amb_nav.desc);
-  cn('amb_predict','out', 895, 52, STR.meta.node.amb_predict.name, STR.meta.node.amb_predict.sub, 'detector', STR.meta.node.amb_predict.desc);
-  cn('amb_cont',   'mid', 535, 71, STR.meta.node.amb_cont.name, STR.meta.node.amb_cont.sub, 'body', STR.meta.node.amb_cont.desc);
-  cn('amb_regen',  'out', 715, 76.1, STR.meta.node.amb_regen.name, STR.meta.node.amb_regen.sub, 'resonance', STR.meta.node.amb_regen.desc);
-  cn('amb_recon',  'out', 902, 78.5, STR.meta.node.amb_recon.name, STR.meta.node.amb_recon.sub, 'ascend', STR.meta.node.amb_recon.desc);   // опущен ниже
+  // НИЖНИЙ КРАЙ: батарейная линия + расщепление кристалла
+  cn('amb_batt',   'mid', 527, 26.2, STR.meta.node.amb_batt.name, STR.meta.node.amb_batt.sub, 'sun', STR.meta.node.amb_batt.desc);
+  cn('amb_charge', 'out', 826, 22.6, STR.meta.node.amb_charge.name, STR.meta.node.amb_charge.sub, 'fast', STR.meta.node.amb_charge.desc);
+  cn('amb_fw',     'out', 1099, 22, STR.meta.node.amb_fw.name, STR.meta.node.amb_fw.sub, 'decode', STR.meta.node.amb_fw.desc);
+  cn('amb_split',  'out', 963, 30.4, STR.meta.node.amb_split.name, STR.meta.node.amb_split.sub, 'resonance', STR.meta.node.amb_split.desc);
+  cn('amb_dock',   'mid', 650, 37, STR.meta.node.amb_dock.name, STR.meta.node.amb_dock.sub, 'stab', STR.meta.node.amb_dock.desc);
+  // СЕРЕДИНА: «Контуры» — ХАБ ТРЁХ ЛИНИЙ, каждая в своём направлении: регенерация (вверх ~42°) · турели (центр ~53°, глубоко) · подавление (вниз ~64°).
+  cn('amb_cont',   'mid', 575, 54.7, STR.meta.node.amb_cont.name, STR.meta.node.amb_cont.sub, 'body', STR.meta.node.amb_cont.desc);
+  cn('amb_regen',  'out', 795, 44.3, STR.meta.node.amb_regen.name, STR.meta.node.amb_regen.sub, 'resonance', STR.meta.node.amb_regen.desc);
+  cn('amb_recon',  'out', 976, 41.7, STR.meta.node.amb_recon.name, STR.meta.node.amb_recon.sub, 'ascend', STR.meta.node.amb_recon.desc);
+  // ТУРЕЛИ ГОРОДА (Батч 8, cityturret.js): авто-оборона базы. РОДИТЕЛЬ — «Контуры» (amb_cont). 1 турель → +1 (симм. Л/П) → +1 (центр).
+  cn('amb_turret',  'out', 947, 56.2, STR.meta.node.amb_turret.name, STR.meta.node.amb_turret.sub, 'blades', STR.meta.node.amb_turret.desc);
+  cn('amb_turret2', 'out', 1126, 51.6, STR.meta.node.amb_turret2.name, STR.meta.node.amb_turret2.sub, 'blades', STR.meta.node.amb_turret2.desc);
+  cn('amb_turret3', 'out', 1373, 53.4, STR.meta.node.amb_turret3.name, STR.meta.node.amb_turret3.sub, 'blades', STR.meta.node.amb_turret3.desc);
+  // ПОДАВЛЕНИЕ ЧАСТОТ → АННИГИЛЯЦИЯ (Батч 9, ЗАДУМКА — функционал позже, wip): 3-я линия от «Контуров».
+  cn('amb_suppress',   'out', 800, 64, STR.meta.node.amb_suppress.name, STR.meta.node.amb_suppress.sub, 'quiet', STR.meta.node.amb_suppress.desc);
+  cn('amb_annihilate', 'out', 1060, 65, STR.meta.node.amb_annihilate.name, STR.meta.node.amb_annihilate.sub, 'bomb', STR.meta.node.amb_annihilate.desc);
+  // ВЕРХНИЙ КРАЙ: маячок → {навигация, предикт → раннее оповещение}
+  cn('amb_beacon', 'mid', 700, 76.7, STR.meta.node.amb_beacon.name, STR.meta.node.amb_beacon.sub, 'map', STR.meta.node.amb_beacon.desc);
+  cn('amb_nav',    'out', 860, 82.3, STR.meta.node.amb_nav.name, STR.meta.node.amb_nav.sub, 'map', STR.meta.node.amb_nav.desc);
+  cn('amb_predict','out', 954, 73, STR.meta.node.amb_predict.name, STR.meta.node.amb_predict.sub, 'detector', STR.meta.node.amb_predict.desc);
+  cn('amb_warn',   'out', 1169, 72, STR.meta.node.amb_warn.name, STR.meta.node.amb_warn.sub, 'detector', STR.meta.node.amb_warn.desc);
   edges.push(['core', 'amb_hub', 'wire']);
   edges.push(['amb_hub', 'amb_batt', 'wire'], ['amb_hub', 'amb_dock', 'wire'], ['amb_hub', 'amb_beacon', 'wire'], ['amb_hub', 'amb_cont', 'wire']);
-  edges.push(['amb_batt', 'amb_charge', 'wire'], ['amb_charge', 'amb_fw', 'wire']);
-  edges.push(['amb_beacon', 'amb_nav', 'wire'], ['amb_beacon', 'amb_predict', 'wire']);   // маячок → {путь, предикт}
+  edges.push(['amb_batt', 'amb_charge', 'wire'], ['amb_charge', 'amb_fw', 'wire'], ['amb_charge', 'amb_split', 'wire']);   // расщепление кристалла — ветка от чарджера
+  edges.push(['amb_cont', 'amb_turret', 'wire'], ['amb_turret', 'amb_turret2', 'wire'], ['amb_turret2', 'amb_turret3', 'wire']);   // ОБОРОНА: Контуры → турели
+  edges.push(['amb_cont', 'amb_suppress', 'wire'], ['amb_suppress', 'amb_annihilate', 'wire']);   // Контуры → подавление частот → аннигиляция
+  edges.push(['amb_beacon', 'amb_nav', 'wire'], ['amb_beacon', 'amb_predict', 'wire'], ['amb_predict', 'amb_warn', 'wire']);   // предикт → раннее оповещение
   edges.push(['amb_cont', 'amb_regen', 'wire'], ['amb_regen', 'amb_recon', 'wire']);
 
   // ── ФИОЛЕТОВАЯ ветка МИР (sector 3, A≈126° вниз-влево): кастомная форма, пока ТОЛЬКО СТРУКТУРА (узлы-заглушки,
@@ -140,8 +163,10 @@ function _metaBuildGraph() {
   // ответвление ГОРОДА (Объём данных → пробуждение → взлом города); сходится с ВЗЛОМОМ на hackcity
   kn('kart_data',    'mid', 735, 132.7, STR.meta.node.kart_data.name, STR.meta.node.kart_data.sub, 'archive', STR.meta.node.kart_data.desc);
   kn('kart_wake',    'out', 950, 131.7, STR.meta.node.kart_wake.name, STR.meta.node.kart_wake.sub, 'rune', STR.meta.node.kart_wake.desc);
-  // линия ВЗЛОМ (от Дешифратора): обезвреживание (ОТКРЫВАЕТ модуль взлома) → взлом юнитов (+стелс) → взлом диких
-  kn('kart_defuse',  'mid', 580, 143.2, STR.meta.node.kart_defuse.name, STR.meta.node.kart_defuse.sub, 'decode', STR.meta.node.kart_defuse.desc);
+  // линия ВЗЛОМ (от Дешифратора): ВЗЛОМ КОНТЕЙНЕРОВ (РЕАЛИЗОВАН — containers.js, ВМЕСТО обезвреживания на входе линии) → взлом юнитов (+стелс) → взлом диких.
+  // «Взлом опасных останков» (kart_defuse) — теперь ВЕТКА влево от «взлома контейнеров» (сохраняет функцию модуля взлома/обезвреживания).
+  kn('kart_hackbox', 'mid', 580, 143.2, STR.meta.node.kart_hackbox.name, STR.meta.node.kart_hackbox.sub, 'archive', STR.meta.node.kart_hackbox.desc);
+  kn('kart_defuse',  'mid', 736, 155.9, STR.meta.node.kart_defuse.name, STR.meta.node.kart_defuse.sub, 'decode', STR.meta.node.kart_defuse.desc);
   kn('kart_stun',    'out', 815, 145.5, STR.meta.node.kart_stun.name, STR.meta.node.kart_stun.sub, 'resonance', STR.meta.node.kart_stun.desc);
   kn('kart_stealth', 'out', 1075, 151.6, STR.meta.node.kart_stealth.name, STR.meta.node.kart_stealth.sub, 'obsidian', STR.meta.node.kart_stealth.desc);
   kn('kart_jam',     'out', 1035, 141.5, STR.meta.node.kart_jam.name, STR.meta.node.kart_jam.sub, 'quiet', STR.meta.node.kart_jam.desc);
@@ -155,9 +180,33 @@ function _metaBuildGraph() {
   edges.push(['kart_hub', 'mast_sr', 'wire'], ['mast_sr', 'mast_sh', 'wire']);   // ДЕТЕКТОР → Экран помех
   edges.push(['kart_hub', 'kart_wreck', 'wire'], ['kart_wreck', 'kart_ruins', 'wire']);   // ДАННЫЕ (прямо от хаба)
   edges.push(['kart_hub', 'kart_data', 'wire'], ['kart_data', 'kart_wake', 'wire'], ['kart_wake', 'kart_hackcity', 'wire']);   // ГОРОДА-ответвление
-  edges.push(['kart_hub', 'kart_defuse', 'wire'], ['kart_defuse', 'kart_stun', 'wire'], ['kart_stun', 'kart_stealth', 'wire'], ['kart_stun', 'kart_jam', 'wire']);   // ВЗЛОМ
+  edges.push(['kart_hub', 'kart_hackbox', 'wire'], ['kart_hackbox', 'kart_stun', 'wire'], ['kart_hackbox', 'kart_defuse', 'wire'], ['kart_stun', 'kart_stealth', 'wire'], ['kart_stun', 'kart_jam', 'wire']);   // ВЗЛОМ: контейнеры → {юниты, ОБЕЗВРЕЖИВАНИЕ(ветка влево)}
   edges.push(['kart_jam', 'kart_breach', 'wire']);   // саботаж → апгрейд нейтрализации
   edges.push(['kart_jam', 'kart_hackcity', 'wire']);   // 2-й родитель hackcity (конвергенция)
+
+  // ── РЕЛИКТЫ (подветвь МИР от kart_ruins в открытую зону НИЖЕ/ЗА линией данных): анализ реликтов + слоты интеграции.
+  // Линия ДАННЫХ ведёт к анализу реликтов: dual (сабхаб, +2-я техно в модалке) → reroll→reroll2 (повторный анализ + запас сбросов);
+  // три слота (unit/city/drone) — НЕЗАВИСИМЫЕ ответвления от dual (+1 слот каждому; drone-слот → 2 дрона). Координаты — констрейнт-солвер
+  // (открытый клин r>1000 между детектором r580-790 и линиями данных/городов 113°+; minDist≥180, клиренс провод↔узел≥76, 0 пересечений).
+  // РАСКЛАДКА: reroll-цепочка уходит в down-left (освобождает сектор); ТРИ СЛОТА — на ОДНОЙ ПРЯМОЙ (дизайн-система META_SLOT_ROW):
+  // «полок» под общим родителем dual. ⚠️ равная длина линков от ОДНОГО родителя + коллинеарность несовместимы (равные радиусы = дуга) →
+  // приоритет ПРЯМОЙ: узел 0 (юнит) радиально за родителем (reach), город/ангар — шагом gap вдоль угла ряда; линки веерятся монотонно.
+  kn('kart_dual',       'out', 1005, 113.8, STR.meta.node.kart_dual.name, STR.meta.node.kart_dual.sub, 'relic', STR.meta.node.kart_dual.desc);
+  kn('kart_reroll',     'out', 1200, 119,   STR.meta.node.kart_reroll.name, STR.meta.node.kart_reroll.sub, 'decode', STR.meta.node.kart_reroll.desc);
+  kn('kart_reroll2',    'out', 1400, 122,   STR.meta.node.kart_reroll2.name, STR.meta.node.kart_reroll2.sub, 'queue', STR.meta.node.kart_reroll2.desc);
+  {                                                                                      // реликт-слоты на прямой META_SLOT_ROW
+    const par = nodes.find((n) => n.id === 'kart_dual');                                 // родитель — из УЖЕ добавленного узла (без дубля координат/угла)
+    const prad = Math.atan2(par.y - MY, par.x - MX), ur = META_SLOT_ROW.deg * Math.PI / 180;   // радиаль родителя (для reach) + угол ряда (дизайн-система)
+    const bx = par.x + Math.cos(prad) * META_SLOT_ROW.reach, by = par.y + Math.sin(prad) * META_SLOT_ROW.reach;   // старт ряда — радиально за родителем
+    const rd = (i) => { const x = bx + Math.cos(ur) * META_SLOT_ROW.gap * i, y = by + Math.sin(ur) * META_SLOT_ROW.gap * i; return [Math.hypot(x - MX, y - MY), Math.atan2(y - MY, x - MX) * 180 / Math.PI]; };
+    const su = rd(0), sc = rd(1), sd = rd(2);
+    kn('kart_slot_unit',  'out', su[0], su[1], STR.meta.node.kart_slot_unit.name, STR.meta.node.kart_slot_unit.sub, 'slot', STR.meta.node.kart_slot_unit.desc);
+    kn('kart_slot_city',  'out', sc[0], sc[1], STR.meta.node.kart_slot_city.name, STR.meta.node.kart_slot_city.sub, 'slot', STR.meta.node.kart_slot_city.desc);
+    kn('kart_slot_drone', 'out', sd[0], sd[1], STR.meta.node.kart_slot_drone.name, STR.meta.node.kart_slot_drone.sub, 'slot', STR.meta.node.kart_slot_drone.desc);
+  }
+  edges.push(['kart_ruins', 'kart_dual', 'wire']);   // линия данных → анализ реликтов
+  edges.push(['kart_dual', 'kart_reroll', 'wire'], ['kart_reroll', 'kart_reroll2', 'wire']);   // аналитическая цепочка (повторный анализ → запас сбросов)
+  edges.push(['kart_dual', 'kart_slot_unit', 'wire'], ['kart_dual', 'kart_slot_city', 'wire'], ['kart_dual', 'kart_slot_drone', 'wire']);   // 3 слота — независимые ответвления от сабхаба
 
   // ── ОРАНЖЕВАЯ ветка ПЕЧАТЬ СТРУКТУР (sector 4, верх-лево, центр ~191°): кастомная форма. Хаб-ПЕЧАТАЮЩИЙ
   // ТРЮМ открывает МОДУЛЬ ПЕЧАТИ + стартовый пассив (стена/шипы) → 4 ЛЕЙНА: ТУРЕЛИ (пулемёт→СВЧ→рейлган) ·
@@ -219,7 +268,9 @@ function _metaBuildGraph() {
   pn('print_gun',   'out', 1130, -4.3,  STR.meta.node.print_gun.name, STR.meta.node.print_gun.sub, 'blades', STR.meta.node.print_gun.desc, 56);
   // ОСАДНЫЙ МОДУЛЬ (реализован, siege.js): после канонира — пробойный луч-копьё по дикому гнезду (директива «устрани угрозу»).
   pn('print_siege', 'out', 1330, -6.5,  STR.meta.node.print_siege.name, STR.meta.node.print_siege.sub, 'bomb', STR.meta.node.print_siege.desc, 40);
-  ['print_slots', 'print_gun'].forEach((id) => { const nn = nodes.find((x) => x.id === id); if (nn) nn.wip = true; });   // КОРПУСА — нет в редакторе, делаем отдельно → баннер «В РАЗРАБОТКЕ»; остальные красные узлы реализованы
+  ['print_slots'].forEach((id) => { const nn = nodes.find((x) => x.id === id); if (nn) nn.wip = true; });   // print_slots («Спрут») ещё без функционала → баннер «В РАЗРАБОТКЕ»; print_gun («Канонир») РЕАЛИЗОВАН (корпус-моноколесо, wheel-hull)
+  // Батч 9 — новые узлы БЕЗ функционала (задел, баннер «В РАЗРАБОТКЕ»): взлом контейнеров, подавление частот/аннигиляция, раннее оповещение, расщепление кристалла.
+  ['amb_suppress', 'amb_annihilate', 'amb_warn'].forEach((id) => { const nn = nodes.find((x) => x.id === id); if (nn) nn.wip = true; });   // amb_split — РЕАЛИЗОВАН (расщепление кристалла → таймер, economy.js), wip снят; kart_hackbox — тоже
   nodes.find((x) => x.id === 'print_life').allDeps = ['print_disc3', 'print_mtmod'];   // КОНВЕРГЕНЦИЯ: тело требует ГОРОД(Симбиоз) И ИИ(Контекст-расширение)
   edges.push(['core', 'print_hub', 'wire']);
   edges.push(['print_hub', 'print_disc', 'wire'], ['print_disc', 'print_disc2', 'wire'], ['print_disc2', 'print_disc3', 'wire']);   // ГОРОД: рационализация 5→10→15%
@@ -232,12 +283,15 @@ function _metaBuildGraph() {
 
   // «Модули дороже»: узел, открывающий МОДУЛЬ сборки, +50% к цене (премия по ценности анлока; корпуса/жизнь красной — заданы явно).
   for (const n of nodes) if (typeof metaUnlocksModule === 'function' && metaUnlocksModule(n.id)) n.cost = Math.round(n.cost * 1.5);
+  // ТУРЕЛИ ГОРОДА — ДОРОГО (постоянная авто-оборона базы). Явные цены: якорь дороже, докупка турелей чуть дешевле.
+  { const c = { amb_turret: 48, amb_turret2: 36, amb_turret3: 40 }; for (const n of nodes) if (c[n.id]) n.cost = c[n.id]; }
 
   // БОЕВЫЕ узлы (эффект завязан на ВРАГОВ/ВОЛНЫ) → в РЕЖИМЕ ИСТОРИИ (дикий город молчит) почти не задействуются → тег-предупреждение
   // (meta_dom.mtRenderCard). Турели/контроль/снабжение структур · детект-угроз/прогноз/файрволл · контр-враг модули (глушение/стелс/саботаж гнёзд).
   const STORY_LIMITED = new Set([
     'vault_mg', 'vault_mw', 'vault_rail', 'vault_siege', 'vault_emp', 'vault_jam', 'vault_repulse', 'vault_batt', 'vault_repair',
     'mast_sa', 'amb_fw', 'amb_predict', 'kart_stun', 'kart_stealth', 'kart_jam', 'kart_breach',
+    'amb_turret', 'amb_turret2', 'amb_turret3',   // авто-турели города — бьют ВРАГОВ (в истории волн нет)
   ]);
   for (const n of nodes) if (STORY_LIMITED.has(n.id)) n.storyLimited = true;
 
@@ -344,7 +398,13 @@ function metaDepNames(n) {       // предки (wire-родители ближ
 // ── для эффектов узлов в забеге ──
 let _metaSaveRef = null;
 function metaBindSave(save) { _metaSaveRef = save; }
-function metaHas(id) { return _metaSaveRef ? metaUnlocked(_metaSaveRef, id) : false; }
+// ⚠️ ТЕСТОВЫЙ ПОЛИГОН (sandbox.js): узлы читаются из карты-оверрайда game._sandboxUnlocks (всё открыто, кроме
+// переключаемых вроде kart_defuse) — в памяти, БЕЗ записи в сейв. Вне сэндбокса — как обычно из сейва.
+function metaHas(id) {
+  const g = (typeof window !== 'undefined') && window.game;
+  if (g && g.sandbox && g._sandboxUnlocks) return !!g._sandboxUnlocks[id];
+  return _metaSaveRef ? metaUnlocked(_metaSaveRef, id) : false;
+}
 // Узел открывает НОВЫЙ модуль сборки? (есть запись в MODULE_DEFS с unlock===id) — для тега «+МОДУЛЬ» в мете.
 function metaUnlocksModule(id) { return typeof MODULE_DEFS !== 'undefined' && Object.keys(MODULE_DEFS).some((k) => MODULE_DEFS[k].unlock === id); }
 // Узел открывает НОВУЮ структуру для печати? (id есть среди значений STRUCT_UNLOCK) — для тега «+СТРУКТУРА».

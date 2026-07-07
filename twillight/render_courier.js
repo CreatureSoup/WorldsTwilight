@@ -11,12 +11,12 @@ function drawCouriers(ctx, game, camera) {
   for (const c of cs) {
     const cx = Math.round(camera.screenX(c.px)), cy = Math.round(c.py - camera.y);
     if (cx < -TILE * 2 || cx > vw + TILE * 2) continue;
-    if (c.state === 'fly') drawCourierDrone(ctx, c, cx, cy, col);
+    if (c.state === 'fly' || c.state === 'return') drawCourierDrone(ctx, c, cx, cy, col, c.state === 'return');   // 'return' — порожний дрон домой на терминал
     else drawCourierEnd(ctx, c, cx, cy, col);
   }
 }
 
-function drawCourierDrone(ctx, c, cx, cy, col) {
+function drawCourierDrone(ctx, c, cx, cy, col, empty) {
   const r = TILE * 0.42, bob = Math.sin(c.bob * 9) * 1.5, y = cy + bob;
   const spin = (c.bob * 26) % 6.283;
   ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -40,7 +40,7 @@ function drawCourierDrone(ctx, c, cx, cy, col) {
   ctx.strokeStyle = '#2a3a3c'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - bw * 0.5, y + r * 0.3); ctx.lineTo(cx - bw * 0.5, by - bh * 0.5); ctx.moveTo(cx + bw * 0.5, y + r * 0.3); ctx.lineTo(cx + bw * 0.5, by - bh * 0.5); ctx.stroke();   // тросы
   ctx.fillStyle = '#16383a'; ctx.strokeStyle = col; ctx.lineWidth = 1.2;
   ctx.fillRect(bx - bw, by - bh * 0.5, bw * 2, bh); ctx.strokeRect(bx - bw, by - bh * 0.5, bw * 2, bh);
-  ctx.fillStyle = col; ctx.globalAlpha = 0.55; ctx.fillRect(bx - bw + 1, by - bh * 0.5 + 1, bw * 2 - 2, bh - 2); ctx.globalAlpha = 1;
+  if (!empty) { ctx.fillStyle = col; ctx.globalAlpha = 0.55; ctx.fillRect(bx - bw + 1, by - bh * 0.5 + 1, bw * 2 - 2, bh - 2); ctx.globalAlpha = 1; }   // порожний дрон (return) — коробка пустая
   // HP-полоса над дроном (если повреждён)
   if (c.hp < c.maxHp) {
     const w = r * 1.6, f = Math.max(0, c.hp / c.maxHp), yb = y - r * 1.15;
@@ -54,7 +54,7 @@ function drawCourierDrone(ctx, c, cx, cy, col) {
 function drawCourierEnd(ctx, c, cx, cy, col) {
   const p = 1 - Math.max(0, c.deathT) / COURIER_DRONE_TTL, r = TILE * 0.42;
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  if (c.state === 'arrived') {
+  if (c.state === 'arrived' || c.state === 'docked') {   // сдача у базы / стыковка на терминале — бирюзовая вспышка-кольцо
     ctx.globalAlpha = (1 - p) * 0.8; ctx.strokeStyle = col; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(cx, cy, r * (0.4 + p * 1.6), 0, 6.283); ctx.stroke();
   } else {

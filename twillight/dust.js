@@ -4,8 +4,8 @@
 //  • КРОШКА ('grit' + редкий 'pebble') — грубые частицы, падают по обычной гравитации;
 //  • ПЫЛЬ ('fine') — мельчайшая, ЛЁГКАЯ: медленно оседает (терминальная скорость) + боковой дрейф,
 //    долго висит (как осыпь в штольне: сеется струйками и частично зависает). НЕ дым — отдельные крапинки.
-// Источники: БУРЕНИЕ (крошка + пыль ВМЕСТЕ, от грани блока к юниту); ФОН с «потолка» (рандомно крошка /
-// пыль / вместе, РЕДКО, только в видимом окне). Потолок `DUST_MAX` частиц (перф).
+// Источники: БУРЕНИЕ (крошка + пыль ВМЕСТЕ, от грани блока к юниту); ВИНТОВЫЕ ЩИТЫ (та же крошка у фрезы, летит
+// НАЗАД); РАЗВАЛ тайла (burst); ФОН с «потолка» (рандомно крошка / пыль / вместе, РЕДКО). Потолок `DUST_MAX` (перф).
 class Dust {
   constructor() { this.parts = []; this._drillT = 0; this._ambT = 0; }
   _push(p) { if (this.parts.length < DUST_MAX) this.parts.push(p); }
@@ -38,6 +38,26 @@ class Dust {
       const sx = bx + nx * TILE * 0.4 + (Math.random() - 0.5) * TILE * 0.6, sy = by + ny * TILE * 0.4 + (Math.random() - 0.5) * TILE * 0.6;
       this._fine(sx, sy, nx * TILE * 0.3 + (Math.random() - 0.5) * TILE * 0.25, ny * TILE * 0.3 - Math.random() * TILE * 0.2, 1.4 + Math.random() * 1.0);
     }
+  }
+
+  // ВИНТОВОЙ ЩИТ: та же крошка/пыль, что у дефолт-бура, но у АВТОНОМНОЙ фрезы. Крошка летит НАЗАД (против хода щита).
+  // Таймер per-щит (`b._dustT`) — щиты тикают параллельно, свой троттл у каждого. Разряженный щит (лежит) не сыплет.
+  borerDrill(dt, b) {
+    if (!b || b.depleted) { if (b) b._dustT = 0; return; }
+    b._dustT = (b._dustT || 0) - dt;
+    if (b._dustT > 0) return;
+    b._dustT = DUST_DRILL_DT;
+    const hx = b.px + b.dx * TILE * 0.4, hy = b.py + b.dy * TILE * 0.4;   // фреза-головка (перёд щита)
+    const n = 2 + (Math.random() * 2 | 0);
+    for (let i = 0; i < n; i++) {
+      const sp = TILE * (1.0 + Math.random() * 1.3);
+      this._grit(hx + (Math.random() - 0.5) * TILE * 0.4, hy + (Math.random() - 0.5) * TILE * 0.4,
+        -b.dx * sp + (Math.random() - 0.5) * TILE, -b.dy * sp - Math.random() * TILE * 0.6, Math.random() < 0.12);
+    }
+    const fn = 1 + (Math.random() * 2 | 0);
+    for (let i = 0; i < fn; i++)
+      this._fine(hx + (Math.random() - 0.5) * TILE * 0.5, hy + (Math.random() - 0.5) * TILE * 0.5,
+        -b.dx * TILE * 0.25, -b.dy * TILE * 0.25 - Math.random() * TILE * 0.15, 1.3 + Math.random() * 0.9);
   }
 
   // РАЗОВЫЙ «развал» тайла: крошка во все стороны + пыль (импульсный бур — порода не исчезает, а рассыпается).

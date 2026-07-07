@@ -22,6 +22,7 @@ i18nRegister('ru', {
       stun_pulse: 'РАДИУС СТАНА', blast_charge: 'УРОН ВЗРЫВА', nano_repair: 'ОБЪЁМ РЕМОНТА', drill_overdrive: 'ПИК ФОРСАЖА',
       drive_dash: 'ДИСТАНЦИЯ РЫВКА', harpoon: 'ДЛИНА ГАРПУНА', xray: 'ВРЕМЯ ОБЗОРА', data_detector: 'РАДИУС ДЕТЕКТА',
       drone_collector: 'РАДИУС СБОРА', drone_courier: 'ГРУЗ ЗА РЕЙС', drone_battery: 'ЗАРЯД ЗА РЕЙС', drone_scout: 'РАДИУС РАЗВЕДКИ', drone_hacker: 'КУЛДАУН ДЕПЛОЯ',
+      synth_iron: 'ЖЕЛЕЗО/ЦИКЛ', synth_organic: 'ОРГАНИКА/ЦИКЛ', synth_crystal: 'КРИСТАЛЛ/ЦИКЛ', converter: 'ОБЪЁМ ВЫХОДА', power_plant: 'СЕК/ОРГАНИКА',
     },
     current: (val) => 'СЕЙЧАС: ' + val,     // val = tr.fmt(...) (DATA из upgrades.js)
     maxSuffix: ' · MAX',

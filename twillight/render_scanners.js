@@ -70,20 +70,37 @@ function drawEchoWave(ctx, game, camera) {
   ctx.globalAlpha = 1; ctx.restore();
 }
 
-// HUD-чип переключателя типа ресурса радара (клик/клавиша C). Скрыт при полном спектре или без радара.
-function radarSwitchRect() { return { x: 10, y: 150, w: 154, h: 24 }; }
+// HUD-виджет выбора типа ресурса РАДАРА: ВСЕ ТРИ типа как кнопки-сегменты разом, активный подсвечен (клик по кнопке
+// = выбрать напрямую; клавиша C = циклом). Ширина = HUD_VW (как ГРУЗ/БАНК/тумблеры). Скрыт при полном спектре / без
+// радара. Позиция динамическая (зона tl, стек под фикс-панелями — hud_layout.js); клик читает кэш кнопок.
+let _radarSwitchRect = null, _radarSwitchBtns = [];
+function radarSwitchRect() { return _radarSwitchRect || { x: 10, y: 150, w: 188, h: 38 }; }
+function radarSwitchButtons() { return _radarSwitchBtns; }
 function radarSwitchVisible(game) { const u = game.unit; return game.mode === 'playing' && !game.debug && u && u.stats && u.stats.radar && !u.stats.radarSpectrum; }
 function drawRadarSwitch(ctx, game) {
   if (!radarSwitchVisible(game)) return;
-  const r = radarSwitchRect(), rs = game.radarSweep, def = RESOURCE_DEFS[rs.resType];
-  ctx.save();
-  ctx.fillStyle = 'rgba(13,12,16,0.82)'; ctx.fillRect(r.x, r.y, r.w, r.h);
-  ctx.strokeStyle = 'rgba(127,176,224,0.5)'; ctx.lineWidth = 1; ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
-  ctx.fillStyle = def.color; ctx.fillRect(r.x + 8, r.y + r.h / 2 - 5, 10, 10);
-  ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1; ctx.strokeRect(r.x + 8.5, r.y + r.h / 2 - 4.5, 9, 9);
-  ctx.font = `9px ${FONT_MONO}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#cfe0f0';
-  ctx.fillText(STR.hud.scan.radarChip(def.name.toUpperCase()), r.x + 24, r.y + r.h / 2 + 0.5);
-  ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(127,176,224,0.7)'; ctx.fillText('C ⟳', r.x + r.w - 8, r.y + r.h / 2 + 0.5);
+  const W = (typeof HUD_VW !== 'undefined') ? HUD_VW : 188, H = 38, ACC = '#7fb0e0';
+  const r = (typeof HudLayout !== 'undefined') ? HudLayout.slotDock('tl', W, H, 'radarsw', ACC) : { x: 10, y: 150, w: W, h: H };
+  _radarSwitchRect = r;
+  const rs = game.radarSweep;
+  const cy = (typeof techPanel === 'function') ? techPanel(ctx, r.x, r.y, r.w, r.h, { accent: ACC, label: STR.hud.scan.radarLabel, bolts: false })
+    : (ctx.fillStyle = 'rgba(13,12,16,0.82)', ctx.fillRect(r.x, r.y, r.w, r.h), r.y + 14);
+  ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const n = RADAR_TYPES.length, pad = 8, gap = 5;
+  const bw = (r.w - pad * 2 - gap * (n - 1)) / n, by = cy + 1, bh = r.y + r.h - by - 6;
+  _radarSwitchBtns = [];
+  for (let i = 0; i < n; i++) {
+    const type = RADAR_TYPES[i], def = RESOURCE_DEFS[type], bx = r.x + pad + i * (bw + gap), on = rs.resType === type;
+    _radarSwitchBtns.push({ x: bx, y: by, w: bw, h: bh, type });
+    ctx.fillStyle = on ? 'rgba(127,176,224,0.16)' : 'rgba(13,12,16,0.5)'; ctx.fillRect(bx, by, bw, bh);   // плита кнопки: активная — подсвечена
+    ctx.strokeStyle = on ? ACC : 'rgba(90,84,70,0.55)'; ctx.lineWidth = on ? 1.6 : 1; ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+    ctx.globalAlpha = on ? 1 : 0.5;   // цвет-свотч ресурса
+    ctx.fillStyle = def.color; ctx.fillRect(bx + 5, by + bh / 2 - 4, 8, 8);
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1; ctx.strokeRect(bx + 5.5, by + bh / 2 - 3.5, 7, 7);
+    ctx.globalAlpha = on ? 1 : 0.55; ctx.fillStyle = on ? '#e8f2ff' : '#9aa7b3'; ctx.font = `${on ? 'bold ' : ''}8px ${FONT_MONO}`;
+    ctx.fillText(def.name.slice(0, 3).toUpperCase(), bx + bw / 2 + 6, by + bh / 2 + 0.5);   // ЖЕЛ / ОРГ / КРИ
+    ctx.globalAlpha = 1;
+  }
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.restore();
 }
 

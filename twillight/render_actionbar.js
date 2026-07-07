@@ -13,7 +13,23 @@ function drawActionBar(ctx, game, W, H) {
 
   const bw = 44, bh = 44, gap = 10;
   const total = list.length * bw + (list.length - 1) * gap;
-  let x = Math.round((W - total) / 2); const y = H - 30 - bh;   // внизу-центру, над строкой подсказок управления
+  let y = H - 30 - bh;                                          // внизу-центру, над строкой подсказок управления
+  let x = Math.round((W - total) / 2);                          // по умолчанию — центр экрана
+  // Обход занятых виджетов в СВОЕЙ горизонтальной полосе (печать слева, лог справа): влезает в СВОБОДНЫЙ интервал [L,R] —
+  // центрируемся там (низ); НЕ влезает — ПОДНИМАЕМ панель НАД полосой (свой ряд), а не уезжаем за край/поверх лога.
+  if (typeof HudLayout !== 'undefined') {
+    const b0 = y, b1 = y + bh, cx = W / 2; let L = 0, R = W, bandTop = H;
+    for (const r of HudLayout.rects()) {
+      if (r.zone === 'action-bar' || r.y + r.h <= b0 || r.y >= b1) continue;   // не пересекает полосу — пропуск
+      // классификация по ЦЕНТРУ виджета (не по краю): виджет, ПЕРЕСЕКАЮЩИЙ середину (длинная запись лога), считаем правым.
+      if (r.x + r.w / 2 < cx) L = Math.max(L, r.x + r.w + gap); else R = Math.min(R, r.x - gap);
+      bandTop = Math.min(bandTop, r.y);                          // верх занятых виджетов полосы (для подъёма)
+    }
+    if (total <= R - L) x = Math.round((L + R) / 2 - total / 2);   // ВЛЕЗАЕТ в зазор → центр зазора (низ)
+    else { y = Math.round(bandTop - bh - gap); x = Math.round((W - total) / 2); }   // НЕ влезает → свой ряд НАД полосой, центр экрана
+    x = Math.max(gap, Math.min(x, W - total - gap));              // всегда в пределах экрана (не за край)
+    HudLayout.mark(x, y, total, bh, 'action-bar');               // в валидатор (после позиционирования)
+  }
   const mx = game.menuMouse ? game.menuMouse.x : -1, my = game.menuMouse ? game.menuMouse.y : -1;
   const t = performance.now() / 1000;
 

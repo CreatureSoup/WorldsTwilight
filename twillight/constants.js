@@ -99,8 +99,9 @@ function unitDrawScale(unit) {
   return (d && typeof d.drawScale === 'number' && d.drawScale > 0) ? d.drawScale : UNIT_DRAW_SCALE;
 }
 // Прыжок: ощущение веса — короткий присед (анттиципация), затем замедленный прыжок.
-const JUMP_CROUCH_T = 0.14;  // сек приседа перед прыжком вверх
-const JUMP_SPEED_FRAC = 0.6; // доля от обычной скорости хода при прыжке (тяжелее)
+const JUMP_CROUCH_T = 0.09;  // сек приседа перед прыжком (короткий взмах — отзывчивее)
+const JUMP_SPEED_FRAC = 1.4; // доля от скорости хода при прыжке: БЫСТРЕЕ хода → «прыжковый» рывок (и подъём, и симметричное снижение)
+const JUMP_BUFFER = 0.15;    // сек: базовый буфер нажатия «вверх» (в воздухе буфер ДЕРЖИТСЯ до приземления — прыжок не теряется)
 const DELIVER_INTERVAL = 0.35; // сек между сдачей одной единицы груза на базе (медленнее)
 
 // Старые серверы — источники данных в породе. Откопал → «хлам»; в радиусе SCAN_RADIUS сканер
@@ -109,6 +110,19 @@ const SERVER_COUNT = 9;      // серверов в ГЛУБОКОЙ пород�
 const SERVER_UP = 5;         // + серверов в ВЕРХНЕЙ страте (погребённая цивилизация над городом — архивы данных, тематично)
 const SERVER_MIN_DIST = 12;  // мин. 2D-дистанция (тайлов) между серверами — чтобы не кучковались
 const SCAN_RADIUS = 2.5;     // тайла — радиус автосканирования у выкопанного сервера
+// ── КОНТЕЙНЕРЫ-ХРАНИЛИЩА (containers.js): погребённые тайники древних; вскрытие требует узла `kart_hackbox` ──
+const CONTAINER_COUNT = 14;  // контейнеров в ГЛУБОКОЙ породе за сессию
+const CONTAINER_UP = 6;      // + в ВЕРХНЕЙ страте (тематично) → ~20 всего
+const CONTAINER_MIN_DIST = 11;   // мин. 2D-дистанция (тайлов) между контейнерами
+const CONTAINER_BREACH_TIME = 3.5;   // сек взлома (юнит рядом + узел kart_hackbox) до вскрытия
+const CONTAINER_RADIUS = 2.4;    // тайла — радиус, в котором идёт взлом (как автоскан сервера)
+// РЕВАРД ПО РЕДКОСТИ (starting-баланс): реже ресурс → его контейнеры РЕЖЕ (weight, как жилы/одиночки в мире) и дают
+// МЕНЬШЕ единиц (ценность за единицу выше) — чтобы редким не заваливать. Крист. — редкий тайник на 2-4, железо — на 6-10.
+const CONTAINER_LOOT = {
+  iron:    { min: 6, max: 10, weight: 5 },   // распространённый → контейнеров больше, ревард крупнее
+  organic: { min: 4, max: 8,  weight: 4 },
+  crystal: { min: 2, max: 4,  weight: 2 },   // редкий → контейнеров мало, ревард мал (но ценен)
+};
 const SCAN_TIME = 4.0;       // сек полной выкачки данных
 // Артефакты — БОЛЬШИЕ погребённые объекты (ARTIFACT_W×ARTIFACT_H тайлов, порода с маркером `t.artifact`).
 // Откопал рядом → модалка выбора: ТЕХНОЛОГИЯ (особое свойство — абилки позже) / ДАННЫЕ городу / ПЕРЕРАБОТКА.
@@ -116,27 +130,29 @@ const ARTIFACT_LONG = 2;         // длинная сторона объекта
 const ARTIFACT_TRIGGER_R = 3;    // тайла: юнит так близко к откопанному артефакту → открыть модалку (не enemy/borer издали)
 const ARTIFACT_DATA = 3;         // фрагментов данных кодекса за «отдать городу» (+1 к dataCount забега)
 const ARTIFACT_SCRAP = 4;        // дропов ресурса за «переработать»
+const ARTIFACT_CHOOSE_ANIM = 1.0; // сек: анимация выбора карты (остальные сворачиваются в центр, выбранная разгорается) до применения — модалка закрывается ТОЛЬКО по её концу
 const ARTIFACT_SEED_COUNT = 4;   // артефактов в ГЛУБОКОЙ породе за сессию (шаффл пула без повторов — вариативность набора растёт с пулом)
 const ARTIFACT_SEED_UP = 2;      // + артефактов в ВЕРХНЕЙ страте (человеческое техно-реликты; их очаги радиации делают верх опасно-интересным)
 const ARTIFACT_MIN_DIST = 40;    // мин. 2D-дистанция между артефактами = 2×RAD_SOURCE_R (=2×20) → очаги радиации НЕ перекрываются (литерал: RAD_SOURCE_R объявлен НИЖЕ, const не хойстится → TDZ)
-// СЛОТЫ артефактов: 3 типа (по 1 — расширяемо метой позже). ЗАЛОЧЕНО при установке (DK-модель): слот занят → только Данные/Переработка.
+// СЛОТЫ артефактов: 3 типа (по 1 БАЗОВО — узлы меты `kart_slot_*` дают +1 каждому, см. game._artifactSlotCap). ЗАЛОЧЕНО при установке (DK): слот занят → только Данные/Переработка.
 const ARTIFACT_SLOT_CAP = { city: 1, unit: 1, drone: 1 };
+const ARTIFACT_REROLL_COST = 3;  // КРИСТАЛЛОВ из трюма за «повторный анализ» реликта (узел kart_reroll); crystal — редчайший ресурс, 3 = ощутимая, но достижимая цена. Стартовое значение.
 // ПУЛ артефактов: id · slot(куда ставится техно) · tier(редкость/глубина посева) · cls(класс ощущения) · имя/описание.
 // Эффекты подключены через game.artifactHas(id) / флаги в unit.stats (см. artifact.js _applyArtifacts). Доращивается итерациями.
 const ARTIFACT_POOL = [
   // { id: 'loot_magnet',  slot: 'unit', tier: 'common', cls: 'info',    name: STR.artifact.pool.loot_magnet.name,  desc: STR.artifact.pool.loot_magnet.desc },   // ОТКЛЮЧЁН: сам по себе не интересен; эффект-проводка (lootMagnet) спит. Вернуть — раскомментировать + найти ему пару/связку.
-  { id: 'combat_drill', slot: 'unit', tier: 'rare',   cls: 'passive', name: STR.artifact.pool.combat_drill.name, desc: STR.artifact.pool.combat_drill.desc, gloss: 'a1' },   // gloss → запись глоссария (artifact.js открывает при находке)
+  { id: 'combat_drill', slot: 'unit', tier: 'rare',   cls: 'passive', combat: true, name: STR.artifact.pool.combat_drill.name, desc: STR.artifact.pool.combat_drill.desc, gloss: 'a1' },   // gloss → запись глоссария (artifact.js открывает при находке); combat → вне пула в режиме истории (нет врагов)
   { id: 'jets',         slot: 'unit', tier: 'rare',   cls: 'active',  name: STR.artifact.pool.jets.name,         desc: STR.artifact.pool.jets.desc,         gloss: 'a2' },
-  { id: 'city_shield',  slot: 'city', tier: 'rare',   cls: 'auto',    name: STR.artifact.pool.city_shield.name,  desc: STR.artifact.pool.city_shield.desc,  gloss: 'a3' },
+  { id: 'city_shield',  slot: 'city', tier: 'rare',   cls: 'auto',    combat: true, name: STR.artifact.pool.city_shield.name,  desc: STR.artifact.pool.city_shield.desc,  gloss: 'a3' },
   // БАТЧ 1 — защита/бур (UNIT, пассивы; tier='common' — редкости по тирам нет, набор не повторяется за забег через шаффл без замены)
   { id: 'armor',        slot: 'unit', tier: 'common', cls: 'passive', name: STR.artifact.pool.armor.name,        desc: STR.artifact.pool.armor.desc,        gloss: 'a4' },
   { id: 'overshield',   slot: 'unit', tier: 'common', cls: 'passive', name: STR.artifact.pool.overshield.name,   desc: STR.artifact.pool.overshield.desc,   gloss: 'a5' },
   { id: 'absorb',       slot: 'unit', tier: 'common', cls: 'passive', name: STR.artifact.pool.absorb.name,       desc: STR.artifact.pool.absorb.desc,       gloss: 'a6' },
-  { id: 'thorns',       slot: 'unit', tier: 'common', cls: 'passive', name: STR.artifact.pool.thorns.name,       desc: STR.artifact.pool.thorns.desc,       gloss: 'a7' },
+  { id: 'thorns',       slot: 'unit', tier: 'common', cls: 'passive', combat: true, name: STR.artifact.pool.thorns.name,       desc: STR.artifact.pool.thorns.desc,       gloss: 'a7' },
   { id: 'echo_drill',   slot: 'unit', tier: 'common', cls: 'passive', name: STR.artifact.pool.echo_drill.name,   desc: STR.artifact.pool.echo_drill.desc,   gloss: 'a8' },
   // БАТЧ 2 — активные доп-действия (UNIT; cls='active' — кнопка в панели действий; логика — artifacts_active.js)
-  { id: 'stun_pulse',   slot: 'unit', tier: 'common', cls: 'active',  name: STR.artifact.pool.stun_pulse.name,   desc: STR.artifact.pool.stun_pulse.desc,   gloss: 'a9' },
-  { id: 'blast_charge', slot: 'unit', tier: 'common', cls: 'active',  name: STR.artifact.pool.blast_charge.name, desc: STR.artifact.pool.blast_charge.desc, gloss: 'a10' },
+  { id: 'stun_pulse',   slot: 'unit', tier: 'common', cls: 'active',  combat: true, name: STR.artifact.pool.stun_pulse.name,   desc: STR.artifact.pool.stun_pulse.desc,   gloss: 'a9' },
+  { id: 'blast_charge', slot: 'unit', tier: 'common', cls: 'active',  combat: true, name: STR.artifact.pool.blast_charge.name, desc: STR.artifact.pool.blast_charge.desc, gloss: 'a10' },
   { id: 'nano_repair',  slot: 'unit', tier: 'common', cls: 'active',  name: STR.artifact.pool.nano_repair.name,  desc: STR.artifact.pool.nano_repair.desc,  gloss: 'a11' },
   // БАТЧ 3 — сложные (UNIT). drill_overdrive — ПАССИВ (нагрев, без кнопки); needsDrill — не предлагать импульс-/винт-несовместимым (гейт позже)
   { id: 'drill_overdrive', slot: 'unit', tier: 'common', cls: 'passive', name: STR.artifact.pool.drill_overdrive.name, desc: STR.artifact.pool.drill_overdrive.desc, gloss: 'a12' },
@@ -150,7 +166,13 @@ const ARTIFACT_POOL = [
   { id: 'drone_courier',   slot: 'drone', tier: 'common', cls: 'auto',   name: STR.artifact.pool.drone_courier.name,   desc: STR.artifact.pool.drone_courier.desc,   gloss: 'a18' },
   { id: 'drone_battery',   slot: 'drone', tier: 'common', cls: 'auto',   name: STR.artifact.pool.drone_battery.name,   desc: STR.artifact.pool.drone_battery.desc,   gloss: 'a19' },
   { id: 'drone_scout',     slot: 'drone', tier: 'common', cls: 'auto',   name: STR.artifact.pool.drone_scout.name,     desc: STR.artifact.pool.drone_scout.desc,     gloss: 'a20' },
-  { id: 'drone_hacker',    slot: 'drone', tier: 'common', cls: 'active', name: STR.artifact.pool.drone_hacker.name,    desc: STR.artifact.pool.drone_hacker.desc,    gloss: 'a21' },
+  { id: 'drone_hacker',    slot: 'drone', tier: 'common', cls: 'active', combat: true, name: STR.artifact.pool.drone_hacker.name,    desc: STR.artifact.pool.drone_hacker.desc,    gloss: 'a21' },
+  // БАТЧ 8 — ЭКОНОМИКА ГОРОДА (слот city; логика economy.js). Синтез — пассив-доход в банк/цикл; конвертер/электростанция — переключаемые виджеты.
+  { id: 'synth_iron',    slot: 'city', tier: 'common', cls: 'auto',   name: STR.artifact.pool.synth_iron.name,    desc: STR.artifact.pool.synth_iron.desc,    gloss: 'a22' },
+  { id: 'synth_organic', slot: 'city', tier: 'common', cls: 'auto',   name: STR.artifact.pool.synth_organic.name, desc: STR.artifact.pool.synth_organic.desc, gloss: 'a23' },
+  { id: 'synth_crystal', slot: 'city', tier: 'rare',   cls: 'auto',   name: STR.artifact.pool.synth_crystal.name, desc: STR.artifact.pool.synth_crystal.desc, gloss: 'a24' },
+  { id: 'converter',     slot: 'city', tier: 'common', cls: 'active', name: STR.artifact.pool.converter.name,     desc: STR.artifact.pool.converter.desc,     gloss: 'a25' },
+  { id: 'power_plant',   slot: 'city', tier: 'rare',   cls: 'active', name: STR.artifact.pool.power_plant.name,    desc: STR.artifact.pool.power_plant.desc,    gloss: 'a26' },
 ];
 const ARTIFACT_BY_ID = Object.fromEntries(ARTIFACT_POOL.map((d) => [d.id, d]));
 // — тюнинг эффектов стартовой четвёрки —
@@ -221,6 +243,26 @@ const JETS_FUEL_MAX = 2.4;            // прыжковые движки: зап
 const JETS_REFILL = 0.3;              // движки: дозаправка топлива/с (вне полёта; ~8с до полного → топливо ощутимо ценно)
 const JETS_CD = 1.6;                  // движки: лок после ПОЛНОГО расхода топлива (сек), пока копится заряд заново
 const FLY_SPEED = 5.5;                // движки: скорость полёта через воздух (тайлов/с)
+// ── ЭКОНОМИКА ГОРОДА (Батч 8, реликты слота city; логика economy.js) ──
+// СИНТЕЗ: доход в банк на смену цикла (база 1/цикл + апгрейд по +1). Значение = _artScaled(synth_*).
+// КОНВЕРТЕР: на смену цикла тратит 2 типа ресурса из банка → выдаёт 3-й. Рецепты (индексация редкости: iron<organic<crystal).
+// Формат: { out, cost:{...}, amt } — amt масштабируется апгрейдом (_artScaled('converter')). Выдаёт РЕДКОЕ дорого, ЧАСТОЕ дёшево.
+const CONVERTER_RECIPES = [
+  { out: 'iron',    cost: { organic: 2, crystal: 1 }, amt: 3 },   // делать железо — дёшево (сливаешь излишки органики/кристалла)
+  { out: 'organic', cost: { iron: 3, crystal: 1 },    amt: 2 },
+  { out: 'crystal', cost: { iron: 6, organic: 4 },    amt: 1 },   // делать кристалл — ДОРОГО (много железа+органики за 1 кристалл)
+];
+// ЭЛЕКТРОСТАНЦИЯ: после истечения таймера гибернации и ДО урона по контурам жжёт органику из банка — резерв секунд.
+const POWERPLANT_SEC_PER_ORGANIC = 8; // сек «запаса гибернации» за 1 сожжённую органику (база; апгрейд ↑). 10 органики ≈ 80с форы
+const POWERPLANT_RESERVE_CAP = 2;     // ×sec_per_organic: кап накопленного резерва (буфер плавности, чтобы не жечь по 1 в кадр)
+// ── ТУРЕЛИ ГОРОДА (Батч 8, узлы жёлтой ветки amb_turret*; cityturret.js) + общий медленный поворот ВСЕХ пушек ──
+const TURRET_TURN_RATE = 1.9;         // рад/с — макс. скорость поворота ствола (медленно; печатные турели И городские)
+const TURRET_FIRE_AIM_TOL = 0.22;     // рад — стреляет ТОЛЬКО когда ствол навёлся (|Δугла| < этого); иначе доводит поворот
+const CITY_TURRET_RANGE = 12;         // тайлов — радиус поражения городской турели
+const CITY_TURRET_DMG = 5;            // урон за выстрел (база; апгрейд города ↑). Скорострельная, но НЕ убойная — не сносит юнитов мгновенно
+const CITY_TURRET_DMG_STEP = 3;      // +урон за уровень трека «УРОН ТУРЕЛЕЙ» (город-апгрейд, узел amb_turret)
+const CITY_TURRET_FIRECD = 0.42;      // сек между выстрелами (частый огонь)
+const CITY_TURRET_SPREAD = 4.5;       // тайлов — разнос симметричных турелей (лево/право) от центра города
 // ГОРОДСКИЕ АПГРЕЙДЫ АРТЕФАКТОВ (Батч 6): на каждый реликт — трек улучшения (≤3 ур., НЕ супер-сильный). base = эффект без апгрейда;
 // step = прибавка за уровень (отрицательная = убывает, напр. кулдаун хакера); cap = потолок уровней. Единый источник: и трек-карточка (upgrades.js),
 // и read-site эффекта читают _artScaled(id) = base + lvl·step. Появляются ТОЛЬКО при установленном артефакте (Upgrades.syncArtifactTracks).
@@ -246,6 +288,12 @@ const ARTIFACT_UP = {
   drone_battery:   { base: DRONE_BATTERY_TOP,    step: 3,    cap: 3 },   // заряд таймера за рейс
   drone_scout:     { base: DRONE_SCOUT_REVEAL,   step: 1,    cap: 3 },   // радиус снятия тумана
   drone_hacker:    { base: DRONE_HACK_CD,        step: -3,   cap: 3 },   // ↓кулдаун редеплоя
+  // БАТЧ 8 — экономика города (доход/объём в РЕСУРСАХ; трек-стоимость индексирует редкость через costMul в ART_UPG_META)
+  synth_iron:      { base: 1,                     step: 1,    cap: 3 },   // +ед. железа в банк/цикл
+  synth_organic:   { base: 1,                     step: 1,    cap: 3 },   // +ед. органики/цикл
+  synth_crystal:   { base: 1,                     step: 1,    cap: 2 },   // +ед. кристалла/цикл (реже — ниже потолок)
+  converter:       { base: 1,                     step: 1,    cap: 3 },   // множитель выхода рецепта (amt × это)
+  power_plant:     { base: POWERPLANT_SEC_PER_ORGANIC, step: 4, cap: 3 },  // сек запаса за 1 органику
 };
 // Геометрия HUD-виджета извлечения (design-координаты): отступ центра от правого/нижнего края
 // и радиус кольца. Тот же якорь использует внутриигровой попап кодекса (codex_dom) — диск
@@ -322,12 +370,31 @@ const SESSION_GOALS = [
 const AIR = 0, ROCK = 1, BORDER = 2, INDESTRUCT = 3;  // типы тайлов (INDESTRUCT — не копается)
 const IDLE = 0, MOVING = 1, DIGGING = 2;   // состояния юнита
 
+// ── КАНОНИР «Моно-колесо» (kind:'wheel') ──
+const GUN_HULL_HP = 120;              // прочнее ядра (тяжёлое шасси; компенсация за невзаимозаменяемый встроенный бур)
+const GUN_DRILL_MULT = 0.75;          // ВСТРОЕННЫЙ бур-кольцо зубьев: чуть слабее стандартного (0.85) — не апается сменой бура, но даёт авто-турель
+const WHEEL_SPIN_MOVE = 0.4;          // множитель качения при ХОДЬБЕ (0.4 = медленнее «честного» качения — колесо крутится неспешно)
+const WHEEL_SPIN_DRILL = 9.0;         // рад/с — раскрутка колеса при БУРЕНИИ (заметно быстрее ходьбы ~3)
+const WHEEL_TOOTH_R = 1.62;           // радиус внешнего кольца-зубьев (в R); внутреннее кольцо-реактор меньше
+const UNIT_TURRET_RANGE = 10;         // тайлов — радиус авто-турели канонира (чуть меньше городской 12)
+const UNIT_TURRET_DMG = 5;            // урон за выстрел
+const UNIT_TURRET_FIRECD = 0.42;      // сек между выстрелами (та же частота, что у городских)
+const WHEEL_GROUND_SINK = 0.06;       // доля тайла: НИЗ колеса опущен ниже линии пола (колесо «стоит» на грунте, не парит) — как ноги первого юнита
+const WHEEL_IDLE_AMP = 2.6;           // design-px: амплитуда IDLE-покачивания колеса вперёд-назад (стоит на месте); зубья катятся синхронно
+const WHEEL_IDLE_FREQ = 1.9;          // рад/с: частота IDLE-покачивания (медленно, «дышит»; на пиках синуса скорость→0 — колесо «замирает»)
+const WHEEL_IDLE_COUNTER = 1.6;       // множитель КОНТР-вращения внутреннего кольца-корпуса относительно idle-докрута зубьев (ассет, не модули; >1 — заметнее)
+const ENGINE_VIB_AMP = 0.6;           // design-px: амплитуда ДРОЖИ модуля-двигателя вверх-вниз (вибрация двигательной системы)
+const ENGINE_VIB_FREQ = 33;           // рад/с: частота дрожи двигателя (быстрая мелкая вибрация)
+
 // Корпус — шасси юнита: задаёт HP и набор слотов под модули. Каждый слот
 // принимает модуль строго своей категории; во время игры модули не снять.
 const HULL_DEFS = {
   // `optional` — слоты, которые НЕ обязательны для valid и не заполняются дефолтом (доп-слот/реликты).
   scout: { name: STR.hull.name.scout, hp: 100, slots: ['drill', 'engine', 'scanner', 'cargo', 'aux'], optional: ['aux'] },
   core:  { name: STR.hull.name.core,  hp: 100, slots: ['drill', 'engine', 'scanner', 'cargo', 'aux'], optional: ['aux'] },  // кольцо-реактор: модули по окружности, кластер ВРАЩАЕТСЯ к направлению бурения; ноги фиксированы
+  // КАНОНИР «Моно-колесо» (kind:'wheel'): ВНЕШНЕЕ кольцо-зубья = ВСТРОЕННЫЙ бур (нет слота бура, `builtinDrill`), крутится
+  // по ходу/бурению; НОГ НЕТ; слот `turret` — авто-турель (поворотная как городские). unlock — узел print_gun.
+  gun:   { name: STR.hull.name.gun, hp: GUN_HULL_HP, slots: ['engine', 'scanner', 'cargo', 'aux', 'turret'], optional: ['aux'], builtinDrill: GUN_DRILL_MULT, unlock: 'print_gun' },
 };
 
 // Модули — снаряжение юнита. Категория = тип слота корпуса. У каждой категории
@@ -357,6 +424,9 @@ const MODULE_DEFS = {
   // ВМЕСТИТЕЛЬНЫЙ трюм: тот же слот ГРУЗ, больше ёмкости. unlock — узел `mast_cargo` (в галерее
   // сборки показывается только при metaHas). Трек ЁМКОСТЬ + его metaCap докручивают так же, как дефолт.
   cargo_large: { name: STR.module.name.cargo_large, category: 'cargo', color: '#a8d83a', capacity: CARGO_LARGE_CAP, unlock: 'mast_cargo' },
+  // АВТО-ТУРЕЛЬ канонира (cannon.js): слот `turret` есть ТОЛЬКО у корпуса «Канонир». Поворотная (aimOverTop),
+  // сама бьёт ближайшего врага в радиусе по прямой видимости (хитскан+трассер). `turret:1` — флаг наличия.
+  turret_auto: { name: STR.module.name.turret_auto, category: 'turret', color: '#e0603a', turret: 1 },
   // ДОП-СЛОТ (`aux`, опциональный): модули-«реликты». Пока один — Экран помех (база noiseResist,
   // трек ЭКРАН ПОМЕХ в апгрейдах докручивает). Будущие артефакты — сюда же, своей записью.
   shield: { name: STR.module.name.shield, category: 'aux', color: '#3a7ec8', noiseResist: 0.4, unlock: 'mast_sh' },
@@ -368,13 +438,12 @@ const MODULE_DEFS = {
   mod_hack: { name: STR.module.name.mod_hack, category: 'aux', color: '#c06ee6', hack: 1, unlock: 'kart_defuse' },
   // ОСАДНЫЙ МОДУЛЬ (доп-слот, siege.js): ДОП-действие (цифра от менеджера) — заряд удержанием → пробойный луч по
   // дикому гнезду (и врагам на линии). Цель — закрыть директиву «устрани угрозу». unlock — узел `print_siege` (после канонира).
-  mod_siege: { name: STR.module.name.mod_siege, category: 'aux', color: '#ff5a3a', siege: 1, unlock: 'print_siege' },
+  mod_siege: { name: STR.module.name.mod_siege, category: 'aux', color: '#ff5a3a', siege: 1, unlock: 'print_siege', hullOnly: 'gun' },   // осадный луч — только корпусу «Канонир»/моно-колесо (боевой)
   // СТЕЛС-МОДУЛЬ (доп-слот, stealth.js): ДОП-действие (цифра от менеджера) — разовая активация → юнит НЕВИДИМ для
   // боевых врагов (охотник/снайпер теряют цель) на время, потом кулдаун. unlock — узел `kart_stealth` (ветвь ВЗЛОМА).
   mod_stealth: { name: STR.module.name.mod_stealth, category: 'aux', color: '#8a7ed4', stealth: 1, unlock: 'kart_stealth' },
-  // ВЗЛОМ ЮНИТОВ (доп-слот, jam.js): ДОП-действие (цифра от менеджера) — импульс глушения: все враги в радиусе ЗАМЕДЛЕНЫ
-  // (как глушилка-структура, через e.slowT), потом кулдаун. unlock — узел `kart_stun` (ветвь ВЗЛОМА, до стелса).
-  mod_jam: { name: STR.module.name.mod_jam, category: 'aux', color: '#9ad0a0', jam: 1, unlock: 'kart_stun' },
+  // ВЗЛОМ ЮНИТОВ (jam.js) — БОЛЬШЕ НЕ отдельный модуль: способность МОДУЛЯ ВЗЛОМА (mod_hack), включается узлом `kart_stun`
+  // (inventory.getStats: s.jam = mod_hack + metaHas('kart_stun')). Все взломы требуют только модуль взлома.
   // РЕМОНТНЫЙ МОДУЛЬ (доп-слот): пассивно чинит HP юнита вне/на базе, НЕ хранит груз. Делит aux-слот
   // с печатью/взломом/осадой/стелсом/глушением (одно из). `heal`-флаг ставит inventory.getStats → stats.healRate.
   // unlock — узел `mast_rep` (переиспользован под модуль). healRate — HP за 10с; трек РЕМОНТ докручивает.
@@ -508,12 +577,26 @@ const CEIL_BANDS = [24, 50, 78];
 const PRINTER = { x: 27, y: CAVE_FLOOR_Y - 1, w: 3, h: 2 };
 const SPAWN_X = 30, SPAWN_Y = CAVE_FLOOR_Y;
 
+// ТЕСТОВЫЙ ПОЛИГОН (sandbox.js): полка породы под базой; объекты — НА ПЕРВОМ тайле породы (минимальная глубина).
+const SANDBOX_SHELF_TOP = CAVE_FLOOR_Y + 1;          // ПЕРВЫЙ тайл породы под базой — тут и лежат объекты
+const SANDBOX_SHELF_BOT = CAVE_FLOOR_Y + 13;         // низ полки (тоньше — объекты у поверхности; вмещает каверны сцен)
+const SANDBOX_FLOOR_TOP = SANDBOX_SHELF_BOT + 12;    // дно-ловушка ниже воздушного зазора (падение восстановимо)
+const SANDBOX_ROW_X0 = 42;                           // старт ряда (правее базы)
+const SANDBOX_ROW_Y = SANDBOX_SHELF_TOP;             // ряд копаемых объектов — НА ПЕРВОМ тайле породы (откоп в 1 тайл)
+const SANDBOX_ROW_GAP = 3;                           // шаг ряда (подписи чередуются по высоте → читаемы)
+const SANDBOX_BACK_Y = CAVE_FLOOR_Y + 7;             // центр каверн-сцен (эллипс вскрывается у поверхности)
+const SANDBOX_SHELF_HARD = 1;                        // мягкая порода полигона (быстрый откоп для теста)
+const SANDBOX_CARGO_FILL = 999;                      // «бесконечные» ресурсы полигона
+
 // Город (нарратив: игрок забирает у города реактор). Все значения апгрейдаемы.
 const CITY_TIMER_MAX = 60;       // сек до начала гибели после ухода с базы
 const CITY_TIMER_RECHARGE = 11;  // сек таймера/сек на базе (намеренно МЕДЛЕННЕЕ — возврат не должен слишком легко восстанавливать таймер)
+const CABLE_RECHARGE_MULT = 0.5; // print_cable: доля скорости зарядки таймера через ЭНЕРГОШЛЕЙФ (реактор питает город на расстоянии; медленнее базы)
 const CITY_RINGS = 3;            // кольца инфраструктуры
 const CITY_RING_HP = 100;        // HP на кольцо
 const CITY_DMG = 20;             // HP/сек, теряемых городом во время гибели
+const SPLIT_RETURN_BASE = 14;    // сек таймера гибернации, возвращаемых за 1 кристалл (узел amb_split «Расщепление кристалла»)
+const SPLIT_RETURN_STEP = 6;     // +сек за уровень городского апгрейда «эффективность расщепления» (трек splitreturn)
 const CITY_REPAIR_RATE = 6;      // HP/сек авто-починки контуров (узел ГОРОД·Нанорой); < CITY_DMG — лишь ЗАМЕДЛЯЕТ гибель, не отменяет
 const CITY_CONTOUR_HP = 80;      // +HP кольцу за уровень трека КОНТУРЫ (3-в-1, по очереди внеш→внутр→ядро)
 const CITY_DOCK_HP = 2;          // HP/сек починки юнита на базе за уровень РЕМОНТНОГО ДОКА (ур.1 = 1HP/0.5с)
@@ -636,9 +719,9 @@ const ENEMY_HP_BY_TYPE = { hunter: 140, siege_ram: 130, digger: 110, hacker: 90,
 const ENEMY_DEATH_TIME = 0.5;   // сек: анимация уничтожения врага (обломки/искры) до чистки из массива
 // ── УДАР-ФИДБЭК (FX при попадании, hub `game._hitFxPass`) ──
 const HIT_FLASH_TIME = 0.16;    // сек: вспышка-флэш на сущности (юнит/враг/структура) при получении урона
-const HIT_SPARK_ENEMY = 5;      // искр на попадание по врагу
-const HIT_SPARK_STRUCT = 5;     // искр на попадание по структуре
-const HIT_SPARK_UNIT = 7;       // искр на ранение юнита
+const HIT_SPARK_ENEMY = 7;      // искр на попадание по врагу (пучок-рикошет)
+const HIT_SPARK_STRUCT = 8;     // искр на попадание по структуре
+const HIT_SPARK_UNIT = 10;      // искр на ранение юнита
 const SHAKE_TIME = 0.16;        // сек: длительность тряски экрана при ранении ЮНИТА
 const SHAKE_HIT = 2.0;          // px: базовая амплитуда тряски
 const SHAKE_PER_DMG = 0.07;     // px на единицу урона сверх базовой
@@ -655,24 +738,25 @@ const SHAKE_MAX = 5;            // px: потолок амплитуды (тер
 // зона (ЭМИ/отталкиватель/глушилка/ремонт/батарея). cooldown/eShot — импульсные. eRate — энергия/с у
 // непрерывных. stun/push/healRate/feed — эффекты. Активные тратят энергию, заряжаются юнитом/батареей.
 const STRUCT_DEFS = {
-  wall:        { name: STR.structure.name.wall,        b: 'wall',      kind: 'passive', hp: 200, build: 2.0, cost: { iron: 3 },             color: '#9aa7b3', solid: true, hard: 3 },
-  spike:       { name: STR.structure.name.spike,       b: 'spike',     kind: 'passive', hp: 80,  build: 1.5, cost: { iron: 4 },             color: '#c2c8ce', dps: 9 },
-  turret_mg:   { name: STR.structure.name.turret_mg,   b: 'turret',    kind: 'active',  hp: 90,  build: 3.0, cost: { iron: 8, crystal: 2 },  color: '#d4a042', energyMax: 100, range: 7,  fireCd: 0.16, dmg: 6,  eShot: 2 },
-  turret_rail: { name: STR.structure.name.turret_rail, b: 'railgun',   kind: 'active',  hp: 100, build: 4.0, cost: { iron: 12, crystal: 5 }, color: '#7fb0e0', energyMax: 120, range: 11, fireCd: 1.5,  dmg: 34, eShot: 9 },
-  turret_mw:   { name: STR.structure.name.turret_mw,   b: 'microwave', kind: 'active',  hp: 90,  build: 3.5, cost: { iron: 9, organic: 6 },  color: '#ff7a3a', energyMax: 110, range: 5,  cone: 0.5, dps: 16, eRate: 7 },
-  emp:         { name: STR.structure.name.emp,         b: 'emp',       kind: 'active',  hp: 70,  build: 2.5, cost: { iron: 6, crystal: 4 },  color: '#5fd0e0', energyMax: 80,  radius: 4,   cooldown: 3.0, eShot: 22, stun: 1.6 },
-  repulsor:    { name: STR.structure.name.repulsor,    b: 'repulsor',  kind: 'active',  hp: 80,  build: 2.5, cost: { iron: 8, organic: 4 },  color: '#c89af0', energyMax: 90,  radius: 3.5, cooldown: 1.3, eShot: 12, push: 2.4 },
-  jammer:      { name: STR.structure.name.jammer,      b: 'jammer',    kind: 'active',  hp: 80,  build: 2.5, cost: { iron: 6, crystal: 5 },  color: '#9ad0a0', energyMax: 100, radius: 4,   eRate: 4 },
-  repair_drone:{ name: STR.structure.name.repair_drone,b: 'repair',    kind: 'active',  hp: 90,  build: 3.0, cost: { iron: 8, crystal: 6 },  color: '#7fe0a0', energyMax: 100, radius: 5,   healRate: 9, eRate: 5 },
-  battery:     { name: STR.structure.name.battery,     b: 'battery',   kind: 'active',  hp: 110, build: 2.5, cost: { iron: 4, crystal: 6 },  color: '#5fbf6a', energyMax: 300, radius: 5,   feed: 22 },
+  wall:        { name: STR.structure.name.wall,        b: 'wall',      kind: 'passive', hp: 200, build: 2.0, cost: { iron: 1 },             color: '#9aa7b3', solid: true, hard: 3 },
+  spike:       { name: STR.structure.name.spike,       b: 'spike',     kind: 'passive', hp: 80,  build: 1.5, cost: { iron: 1 },             color: '#c2c8ce', dps: 9 },
+  turret_mg:   { name: STR.structure.name.turret_mg,   b: 'turret',    kind: 'active',  hp: 90,  build: 3.0, cost: { iron: 3, crystal: 1 },  color: '#d4a042', energyMax: 100, range: 7,  fireCd: 0.16, dmg: 6,  eShot: 2 },
+  turret_rail: { name: STR.structure.name.turret_rail, b: 'railgun',   kind: 'active',  hp: 100, build: 4.0, cost: { iron: 4, crystal: 2 }, color: '#7fb0e0', energyMax: 120, range: 11, fireCd: 1.5,  dmg: 34, eShot: 9 },
+  turret_mw:   { name: STR.structure.name.turret_mw,   b: 'microwave', kind: 'active',  hp: 90,  build: 3.5, cost: { iron: 3, organic: 2 },  color: '#ff7a3a', energyMax: 110, range: 5,  cone: 0.5, dps: 16, eRate: 7 },
+  emp:         { name: STR.structure.name.emp,         b: 'emp',       kind: 'active',  hp: 70,  build: 2.5, cost: { iron: 2, crystal: 1 },  color: '#5fd0e0', energyMax: 80,  radius: 4,   cooldown: 3.0, eShot: 22, stun: 1.6 },
+  repulsor:    { name: STR.structure.name.repulsor,    b: 'repulsor',  kind: 'active',  hp: 80,  build: 2.5, cost: { iron: 3, organic: 1 },  color: '#c89af0', energyMax: 90,  radius: 3.5, cooldown: 1.3, eShot: 12, push: 2.4 },
+  jammer:      { name: STR.structure.name.jammer,      b: 'jammer',    kind: 'active',  hp: 80,  build: 2.5, cost: { iron: 2, crystal: 2 },  color: '#9ad0a0', energyMax: 100, radius: 4,   eRate: 4 },
+  repair_drone:{ name: STR.structure.name.repair_drone,b: 'repair',    kind: 'active',  hp: 90,  build: 3.0, cost: { iron: 3, crystal: 2 },  color: '#7fe0a0', energyMax: 100, radius: 5,   healRate: 9, eRate: 5 },
+  battery:     { name: STR.structure.name.battery,     b: 'battery',   kind: 'active',  hp: 110, build: 2.5, cost: { iron: 1, crystal: 2 },  color: '#5fbf6a', energyMax: 300, radius: 5,   feed: 22 },
   // ОСАДНАЯ БАШНЯ (b:'siege', structures.js): цель — НЕ враги, а ДИКОЕ ГНЕЗДО. Запитана юнитом-реактором → авто-молотит
   // ближайшее живое гнездо в радиусе резонанс-импульсами (площадь, не луч; контраст ручному осадному модулю). Ведёт hp→0 → ПОДАВЛЕНИЕ.
-  siege_tower: { name: STR.structure.name.siege_tower, b: 'siege',    kind: 'active',  hp: 130, build: 5.0, cost: { iron: 14, crystal: 8 }, color: '#ff5a3a', energyMax: 240, range: 6,  fireCd: 2.5, dmg: 22, eShot: 18 },
+  siege_tower: { name: STR.structure.name.siege_tower, b: 'siege',    kind: 'active',  hp: 130, build: 5.0, cost: { iron: 5, crystal: 3 }, color: '#ff5a3a', energyMax: 240, range: 6,  fireCd: 2.5, dmg: 22, eShot: 18 },
   // КУРЬЕР-ТЕРМИНАЛ (b:'courier', structures.js + courier.js): НЕ боевая — ЛОГИСТИКА, энергии не требует. Юнит ВНЕ базы рядом
   // ссыпает груз в её склад по единице; контейнер полон (store) → отлетает ДРОН с HP, летит к базе сам. Снимает беготню «юнит↔город».
-  courier:     { name: STR.structure.name.courier,     b: 'courier',   kind: 'depot',   hp: 90,  build: 3.5, cost: { iron: 10, crystal: 5 }, color: '#5fd0d8', store: 6 },
+  courier:     { name: STR.structure.name.courier,     b: 'courier',   kind: 'depot',   hp: 90,  build: 3.5, cost: { iron: 3, crystal: 2 }, color: '#5fd0d8', store: 6 },
 };
 const JAM_SLOW = 0.45;             // множитель скорости врага под глушилкой (45% хода)
+const REPULSE_PUSH_DUR = 0.18;     // сек: длительность ПЛАВНОГО отброса врага отталкивателем (не телепорт); дистанция = радиус структуры
 const STRUCT_CAP = 12;             // потолок числа структур (перф/термалка: турели — хитскан, без облака проджектайлов)
 const STRUCT_RECHARGE_R = 6;       // тайлов: юнит-реактор подзаряжает активные структуры в этом радиусе
 const STRUCT_RECHARGE_RATE = 30;   // энергии/с от юнита
@@ -692,10 +776,13 @@ const STRUCT_UNLOCK = {
 const COURIER_DEPOSIT_R = 1.6;     // тайлов: юнит ВНЕ базы в этом радиусе ссыпает груз в терминал
 const COURIER_DEPOSIT_INT = 0.16;  // сек между единицами при ссыпке (быстрее базовой сдачи — дамп короткий)
 const COURIER_DRONE_HP = 28;       // HP курьерского дрона (боевой враг на пути может сбить → ресурс потерян)
-const COURIER_DRONE_SPEED = 7.5;   // тайлов/с: скорость дрона по прямой к базе (над тоннелями, поверх тумана)
+const COURIER_DRONE_SPEED = 7.5;   // тайлов/с: скорость дрона к базе по ВОЗДУШНОМУ пути (airPath — тоннели/пустоты, как летные враги; НЕ сквозь породу)
+const COURIER_REPATH = 0.7;        // сек: троттл пересчёта airPath дрона к базе (терраин мог измениться — юнит копает/обвалы)
+const COURIER_WAIT_REPATH = 2.5;   // сек: РЕДКАЯ перепроверка, когда воздушного пути НЕТ (дрон ждёт на месте; BFS без цели — полный, не спамить)
 const COURIER_INTERCEPT_R = 2.4;   // тайлов: боевой враг в этом радиусе бьёт дрон
 const COURIER_INTERCEPT_DPS = 16;  // урон/с дрону от врага рядом (~1.75с под огнём — сбит)
 const COURIER_DRONE_TTL = 0.5;     // сек: анимация прибытия/гибели дрона до чистки
+const COURIER_REBUILD_TIME = 8;    // сек: терминал строит НОВЫЙ дрон после потери прежнего (сбит) — цена незащищённой трассы
 const PRINT_SPEED_FACTOR = 0.7;    // узел vault_speed: ×время сборки всех структур (−30%)
 const PRINT_COST_FACTOR = 0.75;    // узел vault_cost: ×ресурсная цена всех структур (−25%)
 const DIGGER_RETURN_STEPS = 1500;          // ~кадров на возврат в гнездо; не дошёл (глубокое гнездо/крусты) → деспавн (магистраль уже прорыта — не копать вечно)
@@ -756,7 +843,8 @@ const WEB_R = 2.5;                 // радиус опутывания паут
 const WEB_DUR = 4.0;              // сек замедления движения
 const WEB_SLOW = 0.45;           // множитель скорости движения под паутиной
 const LATCH_JUMP_R = 3.0;        // дистанция прыжка прыгуна; не достал юнита → подыхает сразу
-const LATCH_TILES = 8;           // тайлов прокопать, чтобы стряхнуть прыгуна (сброс по проходке, не по таймеру)
+const LATCH_TILES = 8;           // тайлов прокопать, чтобы стряхнуть прыгуна (быстрый сброс по проходке)
+const LATCH_TIME = 5;            // сек: прыгун сам отваливается со временем, даже если НЕ копать (чтобы не висел вечно, когда бур простаивает)
 const LATCH_DRILL_SLOW = 0.5;    // множитель силы бурения, пока прыгун висит на буре
 const JAM_SCAN_DUR = 6.0;        // сек глушения сканера (снятие тумана отключено)
 

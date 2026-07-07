@@ -25,11 +25,14 @@ class Unit {
     this.kinBurstFx = null;  // {x,y}: тайл, пробитый суперзарядом → game рисует FX
     this.echoBreak = null;   // {x,y,type,amount}: соседний тайл, пробитый ЭХО-БУРОМ → game: лут+проходка+FX
     this.webT = 0;           // ДЕБАФФ паутина (останок-робот): >0 → замедление движения (×WEB_SLOW), спадает по таймеру
-    this.latchTiles = 0;     // ДЕБАФФ прыгун (останок-робот): >0 → бурение ×LATCH_DRILL_SLOW; сброс по проходке (game считает)
+    this.latchTiles = 0;     // ДЕБАФФ прыгун (останок-робот): >0 → бурение ×LATCH_DRILL_SLOW; сброс по проходке (latchTiles) ИЛИ по времени (latchT) — game считает
+    this.latchT = 0;         // таймер авто-отвала прыгуна (LATCH_TIME) — чтобы не висел вечно при простое бура
     this.overshield = 0; this.overshieldDelay = 0;   // РЕЛИКТ энергощит: буфер-овершилд + задержка до регена
     this.absorbCharges = 0; this.absorbCd = 0;       // РЕЛИКТ поглощение: заряды (первые удары в ноль) + КД восстановления
     this.broke = false; // событие «прокопан ЛЮБОЙ тайл» (game считает проходку)
     this.crouchT = 0; this.crouchTarget = null; // присед перед прыжком вверх (ощущение веса)
+    this._jumpDesc = false; this._jumpDescDir = 0; this._jumpDescH = 0;   // СНИЖЕНИЕ прыжка: ОТДЕЛЬНЫЙ симметричный ход вниз-вбок после апекса (dir + высота)
+    this._jumpBufT = 0;                                                    // буфер нажатия «вверх»
     this.setStats(stats);
   }
   setStats(stats) {
@@ -46,7 +49,7 @@ class Unit {
     this.state = IDLE; this.dx = 1; this.dy = 0; this.faceX = 1; this._ringAim = 0;
     this.fromX = x; this.fromY = y; this.toX = x; this.toY = y; this.progress = 0;
     this.drilling = false; this.kinRamp = 0; this.kinDir = null; this.kinIdleT = 0;
-    this.dug = null; this.kinCharged = false; this.kinBurstFx = null; this.echoBreak = null; this.webT = 0; this.latchTiles = 0; this.overshield = 0; this.overshieldDelay = 0; this.absorbCharges = 0; this.absorbCd = 0; this.drillHeat = 0; this.drillOverheatT = 0; this.dashing = false; this.dashRemain = 0; this.broke = false; this.crouchT = 0; this.crouchTarget = null;
+    this.dug = null; this.kinCharged = false; this.kinBurstFx = null; this.echoBreak = null; this.webT = 0; this.latchTiles = 0; this.latchT = 0; this.overshield = 0; this.overshieldDelay = 0; this.absorbCharges = 0; this.absorbCd = 0; this.drillHeat = 0; this.drillOverheatT = 0; this.dashing = false; this.dashRemain = 0; this.broke = false; this.crouchT = 0; this.crouchTarget = null; this._jumpDesc = false; this._jumpDescDir = 0; this._jumpDescH = 0; this._jumpBufT = 0;
     this.frozenPrint = this.frozenImpulse = this.frozenHack = this.frozenSiege = false;
     this.stealthT = 0;   // СТЕЛС: >0 → юнит невидим для боевых врагов (stealth.js пишет, ai.js читает)
     this.hp = this.stats.maxHp;
@@ -154,6 +157,12 @@ class Unit {
 
     if (this.dx === 1 || this.dx === -1) this.faceX = this.dx;  // запомнить горизонталь до возможной смены на «вверх/вниз»
 
+    // БУФЕР ПРЫЖКА: нажатие «вверх» помним. ⚠️ В ВОЗДУХЕ/во время прыжка буфер НЕ истекает (держится до приземления) → нажатие
+    // в полёте не теряется, прыжок срабатывает сразу как встал на опору — нет «пропусков»/ощущения кулдауна при частых нажатиях.
+    if (input.pressed('KeyW', 'ArrowUp')) this._jumpBufT = JUMP_BUFFER;
+    else if (this._jumpBufT > 0 && this.state === IDLE && this.crouchT <= 0 && this.isAnchored(world)) this._jumpBufT = Math.max(0, this._jumpBufT - dt);
+    const wantUp = input.up() || this._jumpBufT > 0;
+
     // КИНЕТИЧЕСКИЙ разгон копится ПО ВРЕМЕНИ бурения В ОДНУ СТОРОНУ (см. drill-блок). СБРОС: отпустил направление,
     // ИЛИ перестал бить породу дольше KIN_GRACE (стоп/пустота), ИЛИ СМЕНИЛ направление (там же в drill-блоке).
     // `kinIdleT` копит время с последнего бурения (drill-блок его обнуляет → пауза между тайлами разгон держит).
@@ -181,10 +190,10 @@ class Unit {
         this.px = this.tileX * TILE + TILE / 2;
         this.py = this.tileY * TILE + TILE / 2;
         const falling = this.moveSpeed === FALL_SPEED && !this.isAnchored(world) && world.tileAt(this.tileX, this.tileY + 1).type === AIR;
-        // ПЛАВНЫЙ ход: если держишь то же горизонт. направление и впереди ОТКРЫТЫЙ тайл с опорой — сразу
-        // цепляем следующий, ПЕРЕНОСЯ остаток progress (без кадра-заморозки IDLE на стыке = «осечки по тайлам»).
+        // ПЛАВНЫЙ ход: держишь то же горизонт. направление и впереди ОТКРЫТЫЙ тайл с опорой — цепляем следующий (без «осечек по тайлам»).
+        // ⚠️ но если ХОЧЕШЬ ВВЕРХ (wantUp — держишь/буфер) → НЕ продолжаем шаг: прерываемся в IDLE, чтобы поймался прыжок.
         const nx = this.tileX + this.dx;
-        const walkOn = !falling && this.dy === 0 && (this.dx === 1 || this.dx === -1) && this.moveSpeed !== FALL_SPEED
+        const walkOn = !falling && !wantUp && this.dy === 0 && (this.dx === 1 || this.dx === -1) && this.moveSpeed !== FALL_SPEED
           && (this.dx === 1 ? input.right() : input.left())
           && world.tileAt(nx, this.tileY).type === AIR && this.anchoredAt(world, nx, this.tileY)
           && !(this._dugBlock && this._dugBlock.x === wrapX(nx) && this._dugBlock.y === this.tileY);
@@ -215,27 +224,35 @@ class Unit {
     // управление не действует: зажатые клавиши отделены от физики (гравитации),
     // поэтому «полетать» вбок по воздуху нельзя.
     const anchored = this.isAnchored(world);
+    if (anchored) { this._jumpDesc = false; this._jumpDescDir = 0; this._jumpDescH = 0; }   // приземлился/зацепился → снижение прыжка отменяется
+
+    // СНИЖЕНИЕ ПРЫЖКА: апекс достигнут (ascent-ход завершён, юнит в IDLE и без опоры) → ОДИН диагональный ход вниз-вбок
+    // ТОЙ ЖЕ высоты и скоростью, что подъём (арка симметрична: вверх+вбок → вниз+вбок). Путь занят → обычная гравитация ниже (быстро).
+    if (this._jumpDesc && !anchored) {
+      const dir = this._jumpDescDir, jh = this._jumpDescH, landX = this.tileX + dir, landY = this.tileY + jh;
+      this._jumpDesc = false;
+      let clear = world.tileAt(landX, landY).type === AIR && world.tileAt(this.tileX + dir, this.tileY + 1).type === AIR;
+      for (let k = 2; k <= jh && clear; k++) if (world.tileAt(landX, this.tileY + k).type !== AIR) clear = false;
+      if (clear) { this.dx = dir; this.dy = 1; this.startMove(landX, landY, this.effectiveSpeed() * JUMP_SPEED_FRAC); return; }
+    }
 
     // ПОДЪЁМ по «вверх»: смарт-климб на уступ / лазанье по шахте / прыжок.
     // Присед-прыжок — ТОЛЬКО когда прыгаем в открытый воздух; лазанье с опорой — без приседа.
-    if (anchored && s.canMove && input.up()) {
+    if (anchored && s.canMove && wantUp) {
       const reqHx = input.left() ? -1 : input.right() ? 1 : 0;
-      // 1) явный «вверх+вбок» → диагональ на боковой уступ
-      if (reqHx !== 0 && world.tileAt(this.tileX + reqHx, this.tileY - 1).type === AIR) {
-        this.dx = reqHx; this.dy = 0;
-        this.startMove(this.tileX + reqHx, this.tileY - 1, this.effectiveSpeed());
-        return;
-      }
-      // 1b) print_jump «Толчковые опоры»: ВОЛЬТ на уступ высотой 2 — когда сбоку на 1 стена (обычный залаз невозможен),
-      //     но есть headroom над головой и на 2 — воздух с опорой. Аддитивно: не меняет существующие случаи.
-      if (reqHx !== 0 && typeof metaHas === 'function' && metaHas('print_jump')
-          && world.tileAt(this.tileX, this.tileY - 1).type === AIR
-          && world.tileAt(this.tileX + reqHx, this.tileY - 1).type !== AIR
-          && world.tileAt(this.tileX + reqHx, this.tileY - 2).type === AIR
-          && this.anchoredAt(world, this.tileX + reqHx, this.tileY - 2)) {
-        this.dx = reqHx; this.dy = -1;
-        this.startMove(this.tileX + reqHx, this.tileY - 2, this.effectiveSpeed() * JUMP_SPEED_FRAC);
-        return;
+      // 1) явный «вверх+вбок» (reqHx читает право/лево дёшево): диагональ вверх ОТКРЫТА → ДИАГОНАЛЬНЫЙ ПРЫЖОК (присед+арка+ИНЕРЦИЯ),
+      //    НЕЗАВИСИМО от опоры уступа (так надёжно ловится); потолок над головой занят, а вбок открыто → шаг-залаз на уступ.
+      if (reqHx !== 0) {
+        const sideUpAir = world.tileAt(this.tileX + reqHx, this.tileY - 1).type === AIR;
+        const upAir = world.tileAt(this.tileX, this.tileY - 1).type === AIR;
+        if (sideUpAir && upAir) {
+          this.dx = reqHx; this.dy = -1;
+          const jh = (typeof metaHas === 'function' && metaHas('print_jump') && world.tileAt(this.tileX + reqHx, this.tileY - 2).type === AIR && world.tileAt(this.tileX, this.tileY - 2).type === AIR) ? 2 : 1;
+          this.crouchT = JUMP_CROUCH_T; this.crouchTarget = [this.tileX + reqHx, this.tileY - jh];
+          this._jumpDesc = true; this._jumpDescDir = reqHx; this._jumpDescH = jh; this._jumpBufT = 0;   // после апекса — зеркальный ход вниз-вбок (симметрия скорости/высоты/сноса); буфер израсходован
+          return;
+        }
+        if (sideUpAir) { this.dx = reqHx; this.dy = 0; this.startMove(this.tileX + reqHx, this.tileY - 1, this.effectiveSpeed()); return; }   // потолок занят → шаг-залаз на уступ
       }
       // 2) «вверх» в воздух без явного вбок
       if (reqHx === 0 && world.tileAt(this.tileX, this.tileY - 1).type === AIR) {
@@ -254,9 +271,12 @@ class Unit {
           this.startMove(this.tileX + side, this.tileY - 1, this.effectiveSpeed());
           return;
         }
-        // настоящий прыжок в открытый воздух → присед, затем замедленный прыжок (тяжесть)
+        // настоящий прыжок в открытый воздух → присед, затем замедленный прыжок (тяжесть).
+        // print_jump «Толчковые опоры» — прыжок В 2 РАЗА выше (на 2 тайла, если над головой воздух).
         this.dx = 0; this.dy = -1;
-        this.crouchT = JUMP_CROUCH_T; this.crouchTarget = [this.tileX, this.tileY - 1];
+        const jh = (typeof metaHas === 'function' && metaHas('print_jump') && world.tileAt(this.tileX, this.tileY - 2).type === AIR) ? 2 : 1;
+        this.crouchT = JUMP_CROUCH_T; this.crouchTarget = [this.tileX, this.tileY - jh];
+        this._jumpDesc = true; this._jumpDescDir = 0; this._jumpDescH = jh; this._jumpBufT = 0;   // прямой прыжок: зеркальное снижение прямо вниз той же высоты/скорости (симметрия)
         return;
       }
     }
@@ -268,7 +288,7 @@ class Unit {
     else if (input.left())  dx = -1;
     else if (input.right()) dx =  1;
 
-    if (dx !== 0 || dy !== 0) {
+    if (anchored && (dx !== 0 || dy !== 0)) {   // ⚠️ ход/коп — ТОЛЬКО с опоры: в воздухе (в т.ч. на апексе прыжка) ввод не двигает вбок (иначе «полёт»/лишний шаг)
       this.dx = dx; this.dy = dy;
       const nx = this.tileX + dx, ny = this.tileY + dy;
       const t = world.tileAt(nx, ny);
@@ -322,7 +342,8 @@ class Unit {
       }
     }
 
-    // гравитация: без опоры и снизу пусто — падаем
+    // ГРАВИТАЦИЯ: без опоры и снизу пусто — падаем обычной (быстрой) скоростью. Дуга прыжка (подъём+снижение) идёт
+    // ОТДЕЛЬНЫМИ ходами выше (симметрично, медленно); сюда попадаем уже ПОСЛЕ дуги (падение в яму под точкой приземления).
     if (world.tileAt(this.tileX, this.tileY + 1).type === AIR && !anchored) {
       this.startMove(this.tileX, this.tileY + 1, FALL_SPEED);
     }

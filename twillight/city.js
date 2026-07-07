@@ -23,6 +23,8 @@ class City {
     this._barPhase = null; this._barPrev = null; this._barText = ''; this._barT0 = 0;
     // ЩИТ ГОРОДА (артефакт city_shield): поглощающий буфер ПЕРЕД кольцами. shieldMax ставит game._applyArtifacts.
     this.shield = 0; this.shieldMax = 0; this._shieldRegenT = 0; this._shieldFlash = 0;
+    // ЭЛЕКТРОСТАНЦИЯ (реликт power_plant): секунды форы ПОСЛЕ истечения таймера, ДО урона по контурам. Жжёт органику — game._powerPlantTick.
+    this.powerReserve = 0; this._powerOn = false;
   }
 
   // Щит поглощает урон волн ПЕРЕД кольцами; переполнение возвращается (идёт в кольца/таймер). Сброс задержки регена + вспышка.
@@ -139,8 +141,12 @@ class City {
     }
 
     this._autoRepair(dt);   // вне базы контуры медленно чинятся сами (по уровню охвата)
-    this.powered = !!powered;   // print_cable: юнит в зоне питания → таймер ДЕРЖИТСЯ (не тикает, но и не дозаряжается)
-    if (powered) return;
+    this.powered = !!powered;   // print_cable: юнит-реактор питает город НА РАССТОЯНИИ через шлейф
+    if (powered) {   // таймер ВОССТАНАВЛИВАЕТСЯ (медленнее супер-чарджера базы — CABLE_RECHARGE_MULT); рейдер-кража приостанавливает
+      if (!siphoned && this.timer < this.timerMax) { this.timer = Math.min(this.timerMax, this.timer + this.recharge * CABLE_RECHARGE_MULT * dt); this.charging = true; }
+      else if (this.timer >= this.timerMax) this.full = true;
+      return;
+    }
     // даунсайд ЩИТА: таймер вне базы тикает быстрее ТОЛЬКО пока купол ВОССТАНАВЛИВАЕТСЯ (тратит энергию на рекавери) —
     // цена видна ИМЕННО после поглощённой волны (а не как постоянный невидимый налог).
     const shieldRebuilding = this.shieldMax > 0 && this.shield < this.shieldMax;
@@ -148,6 +154,7 @@ class City {
 
     // таймер истёк — город гибнет: текущее кольцо теряет HP
     this.dying = true;
+    if (this.powerReserve > 0) return;   // ЭЛЕКТРОСТАНЦИЯ: пока горит резерв органики (game._powerPlantTick) — контуры целы (фора перед уроном)
     const i = this.activeRing();
     if (i < 0) { this.dead = true; return; }
     this.rings[i].hp -= CITY_DMG * dt;

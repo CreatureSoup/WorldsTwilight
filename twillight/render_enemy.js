@@ -3,6 +3,15 @@
 // Отрисовка врагов: тёмные дроны, у каждого типа СВОЙ силуэт. Копатель — округлый дрон с
 // крупным буром и красным глазом (проходчик); собиратель — приземистый «жук-носильщик» с
 // открытым кузовом (конкурент за добычу); разведчик — резкий ромб (диверсант).
+// HP-полоса врага (узел меты mast_hpbar «Считыватель целостности»): узкая полоска над дроном; цвет по доле HP —
+// бирюза (цел) → янтарь (ранен) → красный (при смерти). ⚠️ перф: простой fillRect, без filter/shadowBlur.
+function _drawEnemyHpBar(ctx, cx, cy, r, e) {
+  if (!e.maxHp) return;
+  const frac = Math.max(0, Math.min(1, e.hp / e.maxHp)), w = 20, h = 2, x = cx - w / 2, y = cy - r - 6;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = frac > 0.5 ? '#5ad2b4' : frac > 0.25 ? '#e0c848' : '#e0644a';
+  ctx.fillRect(x, y, w * frac, h);
+}
 function drawEnemies(ctx, enemies, camera) {
   if (!enemies) return;
   for (const e of enemies) {
@@ -14,12 +23,9 @@ function drawEnemies(ctx, enemies, camera) {
       ctx.beginPath(); ctx.arc(cx, cy, r + 3, 0, 6.283); ctx.stroke();
       ctx.restore();
     }
-    if (e.hitT > 0 && !e.dying) {   // удар-флэш: аддитивная вспышка-ореол при получении урона (за силуэтом → светящийся кант)
-      const f = e.hitT / HIT_FLASH_TIME;
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55 * f;
-      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(cx, cy, r * (1.05 + (1 - f) * 0.6), 0, 6.283); ctx.fill(); ctx.restore();
-    }
+    // удар-флэш-ореол (круг при уроне) УБРАН — фидбэк урона теперь ТОЛЬКО искры (effects.hit → render_fx). e.hitT ещё тикает (задел).
     if (e.dying) { drawEnemyDeath(ctx, e, cx, cy, r); continue; }   // уничтожен: затухающий обломок + искры
+    if (!e.friendly && typeof metaHas === 'function' && metaHas('mast_hpbar')) _drawEnemyHpBar(ctx, cx, cy, r, e);   // узел «Считыватель целостности»
     if (e.type === 'raider') { drawRaider(ctx, e, cx, cy, r); continue; }
     if (e.type === 'collector') { drawCollector(ctx, e, cx, cy, r); continue; }
     if (e.type === 'hunter') { drawHunter(ctx, e, cx, cy, r); continue; }

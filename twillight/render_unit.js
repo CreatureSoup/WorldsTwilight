@@ -60,6 +60,7 @@ function drawTachikoma(ctx, world, unit, camera, opts) {
   for (const it of items) {
     if (it.leg) { if (!opts.hideLegs) drawLeg(ctx, it.leg, rig.R); continue; }   // hideLegs — прототип щупалец (tentacles.js)
     const p = it.part;
+    if (p.kind === 'drill' && unit.stats && unit.stats.screw) continue;   // ВИНТОВОЙ бур: вид — ЩИТ (drawCarriedBorer/drawMountedBorer), не деталь-бур
     ctx.save();
     if (crouch) { ctx.translate(rig.legHub.x, rig.legHub.y); ctx.scale(1, 0.7); ctx.translate(-rig.legHub.x, -rig.legHub.y); }
     const sid = (typeof partSpriteId === 'function') ? partSpriteId(unit, p.id) : p.id;   // спрайт варианта модуля, если задан
@@ -89,6 +90,15 @@ function unitLightAnchor(world, unit, camera) {
     const dAng = (drill ? (drill.ang || 0) * Math.PI / 180 : 0) + aim;   // реальное направление бура (его угол крепления + доворот)
     const fx = flip * Math.cos(dAng), fy = Math.sin(dAng);              // flip — зеркало X (строго налево)
     return { ax: cx + fx * dist, ay: cy + fy * dist, fx, fy };
+  }
+  if (rdef && rdef.kind === 'wheel') {
+    // МОНО-КОЛЕСО: ног нет (bo не применим) — конус от центра колеса по направлению хода/бурения (бур всенаправленный).
+    const wx = Math.round(camera.screenX(unit.px)), wy = Math.round(unit.py - camera.y + (typeof wheelGroundDy === 'function' ? wheelGroundDy(unit) : 0));
+    const flip = unit.faceX === -1 ? -1 : 1;
+    let fx = flip, fy = 0;
+    if (unit.dy < 0) { fx = 0; fy = -1; } else if (unit.dy > 0) { fx = 0; fy = 1; }
+    const R = (TILE - 8) / 2 * unitDrawScale(unit), dist = (rdef.toothR || WHEEL_TOOTH_R) * R;
+    return { ax: wx + fx * dist, ay: wy + fy * dist, fx, fy };
   }
   const sup = supportDirOf(world, unit), climbing = sup !== 'down';
   let face = unit.faceX === -1 ? -1 : 1, theta = 0;

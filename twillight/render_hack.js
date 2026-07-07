@@ -88,7 +88,9 @@ function drawHackFx(ctx, game, camera) {
 function drawWinTimer(ctx, game, W) {
   const wt = game._winTimer; if (!wt) return;
   const p = Math.min(1, wt.t / HACKCITY_WIN_TIME), rem = Math.max(0, HACKCITY_WIN_TIME - wt.t);
-  const w = 300, h = 28, x = (W - w) / 2, y = 70, t = performance.now() / 1000;
+  const w = 300, h = 28, t = performance.now() / 1000;
+  const box = (typeof HudLayout !== 'undefined') ? HudLayout.slot('tc', w, h) : { x: (W - w) / 2, y: 70 };   // зона tc: под капсулой/файрволлом (hud_layout.js) — больше не наезжает на файрволл
+  const x = box.x, y = box.y;
   ctx.save();
   ctx.fillStyle = 'rgba(13,12,16,0.86)'; ctx.fillRect(x, y, w, h);
   ctx.strokeStyle = `rgba(${HACK_HUE},0.9)`; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);

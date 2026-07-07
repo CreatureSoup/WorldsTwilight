@@ -21,12 +21,64 @@ function drawInventory(ctx, inv, W, H) {
   ctx.fillText(STR.inventory.header.controls, W / 2, 74);
 
   _invDrawBack(ctx, inv, L.back);
+  _invDrawHullTabs(ctx, inv, L);
   _invDrawBlueprint(ctx, inv, L);
   _invDrawStats(ctx, inv, L);
   _invDrawList(ctx, inv, L);
   _invDrawStart(ctx, inv, L);
 
   // if (inv.drag) _invDrawDragGhost(ctx, inv);   // карточка-призрак при перетаскивании (отключено)
+}
+
+// СЕЛЕКТОР КОРПУСА (нижняя полоса ЛЕВОЙ колонки, под превью). Скошенная карточка-таб со скосом
+// верх-левого угла (язык дизайн-системы — как «← назад»/пилюли), процедурный ГЛИФ корпуса (кольцо/колесо),
+// кикер + имя. Активный — акцент корпуса (кобальт «Тор» / оранж «Канонир») + верхняя полоса + LED. Намеренно
+// ИНОЙ визуал, чем у кнопки СТАРТ (сплошной люк). Клик → inventory.hullTabAt → setHull.
+function _invDrawHullTabs(ctx, inv, L) {
+  const tabs = inv.computeHullTabs(); if (!tabs.length) return;
+  ctx.save();
+  for (const t of tabs) {
+    const active = inv.hull === t.hull, hov = inv.inRect(inv.mouse.x, inv.mouse.y, t);
+    const acc = t.hull === 'gun' ? '#e0603a' : PAL.cobalt;
+    const x = t.x, y = t.y, w = t.w, h = t.h, cut = 11;
+    ctx.beginPath();   // скошенный верх-левый угол
+    ctx.moveTo(x + cut, y + 0.5); ctx.lineTo(x + w - 0.5, y + 0.5); ctx.lineTo(x + w - 0.5, y + h - 0.5);
+    ctx.lineTo(x + 0.5, y + h - 0.5); ctx.lineTo(x + 0.5, y + cut); ctx.closePath();
+    ctx.fillStyle = active ? 'rgba(58,126,200,0.12)' : (hov ? 'rgba(255,255,255,0.05)' : 'rgba(13,10,14,0.9)');
+    if (active && t.hull === 'gun') ctx.fillStyle = 'rgba(224,96,58,0.13)';
+    ctx.fill();
+    ctx.strokeStyle = active ? acc : (hov ? PAL.bone : PAL.bronze); ctx.lineWidth = active ? 1.5 : 1; ctx.stroke();
+    if (active) {   // верхняя акцент-полоса (как цветная кромка карточек модулей) от скоса до правого края
+      ctx.fillStyle = acc; ctx.fillRect(x + cut, y + 1, w - cut - 1, 2);
+      pulseDot(ctx, x + w - 9, y + 9, 2.4, acc);   // LED «выбран»
+    }
+    const gx = x + 24, gy = y + h / 2 + 1;
+    _invHullGlyph(ctx, t.hull, gx, gy, 12, active ? acc : (hov ? PAL.bone : PAL.pewter));
+    const tx = gx + 26;
+    ctx.textAlign = 'left';
+    ctx.font = `8px ${FONT_MONO}`; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = active ? acc : PAL.pewter; ctx.fillText(STR.inventory.hullKicker, tx, y + h / 2 - 5);
+    const name = ((HULL_DEFS[t.hull] && HULL_DEFS[t.hull].name) || t.hull).toUpperCase();
+    ctx.font = `bold 12px ${FONT_MONO}`;
+    ctx.fillStyle = active ? PAL.chalk : (hov ? PAL.chalk : PAL.bone); ctx.fillText(name, tx, y + h / 2 + 12);
+  }
+  ctx.restore();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
+
+// Мини-глиф корпуса для таба: КОЛЬЦО-реактор (обод + модули-точки + ядро) / МОНО-КОЛЕСО (обод + зубья + втулка).
+function _invHullGlyph(ctx, hull, cx, cy, r, col) {
+  ctx.save(); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 1.4;
+  if (hull === 'gun') {
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.stroke();
+    for (let i = 0; i < 10; i++) { const a = i / 10 * 6.283, c = Math.cos(a), sn = Math.sin(a); ctx.beginPath(); ctx.moveTo(cx + c * r, cy + sn * r); ctx.lineTo(cx + c * (r + 3), cy + sn * (r + 3)); ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.34, 0, 6.283); ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.stroke();
+    for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i / 5 * 6.283; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 1.9, 0, 6.283); ctx.fill(); }
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.3, 0, 6.283); ctx.fill();
+  }
+  ctx.restore();
 }
 
 // «← назад» — лаконичная стрелка в рамке со скошенным углом (как `.mt-back`/`.cx-back` в DOM-разделах)
@@ -66,13 +118,19 @@ function _invDrawBlueprint(ctx, inv, L) {
   // ЖИВОЙ риг юнита со спрайтами (по фактической сборке: нет модуля → деталь скрыта)
   const S = inv.blueprintScale(L);
   const fakeCam = { x: 0, y: 0, screenX: (px) => px };
-  const dum = inv._dummyUnit(false), ringDef = UNIT_DEFS[inv.hull] && UNIT_DEFS[inv.hull].kind === 'ring';
+  const dum = inv._dummyUnit(false), hullDef = UNIT_DEFS[inv.hull] || {};
+  const ringDef = hullDef.kind === 'ring', wheelDef = hullDef.kind === 'wheel';
   const lr = ringDef ? inv._previewLegRig() : null;
   // НИЗ композиции привязан к нижней кромке: кончики ног уходят чуть ЗА кадр (вся сцена едет
   // вместе — уровень пола относительно юнита НЕ меняется). Фикс. доля от высоты не годилась:
   // в высоком окне масштаб лимитируется ШИРИНОЙ панели → юнит мельче высоты → снизу пустота.
   // `_plLegDrop` — СТАБИЛЬНЫЙ (кэш), а не мгновенный max по кадрам (тот «гуляет» → юнит подпрыгивал).
   if (lr) b.cy = (b.y + b.h - 6) + TILE * 0.5 - inv._plLegDrop * S;   // +TILE*0.5 — насколько кончики за кромкой
+  else if (wheelDef) {   // КОЛЕСО: садим НИЗОМ на «пол» панели, чуть утоплено (как ноги «Ядра»)
+    const tsp = (typeof PART_SPRITES !== 'undefined') && PART_SPRITES['wheel:tooth'];
+    const wheelBottom = (tsp && tsp.h) ? tsp.h / 2 : (hullDef.toothR || WHEEL_TOOTH_R) * 1.07 * ((TILE - 8) / 2);   // низ колеса (design-px от центра)
+    b.cy = (b.y + b.h - 6) - wheelBottom * S + TILE * 0.16 * S;   // низ колеса чуть ниже линии пола панели
+  }
 
   const slots = inv.computeSlots();
 
@@ -87,8 +145,15 @@ function _invDrawBlueprint(ctx, inv, L) {
       for (const leg of rig.legs) drawLeg(ctx, leg, rig.R);
       drawRingUnit(ctx, null, dum, fakeCam, { scale: 1 });
     }
+  } else if (wheelDef) {   // МОНО-КОЛЕСО «Канонир»: без ног, колесо-зубья + втулка + модули + турель
+    if (typeof partsHull === 'function') partsHull(dum.hull);
+    if (typeof drawWheelUnit === 'function') drawWheelUnit(ctx, null, dum, fakeCam, { scale: 1 });
   } else {
     drawTachikoma(ctx, null, dum, fakeCam);
+  }
+  if (dum.stats.screw && typeof drawMountedBorer === 'function') {   // ВИНТОВОЙ бур: деталь-бур скрыта (drawRingUnit/drawTachikoma) → рисуем ЩИТ как «установленный бур»
+    const bx = (ringDef && lr) ? lr.bodyOff.x : 0, by = (ringDef && lr) ? lr.bodyOff.y : 0;
+    drawMountedBorer(ctx, bx, by, Math.atan2(dum.dy || 0, dum.dx || 1));
   }
   ctx.restore();
 
@@ -241,7 +306,9 @@ function _invDrawCard(ctx, x, y, w, h, def, installed, hover, type) {
   const CAT2SPRITE = { drill: 'drill', engine: 'engine', cargo: 'hold', scanner: 'sensor' };
   const sp = (typeof spriteFor === 'function') ? (spriteFor('mod:' + type) || spriteFor(CAT2SPRITE[def.category])) : PART_SPRITES[CAT2SPRITE[def.category]];
   ctx.save(); ctx.translate(x + w / 2, y + 1 + imgH / 2);
-  if (sp && sp.img && sp.img.complete) {
+  if (type === 'drill_screw' && typeof drawBorerFit === 'function') {   // ВИНТОВОЙ бур: карточка = СОСТАВНОЙ ЩИТ (обе части как на юните), ВПИСАН в бокс (не дженерик-деталь-бур)
+    drawBorerFit(ctx, (w - 10) * 0.92, imgH * 0.82);
+  } else if (sp && sp.img && sp.img.complete) {
     const boxW = (w - 8) * 0.92, boxH = imgH * 0.84;
     const k = Math.min(boxW / sp.img.width, boxH / sp.img.height);
     ctx.drawImage(sp.img, -sp.img.width * k / 2, -sp.img.height * k / 2, sp.img.width * k, sp.img.height * k);
@@ -282,21 +349,36 @@ function _invDrawDragGhost(ctx, inv) {
   ctx.restore();
 }
 
+// СТАРТ — «люк в мир»: сплошная золотая плита + L-уголки + левая hazard-полоса + сдвоенный шеврон-стрелка +
+// LED «готов». Намеренно ИНОЙ визуал, чем у скошенных карточек-табов корпуса. Невалид — тускло + чего не хватает.
 function _invDrawStart(ctx, inv, L) {
   const s = inv.getStats(), valid = s.valid, b = L.start;
   const hot = inv.inRect(inv.mouse.x, inv.mouse.y, b);
-  ctx.fillStyle = valid && hot ? PAL.gold : 'rgba(13,10,14,0.9)';
-  ctx.fillRect(b.x, b.y, b.w, b.h);
-  ctx.strokeStyle = valid ? PAL.gold : PAL.ash; ctx.lineWidth = 1;
-  ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+  const acc = PAL.gold, x = b.x, y = b.y, w = b.w, h = b.h;
+  ctx.save();
+  ctx.fillStyle = valid ? (hot ? PAL.gold : 'rgba(212,160,66,0.10)') : 'rgba(13,10,14,0.9)';
+  ctx.fillRect(x, y, w, h);
+  if (valid) hazardTapeV(ctx, x + 2, y + 6, 5, h - 12, hot ? PAL.void : acc);   // «люк наружу» — предупреждающая штриховка
+  ctx.strokeStyle = valid ? acc : PAL.ash; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  if (typeof _panelCorners === 'function') _panelCorners(ctx, x, y, w, h, valid ? acc : PAL.ash, 10);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   if (valid) {
-    ctx.fillStyle = hot ? PAL.void : PAL.gold; ctx.font = `14px ${FONT_MONO}`;
-    ctx.fillText(STR.inventory.start.go, b.x + b.w / 2, b.y + b.h / 2);
+    const col = hot ? PAL.void : acc;
+    ctx.font = `bold 14px ${FONT_MONO}`;
+    const label = STR.inventory.start.go, tw = ctx.measureText(label).width;
+    ctx.fillStyle = col; ctx.fillText(label, x + w / 2 + 11, y + h / 2 + 0.5);
+    _invStartChevrons(ctx, x + w / 2 - tw / 2 - 15, y + h / 2, col);   // сдвоенный шеврон «вперёд» слева от текста
+    pulseDot(ctx, x + w - 12, y + 11, 2.6, col);   // LED «готов к старту»
   } else {
     ctx.fillStyle = PAL.ash; ctx.font = `12px ${FONT_MONO}`;
     const cat2label = STR.inventory.start.cat;
-    ctx.fillText(STR.inventory.start.missing(s.missing.map((c) => cat2label[c]).join(', ').toUpperCase()), b.x + b.w / 2, b.y + b.h / 2);
+    ctx.fillText(STR.inventory.start.missing(s.missing.map((c) => cat2label[c]).join(', ').toUpperCase()), x + w / 2, y + h / 2 + 0.5);
   }
+  ctx.restore();
   ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+}
+// Сдвоенный шеврон «вперёд» (play) — акцент-мотив кнопки старта.
+function _invStartChevrons(ctx, cx, cy, col) {
+  ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (let i = 0; i < 2; i++) { const ox = cx + i * 7; ctx.beginPath(); ctx.moveTo(ox - 3, cy - 5); ctx.lineTo(ox + 3, cy); ctx.lineTo(ox - 3, cy + 5); ctx.stroke(); }
 }

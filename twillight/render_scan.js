@@ -59,7 +59,9 @@ function _drawJunk(ctx, x, y, t, done) {
 // апекс конуса/лучей — РОВНО модуль сканера. В блупринте кольца его kind — 'sensor'
 // (а 'scanner' — лишь флаг-стат need), поэтому ищем 'sensor', иначе src падал в центр юнита.
 function _scanSrc(game, camera) {
-  const bo = (typeof tentacleBodyOffset === 'function' && game.debugTentacles) ? tentacleBodyOffset() : { x: 0, y: 0 };
+  const wheel = typeof UNIT_DEFS !== 'undefined' && UNIT_DEFS[game.unit.hull] && UNIT_DEFS[game.unit.hull].kind === 'wheel';
+  const bo = (typeof tentacleBodyOffset === 'function' && game.debugTentacles && !wheel) ? tentacleBodyOffset() : { x: 0, y: 0 };
+  if (wheel && typeof wheelModuleScreenPos === 'function') return wheelModuleScreenPos(game.unit, camera, 'sensor', bo);
   return (typeof ringModuleScreenPos === 'function')
     ? ringModuleScreenPos(game.unit, camera, 'sensor', bo)
     : { x: camera.screenX(game.unit.px) + bo.x, y: game.unit.py - camera.y + bo.y };

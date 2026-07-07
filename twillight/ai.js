@@ -273,7 +273,7 @@ Object.assign(Game.prototype, {
     e.aimT = (e.aimT || 0) - dt; e.firing = Math.max(0, (e.firing || 0) - dt);
     let distU = Infinity, dpx = 0, dpy = 0;
     if (u) { dpx = wrapDeltaPx(u.px, e.px); dpy = u.py - e.py; distU = Math.hypot(dpx, dpy) / TILE; e.aimAng = Math.atan2(dpy, dpx); }
-    if (seeU && this.shots && distU <= SNIPER_RANGE && distU >= SNIPER_MINDIST && this._hunterLOS(e, u) && e.aimT <= 0) {  // огонь по юниту
+    if (seeU && this.shots && distU <= SNIPER_RANGE && distU >= SNIPER_MINDIST && this.world.hasLineOfSight(e.px, e.py, u.px, u.py) && e.aimT <= 0) {  // огонь по юниту (СТРОГАЯ прямая видимость — не сквозь породу)
       this.shots.fire(e.px, e.py, u.px, u.py); e.aimT = SNIPER_COOLDOWN; e.firing = 0.13;
     } else if (this.shots && e.aimT <= 0) {   // ФАЗА 4: по юниту не вышло — бьём по структуре игрока в радиусе
       const s = this._sniperStructTarget(e);
@@ -297,7 +297,7 @@ Object.assign(Game.prototype, {
     for (const s of this.structures.list) {
       if (s.dying || s.def.solid || s.state !== 'active') continue;
       const d = Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE;
-      if (d < bd && this._hunterLOS(e, s)) { bd = d; best = s; }
+      if (d < bd && this.world.hasLineOfSight(e.px, e.py, s.px, s.py)) { bd = d; best = s; }   // СТРОГАЯ ВИДИМОСТЬ — не стрелять сквозь породу
     }
     return best;
   },
@@ -348,7 +348,7 @@ Object.assign(Game.prototype, {
     for (const s of this.structures.list) {
       if (s.dying || s.def.solid || s.state !== 'active') continue;
       const d = Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE;
-      if (d < bd) { bd = d; best = s; }   // навесной огонь — LOS не требуем
+      if (d < bd && this.world.hasLineOfSight(e.px, e.py, s.px, s.py)) { bd = d; best = s; }   // не сквозь ПОРОДУ (стены-структуры не тайлы → мортира всё ещё бьёт ПОВЕРХ заборов игрока)
     }
     return best;
   },

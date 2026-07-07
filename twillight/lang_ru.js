@@ -66,7 +66,7 @@ i18nRegister('ru', {
     cargo: { title: '// ГРУЗ', hoard: 'КОПИМ РЕСУРС', deliver: 'СДАЁМ ГОРОДУ' },
     bank: { title: '// БАНК ГОРОДА' },
     unit: { title: '// ЮНИТ · НОРД', hp: 'HP / КОРПУС', depthLine: (layer, depth, spd) => `${layer} · ГЛУБ ${depth} · ${spd} т/с` },   // depthLine — горячий путь (каждый кадр), как и оригинал — одна строка/кадр
-    borer: { title: '// ЩИТЫ-ПРОХОДЧИКИ', counts: (carried, deployed) => `НЕСУ ${carried} · В ХОДУ ${deployed}` },
+    borer: { title: '// ЩИТЫ-ПРОХОДЧИКИ', counts: (carried, deployed, depleted) => `НЕСУ ${carried} · В ХОДУ ${deployed}` + (depleted ? ` · РАЗРЯД ${depleted}` : '') },
     cycle: (n) => `ЦИКЛ ${n}`,
     directives: { title: '// ТВОИ ДИРЕКТИВЫ' },
     scan: { extracting: 'ИЗВЛЕЧЕНИЕ ДАННЫХ', extracted: 'ДАННЫЕ ИЗВЛЕЧЕНЫ' },

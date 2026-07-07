@@ -79,6 +79,12 @@ const UPG_TRACKS = [
   // ДЛИНА ШЛЕЙФА — `print_cable` (КРАСНАЯ ветка): длина физического энергошлейфа в тайлах ПУТИ (эффект — game._cableUpdate / cableLen).
   { id: 'cable', cat: 'city', label: STR.upgrades.tracks.cable.label, sub: STR.upgrades.tracks.cable.sub, accent: PAL.amber, icon: null, metaNeed: 'print_cable', cap: 3, metaCap: { node: 'print_cable2', cap: 5 },
     need: () => true, step: CABLE_LEN_STEP, base: () => CABLE_LEN_BASE, fmt: STR.upgrades.tracks.cable.fmt },
+  // УРОН ТУРЕЛЕЙ ГОРОДА — `amb_turret` (жёлтая ветка): +урон авто-турелям базы (эффект — cityturret._cityTurretDmg читает levels.turretdmg).
+  { id: 'turretdmg', cat: 'city', label: STR.upgrades.tracks.turretdmg.label, sub: STR.upgrades.tracks.turretdmg.sub, accent: PAL.rust || '#c0402f', icon: null, metaNeed: 'amb_turret', cap: 3,
+    need: () => true, step: CITY_TURRET_DMG_STEP, base: () => CITY_TURRET_DMG, fmt: (v) => Math.round(v) + '' },
+  // ЭФФЕКТИВНОСТЬ РАСЩЕПЛЕНИЯ — `amb_split` (жёлтая ветка): +сек таймера за кристалл (эффект — economy._crystalSplitReturn читает levels.splitreturn).
+  { id: 'splitreturn', cat: 'city', label: STR.upgrades.tracks.splitreturn.label, sub: STR.upgrades.tracks.splitreturn.sub, accent: PAL.gold, icon: null, metaNeed: 'amb_split', cap: 3,
+    need: () => true, step: SPLIT_RETURN_STEP, base: () => SPLIT_RETURN_BASE, fmt: (v) => Math.round(v) + STR.upgrades.artUnit.sec },
 ];
 // потолок уровней трека: БЕЗ узла «Верстак ИИ» (`mast_hub`) каждый трек капается 1 уровнем; с ним — штатные
 // потолки (базовый `cap`/UPG_MAX — бур 3, сканер/груз/прочность 2 …), узлы `metaCap` поднимают дальше.
@@ -112,6 +118,12 @@ const ART_UPG_META = {
   drone_battery:   { fmt: 'sec', accent: PAL.amber },
   drone_scout:     { fmt: 'tiles', accent: PAL.cobalt },
   drone_hacker:    { fmt: 'sec', accent: PAL.cobalt },
+  // БАТЧ 8 — экономика города. costMul ИНДЕКСИРУЕТ РЕДКОСТЬ выходного ресурса (дороже трек → железо<органика<кристалл).
+  synth_iron:      { fmt: 'num', accent: '#9aa7b3', costMul: 1.0 },
+  synth_organic:   { fmt: 'num', accent: '#5fbf6a', costMul: 1.8 },
+  synth_crystal:   { fmt: 'num', accent: '#c264e0', costMul: 3.0 },
+  converter:       { fmt: 'num', accent: PAL.gold,  costMul: 1.6 },
+  power_plant:     { fmt: 'sec', accent: PAL.amber, costMul: 1.4 },
 };
 
 const trCap = (tr) => {
@@ -166,7 +178,7 @@ class Upgrades {
       const meta = ART_UPG_META[id], def = (typeof ARTIFACT_BY_ID !== 'undefined') && ARTIFACT_BY_ID[id];
       if (!up || !meta || !def) continue;
       const fmt = ART_UPG_FMT[meta.fmt] || ART_UPG_FMT.num;
-      const tr = { id: 'art_' + id, art: id, cat: 'artifact', label: def.name, sub: STR.upgrades.artSub[id] || '', accent: meta.accent, icon: null, cap: up.cap, step: up.step, base: () => up.base, fmt };
+      const tr = { id: 'art_' + id, art: id, cat: 'artifact', label: def.name, sub: STR.upgrades.artSub[id] || '', accent: meta.accent, icon: null, cap: up.cap, step: up.step, base: () => up.base, fmt, costMul: meta.costMul || 1 };   // costMul (Батч 8) индексирует редкость выходного ресурса в цене трека
       this.tracks.push(tr);
       if (this.levels[tr.id] == null) this.levels[tr.id] = 0;
     }

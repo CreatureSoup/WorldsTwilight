@@ -12,7 +12,10 @@ Object.assign(Game.prototype, {
   _artLvl(id) { return (this.upgrades && this.upgrades.levels && this.upgrades.levels['art_' + id]) || 0; },
   _artScaled(id) { const u = (typeof ARTIFACT_UP !== 'undefined') && ARTIFACT_UP[id]; if (!u) return 0; return u.base + Math.min(this._artLvl(id), u.cap) * u.step; },
   _installedArtifactIds() { const sl = this.artifactSlots; return sl ? [].concat(sl.city || [], sl.unit || [], sl.drone || []) : []; },
-  artifactSlotFree(slot) { const sl = this.artifactSlots; return !!sl && sl[slot] && sl[slot].length < (ARTIFACT_SLOT_CAP[slot] || 0); },
+  // ЁМКОСТЬ слота: база + узлы меты kart_slot_<city|unit|drone> (+1 каждый). Единый источник — везде читать ЭТО, не ARTIFACT_SLOT_CAP напрямую.
+  _artifactSlotCap(slot) { return (ARTIFACT_SLOT_CAP[slot] || 0) + ((typeof metaHas === 'function' && metaHas('kart_slot_' + slot)) ? 1 : 0); },
+  _artifactSlotUsed(slot) { const sl = this.artifactSlots; return (sl && sl[slot]) ? sl[slot].length : 0; },
+  artifactSlotFree(slot) { return this._artifactSlotUsed(slot) < this._artifactSlotCap(slot); },
   // Проброс эффектов установленных артефактов в unit.stats/город. Зовётся ПОСЛЕ каждого setStats (onChange) и на установку —
   // иначе пересборка статов апгрейдом стёрла бы флаги. Боевые/щитовые эффекты гейтятся прямо через artifactHas(id).
   _applyArtifacts() {
@@ -78,8 +81,38 @@ Object.assign(Game.prototype, {
       if (Math.hypot(wrapDeltaPx(this.unit.px, acx), this.unit.py - acy) / TILE <= ARTIFACT_TRIGGER_R) { this.openArtifact(a); break; }
     }
   },
+  // ── ВЫБОР ТЕХНО в модалке (a._offer). Всегда есть родная a.tech; узел kart_dual добавляет 2-ю АЛЬТЕРНАТИВНУЮ техно из пула. ──
+  _rollOfferTech(exclude) {   // случайная техно из пула, НЕ в exclude и НЕ уже установленная; ПРИОРИТЕТ — техно в СВОБОДНЫЙ слот
+    const pool = ARTIFACT_POOL.filter((d) => exclude.indexOf(d.id) < 0 && !this.artifactHas(d.id) && !(this.storyMode && d.combat));   // в истории боевые (атака/защита-от-врагов) вне пула — некого бить/защищать
+    if (!pool.length) return null;
+    const free = pool.filter((d) => this.artifactSlotFree(d.slot));   // не предлагать техно в занятый слот (была бы залоченной, впустую); полностью-залоченные — только если свободных нет
+    const src = free.length ? free : pool;
+    return src[Math.floor(Math.random() * src.length)];
+  },
+  _buildArtifactOffer(a) {
+    let primary = a.tech;
+    if (this.storyMode && primary && primary.combat) { const sub = this._rollOfferTech([]); if (sub) primary = sub; }   // родная техно боевая, а мы в истории → подменяем не-боевой (реликт откопан, но анализатор перепрофилируем)
+    a._offer = [primary];
+    if (typeof metaHas === 'function' && metaHas('kart_dual')) { const alt = this._rollOfferTech([primary.id]); if (alt) a._offer.push(alt); }
+  },
+  // ПОВТОРНЫЙ АНАЛИЗ (узел kart_reroll): заменить предложенные техно другими, не выходя из модалки. Цена — КРИСТАЛЛЫ трюма. Лимит на забег: 1 (+1 за kart_reroll2).
+  artifactRerollMax() { return (typeof metaHas === 'function' && metaHas('kart_reroll')) ? (1 + (metaHas('kart_reroll2') ? 1 : 0)) : 0; },
+  artifactRerollsLeft() { return Math.max(0, this.artifactRerollMax() - (this.artifactRerolls || 0)); },
+  artifactCanReroll() { return this.artifactRerollsLeft() > 0 && this.inventory && (this.inventory.cargo.crystal || 0) >= ARTIFACT_REROLL_COST; },
+  _artifactReroll() {
+    const a = this.pendingArtifact; if (!a || !a._offer || !this.artifactCanReroll()) return false;
+    this.inventory.cargo.crystal -= ARTIFACT_REROLL_COST;   // списываем НЕСОМЫЙ кристалл (в поле, у анализатора)
+    this.artifactRerolls = (this.artifactRerolls || 0) + 1;
+    const fresh = [], ex = a._offer.map((t) => t.id);       // новые техно ОТЛИЧАЮТСЯ от текущего набора и друг от друга
+    for (let i = 0; i < a._offer.length; i++) { const t = this._rollOfferTech(ex); if (!t) break; fresh.push(t); ex.push(t.id); }
+    if (fresh.length) a._offer = fresh;
+    if (this.artifactSel > a._offer.length + 1) this.artifactSel = 0;
+    if (this.logEvent) this.logEvent(STR.log.artifactReroll);
+    return true;
+  },
   openArtifact(a) {
-    this.pendingArtifact = a; this.artifactSel = 0; this.mode = 'artifact';
+    this.pendingArtifact = a; this.artifactSel = 0; this._artChoose = null; this.mode = 'artifact';
+    this._buildArtifactOffer(a);
     if (this.logEvent) this.logEvent(STR.log.artifactDug);
     // ГЛОССАРИЙ + лог про ТИП реликта — РАЗОВО на тип: codexDiscover персистит found-set в save.codex и сам гейтит «первую встречу»
     // (повторная находка того же типа → codexDiscover вернёт null, дубля не будет). Карта id→запись — поле `gloss` в ARTIFACT_POOL.
@@ -93,15 +126,26 @@ Object.assign(Game.prototype, {
     for (let dy = 0; dy < a.h; dy++) for (let dx = 0; dx < a.w; dx++) this.world.setAir(wrapX(a.tx + dx), a.ty + dy, true);
     if (this.world.radSources) this.world.radSources = this.world.radSources.filter((s) => s.artifact !== a);   // извлечён артефакт → гаснет привязанный очаг радиации
   },
+  // Клик/Enter по карте: запускает АНИМАЦИЮ выбора (остальные карты сворачиваются в центр, выбранная разгорается),
+  // по концу (_artChoose.t≥dur, тик в game loop) → _artifactResolve применяет эффект. idx<N — техно; idx==N — данные; idx==N+1 — переработка.
   artifactChoose(idx) {
+    const a = this.pendingArtifact; if (!a || this._artChoose) return;   // уже анимируется — игнор
+    const offer = a._offer || [a.tech], n = offer.length;
+    if (idx < n && !this.artifactSlotFree(offer[idx].slot)) return;      // слот занят (DK-модель) → выбор недоступен, без анимации
+    this._artChoose = { idx, t: 0, dur: ARTIFACT_CHOOSE_ANIM };          // старт анимации; применение — по её концу
+  },
+  // Применение выбранной карты (после анимации). Раскладка: [техно×N] · ДАННЫЕ · ПЕРЕРАБОТКА.
+  _artifactResolve(idx) {
     const a = this.pendingArtifact; if (!a) return;
-    if (idx === 0) {                                   // УСТАНОВИТЬ ТЕХНОЛОГИЮ в слот (если свободен — иначе залочено, no-op)
-      const def = a.tech;
-      if (!this.artifactSlotFree(def.slot)) return;    // слот занят (DK-модель: без смены) → выбор недоступен
+    const offer = a._offer || [a.tech], n = offer.length;
+    if (idx < n) {                                     // УСТАНОВИТЬ ТЕХНОЛОГИЮ в слот (если свободен — иначе залочено, no-op)
+      const def = offer[idx];
+      if (!this.artifactSlotFree(def.slot)) { this.pendingArtifact = null; this.mode = 'playing'; return; }
       this.artifactSlots[def.slot].push(def.id);
       this._applyArtifacts();
+      if (def.gloss && typeof codexDiscover === 'function') codexDiscover(def.gloss);   // альтернативную техно тоже занести в кодекс при установке
       if (this.logEvent) this.logEvent(STR.log.techExtracted(def.name));
-    } else if (idx === 1) {                            // ОТДАТЬ ГОРОДУ — ДАННЫЕ
+    } else if (idx === n) {                            // ОТДАТЬ ГОРОДУ — ДАННЫЕ
       this.dataCount = (this.dataCount || 0) + 1;
       { const r = this._dataGain(ARTIFACT_DATA); if (r && typeof codexPopupShow === 'function') codexPopupShow(r, this._codexAnchor()); }   // множитель kart_data учитывается
       if (this.logEvent) this.logEvent(STR.log.artifactDataGiven);
@@ -111,10 +155,13 @@ Object.assign(Game.prototype, {
       if (this.logEvent) this.logEvent(STR.log.artifactRecycled);
     }
     a.resolved = true; this._artifactConsume(a);
-    this.pendingArtifact = null; this.mode = 'playing';
+    this.pendingArtifact = null; this._artChoose = null; this.mode = 'playing';
   },
-  // ЛКМ по карте выбора (rect'ы кладёт рендер в game._artifactRects).
+  // ЛКМ по модалке: сперва кнопка ПОВТОРНЫЙ АНАЛИЗ (rect кладёт рендер), затем карты выбора (game._artifactRects).
   artifactClick(x, y) {
+    if (this._artChoose) return;   // идёт анимация выбора — клики заблокированы
+    const rr = this._artifactRerollRect;
+    if (rr && x >= rr.x && x <= rr.x + rr.w && y >= rr.y && y <= rr.y + rr.h) { this._artifactReroll(); return; }
     const r = this._artifactRects; if (!r) return;
     for (let i = 0; i < r.length; i++) if (x >= r[i].x && x <= r[i].x + r[i].w && y >= r[i].y && y <= r[i].y + r[i].h) { this.artifactChoose(i); return; }
   },
