@@ -49,7 +49,7 @@ class Unit {
     this.state = IDLE; this.dx = 1; this.dy = 0; this.faceX = 1; this._ringAim = 0;
     this.fromX = x; this.fromY = y; this.toX = x; this.toY = y; this.progress = 0;
     this.drilling = false; this.kinRamp = 0; this.kinDir = null; this.kinIdleT = 0;
-    this.dug = null; this.kinCharged = false; this.kinBurstFx = null; this.echoBreak = null; this.webT = 0; this.latchTiles = 0; this.latchT = 0; this.overshield = 0; this.overshieldDelay = 0; this.absorbCharges = 0; this.absorbCd = 0; this.drillHeat = 0; this.drillOverheatT = 0; this.dashing = false; this.dashRemain = 0; this.broke = false; this.crouchT = 0; this.crouchTarget = null; this._jumpDesc = false; this._jumpDescDir = 0; this._jumpDescH = 0; this._jumpBufT = 0;
+    this.dug = null; this.kinCharged = false; this.kinBurstFx = null; this.echoBreak = null; this.webT = 0; this.latchTiles = 0; this.latchT = 0; this.overshield = 0; this.overshieldDelay = 0; this.absorbCharges = 0; this.absorbCd = 0; this.drillHeat = 0; this.drillOverheatT = 0; this.dashing = false; this.dashRemain = 0; this.broke = false; this.crouchT = 0; this.crouchTarget = null; this._jumpDesc = false; this._jumpDescDir = 0; this._jumpDescH = 0; this._jumpBufT = 0; this.rappel = null;
     this.frozenPrint = this.frozenImpulse = this.frozenHack = this.frozenSiege = false;
     this.stealthT = 0;   // СТЕЛС: >0 → юнит невидим для боевых врагов (stealth.js пишет, ai.js читает)
     this.hp = this.stats.maxHp;
@@ -57,8 +57,29 @@ class Unit {
   // опора: только соседняя порода (клинг). Никаких «искусственных» полов —
   // пол стартовой пещеры держится за породу под ним (гарантируется генерацией).
   anchoredAt(world, x, y) {
-    return isSolid(world.tileAt(x - 1, y)) || isSolid(world.tileAt(x + 1, y))
-        || isSolid(world.tileAt(x, y - 1)) || isSolid(world.tileAt(x, y + 1));
+    if (isSolid(world.tileAt(x - 1, y)) || isSolid(world.tileAt(x + 1, y))
+        || isSolid(world.tileAt(x, y - 1)) || isSolid(world.tileAt(x, y + 1))) return true;
+    // «СПРУТ» — ЯКОРНЫЙ МОСТ: щупальца держат за НИЖНИЕ КРОМКИ (solid снизу-вбок, над которым ВОЗДУХ —
+    // верх пола, не отвесная стена) с ОБЕИХ сторон в пределах 3 тайлов → дыры в полу шириной ≤3 проходятся
+    // ЦЕЛИКОМ. Отвесные стены кромкой НЕ считаются (иначе «распорка»-вис в шахтах — отвергнуто как вис).
+    // Широкая полость/дыра ≥5 не держит. Только корпус anchorLegs.
+    const def = (typeof UNIT_DEFS !== 'undefined') && UNIT_DEFS[this.hull];
+    if (!def || !def.anchorLegs) return false;
+    const s = (dx, dy) => isSolid(world.tileAt(x + dx, y + dy));
+    const edge = (sg) => { for (let k = 1; k <= 3; k++) if (s(sg * k, 1) && !s(sg * k, 0)) return true; return false; };
+    return edge(-1) && edge(1);
+  }
+  // «СПРУТ» — РАПЕЛЬ: трос держит, пока юнит В ТОЙ ЖЕ КОЛОННЕ не глубже SPRUT_RAPPEL_LEN от точки схода,
+  // а у точки схода (кромки) ещё есть порода. Невалиден → обычная гравитация (unit.update).
+  _rappelHold(world) {
+    const r = this.rappel; if (!r) return false;
+    const def = (typeof UNIT_DEFS !== 'undefined') && UNIT_DEFS[this.hull];
+    if (!def || !def.anchorLegs) return false;
+    if (wrapX(this.tileX) !== wrapX(r.hx)) { this.rappel = null; return false; }          // сошёл с колонны
+    const depth = this.tileY - r.hy;
+    if (depth < 0 || depth > SPRUT_RAPPEL_LEN) { this.rappel = null; return false; }      // выше подвеса/трос кончился
+    if (!this.anchoredAt(world, r.hx, r.hy)) { this.rappel = null; return false; }        // кромку подвеса выкопали/осыпало
+    return true;
   }
   isAnchored(world) { return this.anchoredAt(world, this.tileX, this.tileY); }
   // Скорость хода — напрямую от модуля «Двигатель». Замедления от веса нет.
@@ -189,7 +210,7 @@ class Unit {
         this.tileX = wrapX(this.toX); this.tileY = this.toY; // переход через шов мира
         this.px = this.tileX * TILE + TILE / 2;
         this.py = this.tileY * TILE + TILE / 2;
-        const falling = this.moveSpeed === FALL_SPEED && !this.isAnchored(world) && world.tileAt(this.tileX, this.tileY + 1).type === AIR;
+        const falling = this.moveSpeed === FALL_SPEED && !this.isAnchored(world) && world.tileAt(this.tileX, this.tileY + 1).type === AIR && !this._rappelHold(world);
         // ПЛАВНЫЙ ход: держишь то же горизонт. направление и впереди ОТКРЫТЫЙ тайл с опорой — цепляем следующий (без «осечек по тайлам»).
         // ⚠️ но если ХОЧЕШЬ ВВЕРХ (wantUp — держишь/буфер) → НЕ продолжаем шаг: прерываемся в IDLE, чтобы поймался прыжок.
         const nx = this.tileX + this.dx;
@@ -224,7 +245,7 @@ class Unit {
     // управление не действует: зажатые клавиши отделены от физики (гравитации),
     // поэтому «полетать» вбок по воздуху нельзя.
     const anchored = this.isAnchored(world);
-    if (anchored) { this._jumpDesc = false; this._jumpDescDir = 0; this._jumpDescH = 0; }   // приземлился/зацепился → снижение прыжка отменяется
+    if (anchored) { this._jumpDesc = false; this._jumpDescDir = 0; this._jumpDescH = 0; this.rappel = null; }   // приземлился/зацепился → снижение прыжка отменяется, трос рапеля сматывается
 
     // СНИЖЕНИЕ ПРЫЖКА: апекс достигнут (ascent-ход завершён, юнит в IDLE и без опоры) → ОДИН диагональный ход вниз-вбок
     // ТОЙ ЖЕ высоты и скоростью, что подъём (арка симметрична: вверх+вбок → вниз+вбок). Путь занят → обычная гравитация ниже (быстро).
@@ -234,6 +255,24 @@ class Unit {
       let clear = world.tileAt(landX, landY).type === AIR && world.tileAt(this.tileX + dir, this.tileY + 1).type === AIR;
       for (let k = 2; k <= jh && clear; k++) if (world.tileAt(landX, this.tileY + k).type !== AIR) clear = false;
       if (clear) { this.dx = dir; this.dy = 1; this.startMove(landX, landY, this.effectiveSpeed() * JUMP_SPEED_FRAC); return; }
+    }
+
+    // РАПЕЛЬ «Спрута» — управление ВИСОМ на тросе (юнит в воздухе, гравитация подавлена _rappelHold):
+    // S — стравить трос ниже (до SPRUT_RAPPEL_LEN, скорость юнита); W — подтянуться к подвесу; A/D — сойти
+    // на соседнюю опору (кромку), если она есть; без ввода — висит. Трос рвётся сам в _rappelHold.
+    if (!anchored && s.canMove && this._rappelHold(world)) {
+      if (input.down() && (this.tileY - this.rappel.hy) < SPRUT_RAPPEL_LEN && world.tileAt(this.tileX, this.tileY + 1).type === AIR) {
+        this.dx = 0; this.dy = 1; this.startMove(this.tileX, this.tileY + 1, this.effectiveSpeed()); return;
+      }
+      if (input.up() && world.tileAt(this.tileX, this.tileY - 1).type === AIR) {
+        this.dx = 0; this.dy = -1; this.startMove(this.tileX, this.tileY - 1, this.effectiveSpeed()); return;
+      }
+      const sdx = input.left() ? -1 : input.right() ? 1 : 0;
+      if (sdx !== 0 && world.tileAt(this.tileX + sdx, this.tileY).type === AIR && this.anchoredAt(world, this.tileX + sdx, this.tileY)) {
+        this.rappel = null;   // сошёл с троса на кромку/мост
+        this.dx = sdx; this.dy = 0; this.startMove(this.tileX + sdx, this.tileY, this.effectiveSpeed()); return;
+      }
+      return;   // висим на тросе
     }
 
     // ПОДЪЁМ по «вверх»: смарт-климб на уступ / лазанье по шахте / прыжок.
@@ -338,13 +377,18 @@ class Unit {
       if (t.type === AIR && s.canMove && anchored) {
         if (this._dugBlock && this._dugBlock.x === nx && this._dugBlock.y === ny && this._dugBlockT < DRILL_HOLD_ADVANCE) return;
         this._dugBlock = null;
+        // РАПЕЛЬ «Спрута»: шаг ВНИЗ в БЕЗОПОРНЫЙ воздух (обрыв/потолок полости) → взводим трос от точки схода:
+        // вместо падения юнит спустится управляемо (вис держит _rappelHold, управление — ветка рапеля выше).
+        const def = (typeof UNIT_DEFS !== 'undefined') && UNIT_DEFS[this.hull];
+        if (dy === 1 && def && def.anchorLegs && !this.anchoredAt(world, nx, ny)) this.rappel = { hx: this.tileX, hy: this.tileY };
         this.startMove(nx, ny, this.effectiveSpeed()); return;
       }
     }
 
     // ГРАВИТАЦИЯ: без опоры и снизу пусто — падаем обычной (быстрой) скоростью. Дуга прыжка (подъём+снижение) идёт
     // ОТДЕЛЬНЫМИ ходами выше (симметрично, медленно); сюда попадаем уже ПОСЛЕ дуги (падение в яму под точкой приземления).
-    if (world.tileAt(this.tileX, this.tileY + 1).type === AIR && !anchored) {
+    // РАПЕЛЬ «Спрута» подавляет гравитацию: юнит ВИСИТ на тросе (управление висом — ветка выше).
+    if (world.tileAt(this.tileX, this.tileY + 1).type === AIR && !anchored && !this._rappelHold(world)) {
       this.startMove(this.tileX, this.tileY + 1, FALL_SPEED);
     }
   }

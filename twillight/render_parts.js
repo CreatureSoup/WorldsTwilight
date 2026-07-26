@@ -16,11 +16,11 @@ function partsHull(h) { _partsHull = h || ''; }
 function spriteFor(id) { if (_partsProc || !id) return null; return (_partsHull && PART_SPRITES[_partsHull + ':' + id]) || PART_SPRITES[id] || null; }
 // Деталь корпуса (kind) → слот-категория модуля. Для подмены спрайта детали на спрайт КОНКРЕТНОГО
 // установленного варианта модуля (ключ `mod:<moduleId>`), если он задан; иначе — обычный спрайт детали.
-const PART2CAT = { drill: 'drill', engine: 'engine', hold: 'cargo', sensor: 'scanner', aux: 'aux' };
+const PART2CAT = { drill: 'drill', engine: 'engine', hold: 'cargo', sensor: 'scanner', aux: 'aux', aux2: 'aux2' };   // aux2 — ВТОРОЙ доп-слот «Спрута» (свой ключ modules)
 let _auxMod = null;   // какой модуль в доп-слоте сейчас рисуется (для проц-силуэта: экран помех vs принтер)
 function partSpriteId(unit, partId) {
   const cat = PART2CAT[partId], modId = cat && unit && unit.modules && unit.modules[cat];
-  if (partId === 'aux') _auxMod = modId || null;
+  if (partId === 'aux' || partId === 'aux2') _auxMod = modId || null;
   return (modId && spriteFor('mod:' + modId)) ? ('mod:' + modId) : partId;
 }
 const CABLE_COL = { power: PAL.amber, data: PAL.cobalt, hydraulic: PAL.toxic };

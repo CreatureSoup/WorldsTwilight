@@ -12,15 +12,24 @@ function drawIntro(ctx, intro, world, unit, camera, W, H) {
   const pcx = camera.screenX((PRINTER.x + PRINTER.w / 2) * TILE), pcyTop = PRINTER.y * TILE - camera.y;
   // (плейсхолдер-прямоугольник принтера убран — базу рисует ассет города `drawPlayerCity`)
 
-  // печать юнита: заливка снизу вверх + сканлайн на кромке. Кольцо рисуем как в игре
-  // (ноги-щупальца ПОД + модули/реактор), иначе FK-риг (scout). Реактор ВЫКЛ до установки
-  // (`unit.reactorOn` ставится по фазе в game.intro-апдейте → drawRingUnit рисует `reactor:off`).
-  const ring = typeof UNIT_DEFS !== 'undefined' && UNIT_DEFS[unit.hull] && UNIT_DEFS[unit.hull].kind === 'ring';
-  const revealH = ring ? TILE * 2.6 : R * 2 + 16, halfW = ring ? TILE * 2 : R + 10;
-  const bottom = cy + (ring ? TILE * 1.4 : R + 8), top = bottom - printT * revealH;
+  // печать юнита: заливка снизу вверх + сканлайн на кромке. РЕАЛЬНЫЙ выбранный корпус, как в игре:
+  // кольцо (ноги-щупальца ПОД + модули/реактор) / КОЛЕСО «Канонира» (с посадкой на пол) / якоря
+  // «Спрута» (живые из intro-апдейта) / FK-риг (scout). Реактор ВЫКЛ до установки (`unit.reactorOn`
+  // ставится по фазе в game.intro-апдейте → drawRingUnit рисует `reactor:off`).
+  const def = (typeof UNIT_DEFS !== 'undefined' && UNIT_DEFS[unit.hull]) || {};
+  const ring = def.kind === 'ring', wheel = def.kind === 'wheel', anchor = ring && def.anchorLegs;
+  const revealH = wheel ? TILE * 3 : ring ? TILE * 2.6 : R * 2 + 16;
+  const halfW = wheel ? TILE * 2 : anchor ? TILE * 2.6 : ring ? TILE * 2 : R + 10;
+  const bottom = cy + (wheel ? TILE * 1.5 : ring ? TILE * 1.4 : R + 8), top = bottom - printT * revealH;
   ctx.save();
   ctx.beginPath(); ctx.rect(cx - halfW, top, halfW * 2, bottom - top); ctx.clip();
-  if (ring) {
+  if (wheel) {
+    if (typeof drawWheelUnit === 'function') drawWheelUnit(ctx, world, unit, camera, { scale: unitDrawScale(unit), dy: (typeof wheelGroundDy === 'function' ? wheelGroundDy(unit) : 0) });
+  } else if (anchor) {
+    if (typeof drawSprutLegs === 'function') drawSprutLegs(ctx, camera);   // якоря (живые из intro-апдейта)
+    const bo = (typeof sprutBodyOffset === 'function') ? sprutBodyOffset() : { x: 0, y: 0 };
+    drawRingUnit(ctx, world, unit, camera, { scale: unitDrawScale(unit), dx: bo.x, dy: bo.y });
+  } else if (ring) {
     if (typeof drawTentacles === 'function') drawTentacles(ctx, camera);   // ноги (живые из intro-апдейта)
     drawRingUnit(ctx, world, unit, camera, { scale: unitDrawScale(unit) });
   } else {

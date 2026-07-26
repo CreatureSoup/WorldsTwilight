@@ -498,8 +498,10 @@ class Game {
     if (typeof drawDrones === 'function') drawDrones(ctx, this, this.camera);   // дрон-компаньон (реликт дрон-слота): ПОВЕРХ тумана
     if (typeof drawTraps === 'function') drawTraps(ctx, this, this.camera);   // ловушки: кислотное облако-шиммер + сейсмо-волна-линза (поверх тумана — опасность видна)
     if (typeof drawJets === 'function') drawJets(ctx, this, this.camera);   // ПРЫЖКОВЫЕ ДВИЖКИ (артефакт): выхлоп из-под юнита в полёте
-    const _wheelHull = this.unit && typeof UNIT_DEFS !== 'undefined' && UNIT_DEFS[this.unit.hull] && UNIT_DEFS[this.unit.hull].kind === 'wheel';
-    const tOff = (this.debugTentacles && !_wheelHull) ? tentacleBodyOffset() : null;   // корпус едет на щупальцах (лаг корпуса) — нужен и щиту, чтобы не отставать от кольца; у колеса ног нет
+    const _uDef = this.unit && typeof UNIT_DEFS !== 'undefined' && UNIT_DEFS[this.unit.hull];
+    const _wheelHull = !!(_uDef && _uDef.kind === 'wheel');
+    const _anchorHull = !!(_uDef && _uDef.anchorLegs);   // «Спрут»: якорные щупальца вместо IK (sprut.js)
+    const tOff = _anchorHull ? sprutBodyOffset() : ((this.debugTentacles && !_wheelHull) ? tentacleBodyOffset() : null);   // корпус едет на ногах (лаг/подвес) — нужен и щиту; у колеса ног нет
     if (typeof drawCarriedBorer === 'function') drawCarriedBorer(ctx, this, this.camera, tOff);   // несомый «следующий» щит торчит из юнита (рисуется ДО юнита → задняя половина уходит под корпус); tOff → приклеен к корпусу
     if (this.printMode === 'place' && typeof drawPrintGhost === 'function') drawPrintGhost(ctx, this, this.camera);   // голограмма размещения печати (поверх тумана — это UI)
     if (typeof partsHull === 'function' && this.unit) partsHull(this.unit.hull);   // спрайты по типу корпуса (ноги+кольцо+детали)
@@ -513,9 +515,10 @@ class Game {
       if (typeof drawWheelUnit === 'function') drawWheelUnit(ctx, this.world, this.unit, this.camera, { scale: unitDrawScale(this.unit), dy: (typeof wheelGroundDy === 'function' ? wheelGroundDy(this.unit) : 0) });   // колесо садится на пол (не парит)
       ctx.restore();
     } else if (isRing) {
-      // КОЛЬЦО: ноги (щупальца) рисуются ПОД кольцом/модулями (клип по видимому воздуху → не «вылезает»),
-      // затем кластер кольца+модулей ПОВЕРХ. Кластер вращается к направлению бурения, ноги — нет.
-      if (this.debugTentacles && this.unit) { ctx.save(); clipVisibleAir(ctx, this.world, this.camera); drawTentacles(ctx, this.camera); ctx.restore(); }
+      // КОЛЬЦО: ноги (щупальца/якоря «Спрута») рисуются ПОД кольцом/модулями (клип по видимому воздуху →
+      // не «вылезает»), затем кластер кольца+модулей ПОВЕРХ. Кластер вращается к направлению бурения, ноги — нет.
+      if (_anchorHull && this.unit && typeof drawSprutLegs === 'function') { ctx.save(); clipVisibleAir(ctx, this.world, this.camera); drawSprutLegs(ctx, this.camera); ctx.restore(); }
+      else if (this.debugTentacles && this.unit) { ctx.save(); clipVisibleAir(ctx, this.world, this.camera); drawTentacles(ctx, this.camera); ctx.restore(); }
       drawRingUnit(ctx, this.world, this.unit, this.camera, { scale: unitDrawScale(this.unit), dx: tOff ? tOff.x : 0, dy: tOff ? tOff.y : 0 });
     } else {
       drawTachikoma(ctx, this.world, this.unit, this.camera, { scale: unitDrawScale(this.unit), hideLegs: this.debugTentacles, dx: tOff ? tOff.x : 0, dy: tOff ? tOff.y : 0 });
@@ -695,7 +698,9 @@ class Game {
       this.updateHarpoon(dt);   // ГАРПУН (артефакт): доп-действие → притяг к стене через dash-машинерию (до unit.update)
       this.unit.update(dt, this.input, this.world);
       const _hullKind = UNIT_DEFS[this.unit.hull] && UNIT_DEFS[this.unit.hull].kind;
-      if (this.debugTentacles && _hullKind !== 'wheel') updateTentacles(dt, this.unit, this.world);   // у колеса ног нет
+      const _hullAnchor = UNIT_DEFS[this.unit.hull] && UNIT_DEFS[this.unit.hull].anchorLegs;
+      if (_hullAnchor) updateSprutLegs(dt, this.unit, this.world);   // «Спрут»: якорные щупальца (sprut.js)
+      else if (this.debugTentacles && _hullKind !== 'wheel') updateTentacles(dt, this.unit, this.world);   // у колеса ног нет
       if (typeof updateRingAim === 'function' && _hullKind === 'ring') updateRingAim(dt, this.unit);   // доворот кластера кольца к направлению бурения
       if (_hullKind === 'wheel') {
         if (typeof updateWheelSpin === 'function') updateWheelSpin(dt, this.unit);   // качение колеса + раскрутка бура
@@ -828,11 +833,21 @@ class Game {
       this.intro.update(dt);
       // реактор ВКЛ только ПОСЛЕ установки (фаза печати/влёта → выкл, drawRingUnit рисует reactor:off)
       if (this.unit) this.unit.reactorOn = this.intro.t >= (INTRO_PRINT + INTRO_REACTOR);
-      if (this.debugTentacles && this.unit) updateTentacles(dt, this.unit, this.world);   // живые ноги-щупальца в интро
+      if (this.unit && UNIT_DEFS[this.unit.hull] && UNIT_DEFS[this.unit.hull].anchorLegs) updateSprutLegs(dt, this.unit, this.world);   // якоря «Спрута» живут и в интро
+      else if (this.debugTentacles && this.unit) updateTentacles(dt, this.unit, this.world);   // живые ноги-щупальца в интро
       if (this.intro.done || this.input.pressed('Space', 'Enter', 'NumpadEnter')) { if (this.unit) this.unit.reactorOn = true; this.mode = 'playing'; }
       ctx.fillStyle = PAL.pit; ctx.fillRect(0, 0, this.designW, this.designH);
       drawWorld(ctx, this.world, this.unit, this.camera);
       drawFog(ctx, this.world, this.unit, this.camera, this.designW, this.designH);
+      // ПРОЖЕКТОРНАЯ ТЬМА как в drawScene (без неё интро выглядело «без тумана» — раскрытая порода слишком светлая):
+      // до установки реактора конуса нет — плоское затемнение с мягким гало у принтера; после — полный drawHeadlight.
+      if (this.unit && this.unit.reactorOn) drawHeadlight(ctx, this.world, this.unit, this.camera, this.designW, this.designH, 0);
+      else if (this.unit) {
+        const ux = this.camera.screenX(this.unit.px), uy = this.unit.py - this.camera.y;
+        const gr = ctx.createRadialGradient(ux, uy, TILE * 0.8, ux, uy, TILE * 2.8);
+        gr.addColorStop(0, 'rgba(6,5,11,0.10)'); gr.addColorStop(1, 'rgba(6,5,11,0.46)');   // те же 0.46, что тьма drawHeadlight → включение реактора без скачка
+        ctx.fillStyle = gr; ctx.fillRect(0, 0, this.designW, this.designH);
+      }
       drawIntro(ctx, this.intro, this.world, this.unit, this.camera, this.designW, this.designH);
     } else if (this.mode === 'gameover') {
       // ENTER уводит в меню; рисуем сцену ТОЛЬКО если ещё в gameover — после

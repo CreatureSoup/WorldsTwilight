@@ -26,7 +26,8 @@ function unitHasPart(unit, need) {
   if (need === 'engine')  return !!s.canMove;       // есть двигатель
   if (need === 'scanner') return (s.scanR || 0) > 0;
   if (need === 'cargo')   return (s.capacity || 0) > 0;
-  if (need === 'aux')     return (s.noiseResist || 0) > 0 || (s.printer || 0) > 0;   // доп-слот: деталь видна, когда модуль (экран помех ИЛИ принтер) установлен
+  if (need === 'aux')     return s.auxOn !== undefined ? !!s.auxOn : ((s.noiseResist || 0) > 0 || (s.printer || 0) > 0);   // доп-слот: деталь видна при ЛЮБОМ занятом aux-модуле (auxOn из getStats; фолбэк — старая пара флагов)
+  if (need === 'aux2')    return !!s.aux2On;        // ВТОРОЙ доп-слот «Спрута» (слот aux2, флаг из getStats)
   if (need === 'turret')  return !!s.turret;        // авто-турель канонира (слот turret)
   return true;
 }

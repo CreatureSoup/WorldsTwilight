@@ -19,6 +19,8 @@ const SLOT_META = {
   scanner: { kind: 'sensor', label: STR.inventory.category.scanner.slot, lx:  0.5,  ly: -1.1 },   // вверх-ВПРАВО: не лезет на пустой круг доп-слота (тот вверху-слева)
   cargo:   { kind: 'hold',   label: STR.inventory.category.cargo.slot,   lx: -1,    ly:  0   },   // влево
   aux:     { kind: 'aux',    label: STR.inventory.category.aux.slot,     lx: -1.3, ly: -0.6 },   // доп-слот (экран помех) — влево-ВВЕРХ (не лезть на трюм); показ гейтнут _categoryActive
+  // ВТОРОЙ доп-слот «Спрута» (слот aux2 → категория 'aux'): деталь ищется по partId (kind 'aux' дублируется)
+  aux2:    { kind: 'aux',    partId: 'aux2', label: STR.inventory.category.aux2.slot, lx: -0.7, ly: -1.15 },   // вверх-влево (деталь на −118°)
   turret:  { kind: 'turret', label: STR.inventory.category.turret.slot,  lx:  1.2, ly: -0.7 },   // авто-турель (только у «Канонира») — вправо-ВВЕРХ
   // engine НЕ показываем на сборке: двигатель — параметр КОРПУСА (стат остаётся, слот/галерея/выноска скрыты).
 };
@@ -44,6 +46,9 @@ class Inventory {
     this.defaultBuild();
   }
 
+  // Категория модулей, которую принимает СЛОТ. Обычно слот===категория; исключение — второй доп-слот
+  // «Спрута»: слот `aux2` принимает модули категории 'aux' (ключ в modules остаётся 'aux2').
+  _slotCat(slot) { return slot === 'aux2' ? 'aux' : slot; }
   // По умолчанию юнит СОБРАН — каждый слот корпуса получает первый модуль своей
   // категории (как риг в тулзе). Менять можно при наличии других вариантов.
   defaultBuild() {
@@ -51,7 +56,7 @@ class Inventory {
     const optional = HULL_DEFS[this.hull].optional || [];
     for (const slot of HULL_DEFS[this.hull].slots) {
       if (optional.includes(slot)) continue;   // доп-слот по умолчанию ПУСТ (опциональный)
-      for (const key in MODULE_DEFS) if (MODULE_DEFS[key].category === slot && this._moduleFitsHull(key)
+      for (const key in MODULE_DEFS) if (MODULE_DEFS[key].category === this._slotCat(slot) && this._moduleFitsHull(key)
         && (!MODULE_DEFS[key].unlock || (typeof metaHas === 'function' && metaHas(MODULE_DEFS[key].unlock)))) { this.modules[slot] = key; break; }   // дефолт — первый НЕзагейченный вариант, подходящий корпусу
     }
   }
@@ -66,23 +71,26 @@ class Inventory {
     if (!b.modules) return;
     for (const slot in b.modules) {                        // переставляем сохранённый модуль, ЕСЛИ он валиден для слота и открыт
       const m = b.modules[slot], def = MODULE_DEFS[m];
-      if (def && def.category === slot && this._moduleFitsHull(m) && (!def.unlock || (typeof metaHas === 'function' && metaHas(def.unlock))) && this._categoryActive(slot)) this.modules[slot] = m;   // доп-слот восстанавливаем только если он открыт (ядро core) и подходит корпусу
+      if (def && def.category === this._slotCat(slot) && this._moduleFitsHull(m) && (!def.unlock || (typeof metaHas === 'function' && metaHas(def.unlock))) && this._categoryActive(slot)) this.modules[slot] = m;   // доп-слот восстанавливаем только если он открыт (ядро core) и подходит корпусу
     }
   }
   // Модуль подходит текущему корпусу? `hullOnly` ограничивает вариант конкретным корпусом (осадный луч — только «Канонир»).
   _moduleFitsHull(type) { const d = MODULE_DEFS[type]; return !d || !d.hullOnly || d.hullOnly === this.hull; }
-  // Слот показывается на сборке? Обязательные — всегда; опциональные (доп-слот) — если установлен ИЛИ есть доступный модуль.
+  // Слот показывается на сборке? Не у корпуса — нет; обязательные — всегда; опциональные (доп-слоты) —
+  // если установлен ИЛИ есть доступный модуль категории слота (aux2 → 'aux' через _slotCat).
   _categoryActive(cat) {
+    if (!HULL_DEFS[this.hull].slots.includes(cat)) return false;             // слот не у этого корпуса (aux2 — только «Спрут»)
     if (!(HULL_DEFS[this.hull].optional || []).includes(cat)) return true;   // обязательные слоты — всегда
     if (!(typeof metaHas === 'function' && metaHas('core'))) return false;   // ДОП-СЛОТ открывает СТАРТОВЫЙ узел ЯДРО (core): нет ядра → слот скрыт, доп-модули ставить некуда
     if (this.modules[cat]) return true;
-    return Object.keys(MODULE_DEFS).some((k) => MODULE_DEFS[k].category === cat && this._moduleFitsHull(k) && (!MODULE_DEFS[k].unlock || (typeof metaHas === 'function' && metaHas(MODULE_DEFS[k].unlock))));
+    return Object.keys(MODULE_DEFS).some((k) => MODULE_DEFS[k].category === this._slotCat(cat) && this._moduleFitsHull(k) && (!MODULE_DEFS[k].unlock || (typeof metaHas === 'function' && metaHas(MODULE_DEFS[k].unlock))));
   }
   // ---- выбор КОРПУСА (на экране сборки) ----
-  // Доступные корпуса: «Тор» всегда; «Канонир» — после узла print_gun. «Скиталец» — легаси (в выбор не даём).
+  // Доступные корпуса: «Тор» всегда; «Канонир» — узел print_gun; «Спрут» — узел print_slots. «Скиталец» — легаси.
   availableHulls() {
     const list = ['core'];
     if (typeof metaHas === 'function' && metaHas('print_gun') && HULL_DEFS.gun) list.push('gun');
+    if (typeof metaHas === 'function' && metaHas('print_slots') && HULL_DEFS.sprut) list.push('sprut');
     return list;
   }
   setHull(h) {
@@ -136,6 +144,7 @@ class Inventory {
       if (m.stealth) s.stealth = true;                   // стелс-модуль (доп-слот): невидимость (stealth.js)
       if (m.turret) s.turret = true;                     // авто-турель канонира (слот turret) — cannon.js
     }
+    s.auxOn = !!this.modules.aux; s.aux2On = !!this.modules.aux2;   // занятость доп-слотов → видимость деталей aux/aux2 (unitHasPart)
     // Готов к старту, когда заняты все ОБЯЗАТЕЛЬНЫЕ слоты (опциональные — доп-слот — можно пустыми).
     const req = hull.slots.filter((cat) => !optional.includes(cat));
     s.valid = req.every((cat) => !!this.modules[cat]);
@@ -196,6 +205,8 @@ class Inventory {
         scanR:    (allOn || this.modules.scanner) ? 1 : 0,
         capacity: (allOn || this.modules.cargo)   ? 1 : 0,
         noiseResist: (allOn || this.modules.aux)  ? 1 : 0,   // доп-слот: деталь видна при установленном модуле
+        auxOn:    (allOn || this.modules.aux)     ? 1 : 0,   // занятость доп-слотов (unitHasPart aux/aux2)
+        aux2On:   (allOn || this.modules.aux2)    ? 1 : 0,
         turret:   (allOn || this.modules.turret)  ? 1 : 0,   // авто-турель (слот turret канонира)
         screw: !!(this.modules.drill && typeof MODULE_DEFS !== 'undefined' && MODULE_DEFS[this.modules.drill] && MODULE_DEFS[this.modules.drill].screw),   // ВИНТОВОЙ бур: превью прячет деталь-бур и рисует ЩИТ (drawMountedBorer)
       },
@@ -217,6 +228,7 @@ class Inventory {
       }
     } else if (def.kind === 'ring') {   // кольцо: габарит по выносу модулей (rig.parts тут NaN), + ноги
       for (const p of def.parts) if (p.kind !== 'leg') maxR = Math.max(maxR, ((p.rad || def.ringR || 1) + 1.1) * rig.R);
+      if (def.anchorLegs) maxR = Math.max(maxR, TILE * 2.05);   // «Спрут»: в кадр входит «камера» превью с якорями (стены ±1.9 тайла + лапы)
     } else {
       for (const p of rig.parts) maxR = Math.max(maxR, Math.hypot(p.x, p.y) + rig.R);
     }
@@ -278,7 +290,7 @@ class Inventory {
       const R = (TILE - 8) / 2, bo = (this._plRig && this._plRig.bodyOff) || { x: 0, y: 0 };   // сдвиг корпуса на щупальцах (у колеса ног нет → 0)
       for (const cat in SLOT_META) {
         if (!this._categoryActive(cat)) continue;   // доп-слот скрыт, пока нет модуля
-        const p = def.parts.find((pp) => pp.kind === SLOT_META[cat].kind); if (!p) continue;
+        const p = def.parts.find((pp) => (SLOT_META[cat].partId ? pp.id === SLOT_META[cat].partId : pp.kind === SLOT_META[cat].kind)); if (!p) continue;   // aux2 ищется по partId (kind 'aux' дублируется)
         const a = (p.ang || 0) * Math.PI / 180;   // aim=0, flip=1 в превью
         push(cat, b.cx + (bo.x + Math.cos(a) * (p.rad || 0) * R) * S, b.cy + (bo.y + Math.sin(a) * (p.rad || 0) * R) * S);
       }
@@ -287,7 +299,7 @@ class Inventory {
     const rig = resolveUnitRig(0, 0, this._dummyUnit(true), this._rigTime());
     for (const cat in SLOT_META) {
       if (!this._categoryActive(cat)) continue;   // доп-слот скрыт, пока нет модуля
-      const part = rig.parts.find((p) => p.kind === SLOT_META[cat].kind); if (!part) continue;
+      const part = rig.parts.find((p) => (SLOT_META[cat].partId ? p.id === SLOT_META[cat].partId : p.kind === SLOT_META[cat].kind)); if (!part) continue;
       push(cat, b.cx + part.x * S, b.cy + part.y * S);
     }
     return out;
@@ -302,7 +314,7 @@ class Inventory {
   CARD_H() { return 116; }
   computeCards() {
     const L = this.layout; if (!L) return { cards: [], headers: [], contentH: 0 };
-    const labels = { drill: STR.inventory.category.drill.gallery, engine: STR.inventory.category.engine.gallery, scanner: STR.inventory.category.scanner.gallery, cargo: STR.inventory.category.cargo.gallery, aux: STR.inventory.category.aux.gallery, turret: STR.inventory.category.turret.gallery };
+    const labels = { drill: STR.inventory.category.drill.gallery, engine: STR.inventory.category.engine.gallery, scanner: STR.inventory.category.scanner.gallery, cargo: STR.inventory.category.cargo.gallery, aux: STR.inventory.category.aux.gallery, aux2: STR.inventory.category.aux2.gallery, turret: STR.inventory.category.turret.gallery };
     const cw = this.CARD_W(), ch = this.CARD_H(), cgap = 10, hdrH = 22, rowGap = 18;
     const x0 = L.list.x + 14, y0 = L.list.y + 38 - this.scrollY;
     const cards = [], headers = [];
@@ -312,8 +324,8 @@ class Inventory {
       if (!this._categoryActive(cat)) continue; // доп-слот скрыт, пока нет доступного модуля
       headers.push({ label: labels[cat] || cat.toUpperCase(), x: x0, y: cy, w: L.list.w - 28 });
       cy += hdrH;
-      // варианты слота; гейтнутые (`unlock`) показываются только при открытом узле СЕТИ ПАМЯТИ
-      const mods = Object.keys(MODULE_DEFS).filter((k) => MODULE_DEFS[k].category === cat && this._moduleFitsHull(k)
+      // варианты слота (aux2 → категория 'aux'); гейтнутые (`unlock`) — только при открытом узле СЕТИ ПАМЯТИ
+      const mods = Object.keys(MODULE_DEFS).filter((k) => MODULE_DEFS[k].category === this._slotCat(cat) && this._moduleFitsHull(k)
         && (!MODULE_DEFS[k].unlock || (typeof metaHas === 'function' && metaHas(MODULE_DEFS[k].unlock))));
       // ПЕРЕНОС по рядам: когда вариантов больше, чем влезает по ширине (напр. 4 бура) — крайние НЕ уезжают
       // за панель (и остаются кликабельны). Лишняя высота уходит в вертикальный скролл (maxScroll).
@@ -346,11 +358,16 @@ class Inventory {
     if (this.inRect(x, y, L.back)) { if (this.onBack) this.onBack(); return; }
     if (this.inRect(x, y, L.start)) { if (this.getStats().valid && this.onStart) this.onStart(); return; }
     const card = this.cardAt(x, y);
-    // ВЫБОР карточки в галерее = установка модуля в слот (перетаскивание отключено).
+    // ВЫБОР карточки в галерее = установка модуля в СЛОТ секции (card.category = ключ слота; перетаскивание отключено).
     if (card) {
       const optional = (HULL_DEFS[this.hull].optional || []).includes(card.category);
       if (optional && this.modules[card.category] === card.type) delete this.modules[card.category];   // повторный клик по опц. слоту (доп-слот) — снять
-      else this.modules[card.category] = card.type;
+      else {
+        // УНИКАЛЬНОСТЬ между парными доп-слотами «Спрута»: тот же модуль в другом aux-слоте → переезжает (не дублится)
+        const twin = card.category === 'aux' ? 'aux2' : (card.category === 'aux2' ? 'aux' : null);
+        if (twin && this.modules[twin] === card.type) delete this.modules[twin];
+        this.modules[card.category] = card.type;
+      }
     }
     // if (card) this.drag = { type: card.type, category: card.category };   // перетаскивание (отключено)
   }

@@ -24,7 +24,7 @@
 ## Данные структур (`STRUCT_DEFS`, constants.js)
 
 Каждый дефиниш имеет `b` (поведение — диспетчер `structures.update`/`render_structure`). Активные тратят
-энергию, заряжаются юнитом/батареей. РОСТЕР (10 типов):
+энергию, заряжаются юнитом/батареей. РОСТЕР (12 типов):
 
 | тип · `b` | kind | hp | эффект |
 |---|---|---|---|
@@ -38,10 +38,33 @@
 | `jammer` `jammer` Глушилка | active | 80 | аура ЗАМЕДЛЕНИЯ `radius`4 → `enemy.slowT` (×`JAM_SLOW`0.45 скорости), `eRate`4/с |
 | `repair_drone` `repair` Ремонт-дрон | active | 90 | чинит HP активных структур (не стен) в `radius`5 на `healRate`9/с, `eRate`5/с |
 | `battery` `battery` Батарея | active | 110 | `feed`22 релей энергии активным структурам в `radius`5 |
+| `siege_tower` `siege` Осадная башня | active | 130 | цель — НЕ враги, а ближайшее живое ДИКОЕ ГНЕЗДО в `range`6 → авто-резонанс `damageWild` (`dmg`22, площадь), `fireCd`2.5 `eShot`18 (узел `vault_siege`; контраст ручному `siege.js`) |
+| `courier` `courier` Курьер-терминал | depot | 90 | ЛОГИСТИКА (энергии НЕ требует, узел `vault_courier`): принимает груз юнита ВНЕ базы в склад `store`6 → дрон к базе (см. ниже) |
 
 Импульсные/непрерывные: `Structure.pulse` (анимация кольца ЭМИ/отталкивателя), `active2` (СВЧ-конус/
 глушилка/ремонт работают сейчас — для рендера). Тюнинг: `STRUCT_CAP`12, `STRUCT_RECHARGE_R/RATE`,
 `STRUCT_DEATH_TIME`0.4, `STRUCT_TRACER_TTL`0.09, `ENEMY_DEATH_TIME`0.5, `JAM_SLOW`0.45.
+
+## Курьер-дрон — логистика (`vault_courier`; `structures.js` + `courier.js` + `render_courier.js`)
+
+Снимает беготню «юнит↔город» на ДАЛЬНЕЙ проходке. Не боевая структура; платишь HP-риском дрона за то, что
+не возишь груз сам. Терминал = структура `courier` (`kind:'depot'`, энергии НЕ требует), дрон = лёгкая
+летящая сущность `game.couriers` (НЕ структура; домешан в `Game.prototype` через `courier.js`).
+
+- **Приём груза** (`structures._courierTick`): когда юнит ВНЕ базы (`!game.atBase()`, чтобы не воровать груз,
+  который пошёл бы прямо в город) и в `COURIER_DEPOSIT_R`1.6 тайла, терминал тянет из `inventory.cargo` по
+  единице каждые `COURIER_DEPOSIT_INT`0.16с в склад `s.store`/`s.stored` (`active2` — идёт ссыпка, рендер).
+- **Запуск дрона** (`game._launchCourier`): склад заполнил контейнер `def.store`6 → отлепляется дрон со
+  СНИМКОМ склада (`{...s.store}`), склад терминала обнуляется. Лог `STR.log.courierLaunch`.
+- **Полёт** (`game.updateCouriers`): ПРЯМАЯ линия к центру `PRINTER` (точка сдачи у базы), скорость
+  `COURIER_DRONE_SPEED`7.5 тайла/с, над тоннелями/поверх тумана (террейн игнорит — это дрон). Боевой враг
+  (`!e.friendly`) в `COURIER_INTERCEPT_R`2.4 бьёт `COURIER_INTERCEPT_DPS`16/с (`hitT` — вспышка попадания).
+- **Финал**: долетел → `_courierArrive` (каждая единица контейнера → `deliveredTotal`/`upgrades.addBank`, как
+  ручная сдача на принтере; лог `courierArrived`); HP≤0 → `_courierDown` (груз ПОТЕРЯН — цена незащищённой
+  трассы; лог `courierLost`). После — `state` arrived/down + `deathT`(`COURIER_DRONE_TTL`0.5) на анимацию,
+  затем чистка. `game.couriers` сбрасывается на старте забега.
+- Рендер: дрон — `render_courier.drawCouriers` (поверх тумана); терминал — `render_structure.drawCourierStruct`
+  (док + парковочный дрон + антенна) + `drawCourierFill` (индикатор накопления склада, вместо энергобара).
 
 ## Радиус строительства (`PRINT_REACH`, апгрейд РАДИУС ПЕЧАТИ)
 
@@ -60,6 +83,11 @@
   `_turretTick` (цель = ближайший живой враг в радиусе с `_los`; хитскан + трассер; тратит энергию) /
   `_batteryTick` (релей). Чистка `dying && deathT<=0`. Обломки гибели — через `dust._grit`.
 - ⚠️ `wrapDeltaPx(a,b) = a−b` — для направления s→цель брать `wrapDeltaPx(target, s)` (аим/LOS/трассер).
+- ⚠️ **МЕДЛЕННЫЙ ПОВОРОТ ЧЕРЕЗ ВЕРХ (Батч 8):** ствол ВСЕХ пушек (`_turretTick`/`_railTick`/`_mwTick` + городские турели `cityturret.js`)
+  доводится к цели НЕ мгновенно — `aimOverTop(cur,tgt,TURRET_TURN_RATE·dt)` вращает по ≤шагу, ОГИБАЯ низ (через верх, ствол не ныряет в
+  землю); стрельба гейтится `turretAimed(aimAng,tgt)` (|Δ|<`TURRET_FIRE_AIM_TOL`). Хелперы `normAng`/`aimOverTop`/`turretAimed` — глобалы structures.js.
+- **ТУРЕЛИ ГОРОДА (не печатные, `cityturret.js`):** авто-оборона базы по узлам `amb_turret/2/3` (1 центр → 2 симм. Л/П → 3 +центр);
+  урон = `CITY_TURRET_DMG` + трек `turretdmg` (metaNeed `amb_turret`); скорострельные/слабые; визуал — амбер-купол (`render_cityturret.js`).
 - Вызов: `game.structures.update(dt, this)` после `updateEnemies` (оба цикла — playing и debug-обзор).
 
 ## Рендер (`render_structure.js`)

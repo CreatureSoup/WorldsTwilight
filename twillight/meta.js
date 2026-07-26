@@ -268,7 +268,7 @@ function _metaBuildGraph() {
   pn('print_gun',   'out', 1130, -4.3,  STR.meta.node.print_gun.name, STR.meta.node.print_gun.sub, 'blades', STR.meta.node.print_gun.desc, 56);
   // ОСАДНЫЙ МОДУЛЬ (реализован, siege.js): после канонира — пробойный луч-копьё по дикому гнезду (директива «устрани угрозу»).
   pn('print_siege', 'out', 1330, -6.5,  STR.meta.node.print_siege.name, STR.meta.node.print_siege.sub, 'bomb', STR.meta.node.print_siege.desc, 40);
-  ['print_slots'].forEach((id) => { const nn = nodes.find((x) => x.id === id); if (nn) nn.wip = true; });   // print_slots («Спрут») ещё без функционала → баннер «В РАЗРАБОТКЕ»; print_gun («Канонир») РЕАЛИЗОВАН (корпус-моноколесо, wheel-hull)
+  // print_slots («Спрут») РЕАЛИЗОВАН: hull sprut (якорные щупальца + мост/рапель) + ДВА доп-слота (aux2) — wip снят; print_gun («Канонир») РЕАЛИЗОВАН (корпус-моноколесо, wheel-hull)
   // Батч 9 — новые узлы БЕЗ функционала (задел, баннер «В РАЗРАБОТКЕ»): взлом контейнеров, подавление частот/аннигиляция, раннее оповещение, расщепление кристалла.
   ['amb_suppress', 'amb_annihilate', 'amb_warn'].forEach((id) => { const nn = nodes.find((x) => x.id === id); if (nn) nn.wip = true; });   // amb_split — РЕАЛИЗОВАН (расщепление кристалла → таймер, economy.js), wip снят; kart_hackbox — тоже
   nodes.find((x) => x.id === 'print_life').allDeps = ['print_disc3', 'print_mtmod'];   // КОНВЕРГЕНЦИЯ: тело требует ГОРОД(Симбиоз) И ИИ(Контекст-расширение)

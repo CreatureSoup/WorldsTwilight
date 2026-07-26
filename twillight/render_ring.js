@@ -91,9 +91,10 @@ function drawRingUnit(ctx, world, unit, camera, opts) {
   // Строго налево → ЗЕРКАЛО всего кластера (а не вращение на 180°): верхние модули остаются сверху.
   if (unit._ringFlip) ctx.scale(-1, 1);
 
-  // реактор-кольцо + модули — ЕДИНЫЙ порядок по z (ноги рисуются ОТДЕЛЬНО, ПОД — в game.drawScene).
+  // реактор-кольцо + модули — ЕДИНЫЙ порядок по z (ноги и якоря «Спрута» рисуются ОТДЕЛЬНО, ПОД — в
+  // game.drawScene; kind:'anchor' НЕ вращается с кластером — гнёзда рисует render_sprut).
   const aim = unit._ringAim || 0;
-  const items = def.parts.filter((p) => p.kind !== 'leg' && (p.kind === 'reactor' || unitHasPart(unit, p.need)));
+  const items = def.parts.filter((p) => p.kind !== 'leg' && p.kind !== 'anchor' && (p.kind === 'reactor' || unitHasPart(unit, p.need)));
   items.sort((a, b) => (a.z || 0) - (b.z || 0));
   for (const p of items) {
     if (p.kind === 'reactor') { drawRingCore(ctx, 0, 0, def.ringR * R, t, def, unit.reactorOn !== false); continue; }   // центр, не вращается

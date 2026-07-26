@@ -39,13 +39,14 @@ function _invDrawHullTabs(ctx, inv, L) {
   ctx.save();
   for (const t of tabs) {
     const active = inv.hull === t.hull, hov = inv.inRect(inv.mouse.x, inv.mouse.y, t);
-    const acc = t.hull === 'gun' ? '#e0603a' : PAL.cobalt;
+    const acc = t.hull === 'gun' ? '#e0603a' : (t.hull === 'sprut' ? '#9a6ae0' : PAL.cobalt);
     const x = t.x, y = t.y, w = t.w, h = t.h, cut = 11;
     ctx.beginPath();   // скошенный верх-левый угол
     ctx.moveTo(x + cut, y + 0.5); ctx.lineTo(x + w - 0.5, y + 0.5); ctx.lineTo(x + w - 0.5, y + h - 0.5);
     ctx.lineTo(x + 0.5, y + h - 0.5); ctx.lineTo(x + 0.5, y + cut); ctx.closePath();
     ctx.fillStyle = active ? 'rgba(58,126,200,0.12)' : (hov ? 'rgba(255,255,255,0.05)' : 'rgba(13,10,14,0.9)');
     if (active && t.hull === 'gun') ctx.fillStyle = 'rgba(224,96,58,0.13)';
+    if (active && t.hull === 'sprut') ctx.fillStyle = 'rgba(154,106,224,0.13)';
     ctx.fill();
     ctx.strokeStyle = active ? acc : (hov ? PAL.bone : PAL.bronze); ctx.lineWidth = active ? 1.5 : 1; ctx.stroke();
     if (active) {   // верхняя акцент-полоса (как цветная кромка карточек модулей) от скоса до правого края
@@ -58,21 +59,31 @@ function _invDrawHullTabs(ctx, inv, L) {
     ctx.textAlign = 'left';
     ctx.font = `8px ${FONT_MONO}`; ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = active ? acc : PAL.pewter; ctx.fillText(STR.inventory.hullKicker, tx, y + h / 2 - 5);
-    const name = ((HULL_DEFS[t.hull] && HULL_DEFS[t.hull].name) || t.hull).toUpperCase();
+    let name = ((HULL_DEFS[t.hull] && HULL_DEFS[t.hull].name) || t.hull).toUpperCase();
     ctx.font = `bold 12px ${FONT_MONO}`;
+    if (typeof _logTrunc === 'function') name = _logTrunc(ctx, name, w - (tx - x) - 10);   // 3 корпуса → узкие табы, длинное имя капается
     ctx.fillStyle = active ? PAL.chalk : (hov ? PAL.chalk : PAL.bone); ctx.fillText(name, tx, y + h / 2 + 12);
   }
   ctx.restore();
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 }
 
-// Мини-глиф корпуса для таба: КОЛЬЦО-реактор (обод + модули-точки + ядро) / МОНО-КОЛЕСО (обод + зубья + втулка).
+// Мини-глиф корпуса для таба: КОЛЬЦО-реактор (обод + модули-точки + ядро) / МОНО-КОЛЕСО (обод + зубья +
+// втулка) / СПРУТ (малый обод + 8 лучей-якорей с точками-лапами).
 function _invHullGlyph(ctx, hull, cx, cy, r, col) {
   ctx.save(); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 1.4;
   if (hull === 'gun') {
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.stroke();
     for (let i = 0; i < 10; i++) { const a = i / 10 * 6.283, c = Math.cos(a), sn = Math.sin(a); ctx.beginPath(); ctx.moveTo(cx + c * r, cy + sn * r); ctx.lineTo(cx + c * (r + 3), cy + sn * (r + 3)); ctx.stroke(); }
     ctx.beginPath(); ctx.arc(cx, cy, r * 0.34, 0, 6.283); ctx.fill();
+  } else if (hull === 'sprut') {
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.58, 0, 6.283); ctx.stroke();
+    for (let i = 0; i < 8; i++) {
+      const a = Math.PI / 8 + i / 8 * 6.283, c = Math.cos(a), sn = Math.sin(a);
+      ctx.beginPath(); ctx.moveTo(cx + c * r * 0.58, cy + sn * r * 0.58); ctx.lineTo(cx + c * (r + 2), cy + sn * (r + 2)); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx + c * (r + 2), cy + sn * (r + 2), 1.3, 0, 6.283); ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.2, 0, 6.283); ctx.fill();
   } else {
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.stroke();
     for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i / 5 * 6.283; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 1.9, 0, 6.283); ctx.fill(); }
@@ -120,12 +131,14 @@ function _invDrawBlueprint(ctx, inv, L) {
   const fakeCam = { x: 0, y: 0, screenX: (px) => px };
   const dum = inv._dummyUnit(false), hullDef = UNIT_DEFS[inv.hull] || {};
   const ringDef = hullDef.kind === 'ring', wheelDef = hullDef.kind === 'wheel';
-  const lr = ringDef ? inv._previewLegRig() : null;
+  const anchorDef = ringDef && hullDef.anchorLegs;   // «Спрут»: якорные щупальца (свой превью), IK-риг не строим
+  const lr = (ringDef && !anchorDef) ? inv._previewLegRig() : null;
   // НИЗ композиции привязан к нижней кромке: кончики ног уходят чуть ЗА кадр (вся сцена едет
   // вместе — уровень пола относительно юнита НЕ меняется). Фикс. доля от высоты не годилась:
   // в высоком окне масштаб лимитируется ШИРИНОЙ панели → юнит мельче высоты → снизу пустота.
   // `_plLegDrop` — СТАБИЛЬНЫЙ (кэш), а не мгновенный max по кадрам (тот «гуляет» → юнит подпрыгивал).
   if (lr) b.cy = (b.y + b.h - 6) + TILE * 0.5 - inv._plLegDrop * S;   // +TILE*0.5 — насколько кончики за кромкой
+  else if (anchorDef) b.cy = (b.y + b.h - 6) - (TILE * 1.15 + 10) * S;   // «СПРУТ»: пол «камеры» превью (floorY=TILE·1.15) у нижней кромки панели
   else if (wheelDef) {   // КОЛЕСО: садим НИЗОМ на «пол» панели, чуть утоплено (как ноги «Ядра»)
     const tsp = (typeof PART_SPRITES !== 'undefined') && PART_SPRITES['wheel:tooth'];
     const wheelBottom = (tsp && tsp.h) ? tsp.h / 2 : (hullDef.toothR || WHEEL_TOOTH_R) * 1.07 * ((TILE - 8) / 2);   // низ колеса (design-px от центра)
@@ -135,7 +148,15 @@ function _invDrawBlueprint(ctx, inv, L) {
   const slots = inv.computeSlots();
 
   ctx.save(); ctx.translate(b.cx, b.cy); ctx.scale(S, S);
-  if (ringDef) {   // КОЛЬЦО: ноги-ЩУПАЛЬЦА (IK, как в игре) ПОД + кольцо-реактор/модули
+  if (anchorDef) {   // «СПРУТ»: живые якорные щупальца в фейковой «камере» (пол+стены+потолок) ПОД кольцом
+    if (typeof partsHull === 'function') partsHull(dum.hull);
+    let boff = { x: 0, y: 0 };
+    if (typeof drawSprutPreview === 'function') {
+      const rig = drawSprutPreview(ctx, dum, hullDef, 'inv', { floorY: TILE * 1.15, ceilY: -TILE * 1.5, wallL: -TILE * 1.9, wallR: TILE * 1.9 }, true);
+      if (rig) boff = rig.off;
+    }
+    drawRingUnit(ctx, null, dum, fakeCam, { scale: 1, dx: boff.x, dy: boff.y });
+  } else if (ringDef) {   // КОЛЬЦО: ноги-ЩУПАЛЬЦА (IK, как в игре) ПОД + кольцо-реактор/модули
     if (typeof partsHull === 'function') partsHull(dum.hull);
     if (lr) {   // IK-щупальца на фейковом полу + корпус едет на их bodyOff (как в игре)
       drawLegRig(ctx, lr, { y: inv._plWy, screenX: (px) => px });

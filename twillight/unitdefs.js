@@ -55,6 +55,39 @@ const UNIT_DEFS = {
     legHub: { f: 0, s: 0, dropY: 0.6 },
     cables: [],
   },
+  // Спрут «Ядро-якорник» (kind:'ring' + anchorLegs): тело/модули как у core (кластер доворачивается к бурению),
+  // но ноги — 8 ПРЯМЫХ щупалец-ЯКОРЕЙ (детали kind:'anchor': ang/rad = расстановка КРЕПЛЕНИЙ, правится в
+  // редакторе перетаскиванием как модули; 4 нижних + 4 верхних по кругу). Локомоция/стейт-машина — sprut.js,
+  // рендер ног — render_sprut.js (звенья `sprut:link` + лапа `sprut:claw` — ГЛОБАЛЬНЫЕ плоские ключи, как wheel:*).
+  // ⚠️ якоря НЕ рисуются drawRingUnit и НЕ вращаются с кластером модулей (фиксированы, как ноги core).
+  sprut: {
+    kind: 'ring',
+    anchorLegs: true,
+    ringR: 1.05,
+    bob: { amp: 0.08, spd: 2.0 },     // нужен resolveUnitRig/blueprintScale (FK-веток нет, но bob читается)
+    parts: [
+      { id: 'reactor', kind: 'reactor', ang: 0, rad: 0, z: 5, proc: true },
+      { id: 'drill',  kind: 'drill',  ang: 0,    rad: 1.7, z: 20, need: 'dig',     proc: true },
+      { id: 'sensor', kind: 'sensor', ang: -62,  rad: 1.5, z: 20, need: 'scanner', proc: true },
+      { id: 'engine', kind: 'engine', ang: 62,   rad: 1.5, z: 20, need: 'engine',  proc: true },
+      { id: 'hold',   kind: 'hold',   ang: 180,  rad: 1.6, z: 20, need: 'cargo',   proc: true },
+      { id: 'aux',    kind: 'aux',    ang: 118,  rad: 1.5, z: 20, need: 'aux',     proc: true },
+      // ВТОРОЙ доп-слот — ГЛАВНОЕ свойство «Спрута» (узел print_slots): деталь id 'aux2' (kind 'aux' —
+      // та же процедура/спрайты), need 'aux2' → stats.aux2On из getStats; слот aux2 → категория 'aux'.
+      { id: 'aux2',   kind: 'aux',    ang: -118, rad: 1.5, z: 20, need: 'aux2',    proc: true },
+      // 8 креплений якорей: экранный y вниз → ang 30..150 = НИЖНЯЯ полусфера, −30..−150 = ВЕРХНЯЯ.
+      { id: 'anc1', kind: 'anchor', ang:  30,  rad: 1.12, z: 1 },
+      { id: 'anc2', kind: 'anchor', ang:  75,  rad: 1.12, z: 1 },
+      { id: 'anc3', kind: 'anchor', ang: 105,  rad: 1.12, z: 1 },
+      { id: 'anc4', kind: 'anchor', ang: 150,  rad: 1.12, z: 1 },
+      { id: 'anc5', kind: 'anchor', ang: -150, rad: 1.12, z: 1 },
+      { id: 'anc6', kind: 'anchor', ang: -105, rad: 1.12, z: 1 },
+      { id: 'anc7', kind: 'anchor', ang: -75,  rad: 1.12, z: 1 },
+      { id: 'anc8', kind: 'anchor', ang: -30,  rad: 1.12, z: 1 },
+    ],
+    legHub: { f: 0, s: 0, dropY: 0.6 },
+    cables: [],
+  },
   // Канонир «Моно-колесо»: НОВЫЙ ТИП (kind:'wheel'). ВНЕШНЕЕ кольцо-зубья (`toothR`) — встроенный бур, ВРАЩАЕТСЯ по
   // ходу/бурению (render_wheel). ВНУТРЕННЯЯ втулка-реактор (`ringR`) неподвижна; модули крепятся на втулку (ang°+rad, в R),
   // НЕ доворачиваются к бурению (колесо всенаправленно). НОГ НЕТ. Турель (`kind:'turret'`) — на верху втулки, поворотная
