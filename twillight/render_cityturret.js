@@ -26,7 +26,7 @@ function _drawCityTurret(ctx, t, camera) {
   ctx.strokeStyle = '#7a6a44'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, oy, r * 0.85, Math.PI, 0); ctx.stroke();
   const blen = r * 1.5, bx = cx + Math.cos(a) * blen, by = oy + Math.sin(a) * blen;                       // ствол по aimAng (медленно вращается через верх)
   ctx.strokeStyle = '#9098a0'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx, oy); ctx.lineTo(bx, by); ctx.stroke();
-  if (t.flash > 0) { ctx.fillStyle = '#ffe0a0'; ctx.beginPath(); ctx.arc(bx, by, 3.2, 0, 6.283); ctx.fill(); }   // вспышка дула
-  ctx.fillStyle = '#d0402f'; ctx.beginPath(); ctx.arc(cx, cy + r * 0.1, 2, 0, 6.283); ctx.fill();         // сенсор
+  if (t.flash > 0) { ctx.fillStyle = '#ffe0a0'; ctx.beginPath(); ctx.arc(bx, by, 3.2, 0, TAU); ctx.fill(); }   // вспышка дула
+  ctx.fillStyle = PAL.enemyEye; ctx.beginPath(); ctx.arc(cx, cy + r * 0.1, 2, 0, TAU); ctx.fill();         // сенсор
   ctx.restore();
 }

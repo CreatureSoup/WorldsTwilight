@@ -7,7 +7,6 @@
 const PART_SPRITES = {};   // kind → {img,w,h,px,py,...}; есть запись → рисуем спрайт
 let _partsProc = false;    // отладка: рисовать ВСЕ детали ПРОЦЕДУРНО (игнорировать спрайты)
 function partsProcedural(on) { _partsProc = !!on; }
-function partsProcOn() { return _partsProc; }   // активны ли спрайты (false=да): кольцу — спрайт vs процедурный тор
 // СПРАЙТЫ ПРИВЯЗАНЫ К ТИПУ КОРПУСА: ключ `<hull>:<id>`. Рендер ставит `partsHull(unit.hull)` перед
 // отрисовкой, `spriteFor(id)` ищет namespaced-ключ (с откатом на плоский `id` — для редактора, где
 // авторится один корпус плоскими ключами). Так core/scout не делят ассеты, без гонок.
@@ -79,7 +78,7 @@ function drawCable(ctx, ax, ay, bx, by, type, t) {
   const qx = u * u * ax + 2 * u * ph * mx + ph * ph * bx;
   const qy = u * u * ay + 2 * u * ph * my + ph * ph * by;
   ctx.fillStyle = PAL.chalk; ctx.globalAlpha = 0.85;
-  ctx.beginPath(); ctx.arc(qx, qy, 1.5, 0, 6.283); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.beginPath(); ctx.arc(qx, qy, 1.5, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
 }
 
 // Враппер: общий трансформ + спрайт-или-процедура. angle/flip из рига. Спрайт
@@ -124,7 +123,7 @@ function drawPrinterPart(ctx, S) {
   ctx.moveTo(-r * 0.7, -r * 0.7); ctx.lineTo(r * 0.7, -r * 0.7); ctx.lineTo(r * 0.4, r * 0.5); ctx.lineTo(-r * 0.4, r * 0.5); ctx.closePath();
   ctx.fill(); ctx.stroke();
   ctx.fillStyle = '#3a2a1a'; ctx.fillRect(-r * 0.22, r * 0.42, r * 0.44, r * 0.34);   // сопло
-  ctx.fillStyle = '#ffb060'; ctx.beginPath(); ctx.arc(0, r * 0.8, r * 0.16, 0, 6.283); ctx.fill();   // свечение кончика
+  ctx.fillStyle = '#ffb060'; ctx.beginPath(); ctx.arc(0, r * 0.8, r * 0.16, 0, TAU); ctx.fill();   // свечение кончика
   ctx.strokeStyle = '#ff8f3a'; ctx.lineWidth = Math.max(1, S * 0.04); ctx.globalAlpha = 0.6;
   for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(-r * 0.5, i * r * 0.22 - r * 0.08); ctx.lineTo(r * 0.5, i * r * 0.22 - r * 0.08); ctx.stroke(); }
   ctx.globalAlpha = 1;
@@ -183,7 +182,7 @@ function drawReactorPart(ctx, S, t) {
   ctx.fillStyle = `rgba(180,255,210,${0.7 + 0.3 * pulse})`;
   ctx.fillRect(-cw * 0.12, -ch / 2, cw * 0.24, ch);
   ctx.fillStyle = PAL.ash;
-  for (const sx of [-1, 1]) for (const sy of [-1, 1]) { ctx.beginPath(); ctx.arc(sx * w * 0.4, sy * h * 0.38, S * 0.08, 0, 6.283); ctx.fill(); }
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) { ctx.beginPath(); ctx.arc(sx * w * 0.4, sy * h * 0.38, S * 0.08, 0, TAU); ctx.fill(); }
 }
 
 function drawHoldPart(ctx, S) {
@@ -195,9 +194,9 @@ function drawHoldPart(ctx, S) {
 
 function drawSensorPart(ctx, S) {
   const lens = (lx, ly, r) => {
-    ctx.fillStyle = PAL.night; ctx.beginPath(); ctx.arc(lx, ly, r + S * 0.05, 0, 6.283); ctx.fill();
-    ctx.fillStyle = '#bff4ff'; ctx.beginPath(); ctx.arc(lx, ly, r, 0, 6.283); ctx.fill();
-    ctx.fillStyle = PAL.cobalt; ctx.beginPath(); ctx.arc(lx, ly, r * 0.5, 0, 6.283); ctx.fill();
+    ctx.fillStyle = PAL.night; ctx.beginPath(); ctx.arc(lx, ly, r + S * 0.05, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#bff4ff'; ctx.beginPath(); ctx.arc(lx, ly, r, 0, TAU); ctx.fill();
+    ctx.fillStyle = PAL.cobalt; ctx.beginPath(); ctx.arc(lx, ly, r * 0.5, 0, TAU); ctx.fill();
   };
   lens(S * 0.06, 0, S * 0.2);             // главная линза — вперёд (+X)
   lens(-S * 0.05, S * 0.34, S * 0.12);    // фланги — по перпендикуляру
@@ -218,7 +217,7 @@ function drawEnginePart(ctx, S) {  // основа ног — низкий ши�
   const w = S * 1.4, h = S * 0.7;
   platedBox(ctx, w, h, S * 0.12, PAL.bronze, PAL.carbon);
   ctx.fillStyle = PAL.night;
-  for (const sx of [-1, 1]) { ctx.beginPath(); ctx.arc(sx * w * 0.32, h * 0.35, S * 0.16, 0, 6.283); ctx.fill(); }
+  for (const sx of [-1, 1]) { ctx.beginPath(); ctx.arc(sx * w * 0.32, h * 0.35, S * 0.16, 0, TAU); ctx.fill(); }
   ctx.fillStyle = PAL.amber; ctx.fillRect(-w * 0.18, -h * 0.18, w * 0.36, S * 0.07);
 }
 
@@ -227,7 +226,7 @@ function drawWeaponPart(ctx, S) {  // ствол по направлению (+X
   platedBox(ctx, S * 0.5, W * 1.8, S * 0.1, PAL.carbon, PAL.bronze);  // казённик
   ctx.fillStyle = '#8a9099'; ctx.fillRect(0, -W / 2, L, W);            // ствол
   ctx.strokeStyle = PAL.carbon; ctx.lineWidth = Math.max(1, S * 0.05); ctx.strokeRect(0, -W / 2, L, W);
-  ctx.fillStyle = PAL.bloodBright; ctx.beginPath(); ctx.arc(L, 0, W * 0.5, 0, 6.283); ctx.fill();  // дуло
+  ctx.fillStyle = PAL.bloodBright; ctx.beginPath(); ctx.arc(L, 0, W * 0.5, 0, TAU); ctx.fill();  // дуло
 }
 
 function drawCustomPart(ctx, S) {  // плейсхолдер кастомной детали (до загрузки ассета)

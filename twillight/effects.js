@@ -35,7 +35,7 @@ class Fx {
         a = -Math.PI / 2 + hs * (0.25 + Math.random() * 0.55);
         sp = TILE * (3.0 + Math.random() * 3.4); grav = FX_GRAV * 1.7; ttl = 0.16 + Math.random() * 0.16;
       } else {                                                                   // без направления — быстрый круговой разлёт
-        a = Math.random() * 6.283;
+        a = Math.random() * TAU;
         sp = TILE * (2.6 + Math.random() * 2.6); grav = FX_GRAV * 0.9; ttl = 0.12 + Math.random() * 0.13;
       }
       this.parts.push({

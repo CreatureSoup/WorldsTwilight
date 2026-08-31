@@ -11,7 +11,7 @@ function drawGrabLegs(ctx, ux, uy, dx, dy) {
     ctx.strokeStyle = '#6fa9c8'; ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.moveTo(ux, uy); ctx.quadraticCurveTo(kx, ky, dx, dy); ctx.stroke();
   }
-  ctx.fillStyle = '#243a4a'; ctx.beginPath(); ctx.arc(dx, dy, 2.6, 0, 6.283); ctx.fill();
+  ctx.fillStyle = '#243a4a'; ctx.beginPath(); ctx.arc(dx, dy, 2.6, 0, TAU); ctx.fill();
 }
 
 // Отрисовка выпавших ресурсов: гранёный самоцвет с мягким свечением; при
@@ -27,7 +27,7 @@ function drawLoot(ctx, loot, camera) {
     const r = TILE * 0.26 * scale;                   // ресурс ~ 1 тайл
     ctx.globalAlpha = 0.22 * scale;
     ctx.fillStyle = def.color;
-    ctx.beginPath(); ctx.arc(cx, cy, r * 1.7, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.7, 0, TAU); ctx.fill();
     ctx.globalAlpha = 1;
 
     paintResource(ctx, d.type, cx, cy, r, (d.tileX * 131 + d.tileY * 17) | 0);

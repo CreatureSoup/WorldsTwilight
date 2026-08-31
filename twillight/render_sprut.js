@@ -46,7 +46,7 @@ function _sprutLegDraw(ctx, L, hx, hy, tx, ty, open, k) {
       ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(tx, ty); ctx.stroke();
       ctx.fillStyle = PAL.ash;
       const n = Math.max(1, Math.round(d / (SPRUT_LINK_SPACING * k)));
-      for (let i = 1; i < n; i++) { const p = i / n; ctx.beginPath(); ctx.arc(hx + dx * p, hy + dy * p, Math.max(1, 1.7 * k), 0, 6.283); ctx.fill(); }
+      for (let i = 1; i < n; i++) { const p = i / n; ctx.beginPath(); ctx.arc(hx + dx * p, hy + dy * p, Math.max(1, 1.7 * k), 0, TAU); ctx.fill(); }
     }
     if (L.state === 'fire') {   // вспышка выстрела: яркая сердцевина на миг
       ctx.strokeStyle = 'rgba(242,200,120,0.55)'; ctx.lineWidth = Math.max(1, 1.3 * k);
@@ -71,8 +71,8 @@ function _sprutLegDraw(ctx, L, hx, hy, tx, ty, open, k) {
     ctx.restore();
   }
   // гнездо-крепление (поверх основания звеньев)
-  ctx.fillStyle = PAL.carbon; ctx.beginPath(); ctx.arc(hx, hy, Math.max(1.6, 2.8 * k), 0, 6.283); ctx.fill();
-  ctx.strokeStyle = PAL.bronze; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(hx, hy, Math.max(1.6, 2.8 * k), 0, 6.283); ctx.stroke();
+  ctx.fillStyle = PAL.carbon; ctx.beginPath(); ctx.arc(hx, hy, Math.max(1.6, 2.8 * k), 0, TAU); ctx.fill();
+  ctx.strokeStyle = PAL.bronze; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(hx, hy, Math.max(1.6, 2.8 * k), 0, TAU); ctx.stroke();
 }
 
 // Мировой проход (game.drawScene, в клипе видимого воздуха, ПОД drawRingUnit).

@@ -73,21 +73,21 @@ function _invDrawHullTabs(ctx, inv, L) {
 function _invHullGlyph(ctx, hull, cx, cy, r, col) {
   ctx.save(); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 1.4;
   if (hull === 'gun') {
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.stroke();
-    for (let i = 0; i < 10; i++) { const a = i / 10 * 6.283, c = Math.cos(a), sn = Math.sin(a); ctx.beginPath(); ctx.moveTo(cx + c * r, cy + sn * r); ctx.lineTo(cx + c * (r + 3), cy + sn * (r + 3)); ctx.stroke(); }
-    ctx.beginPath(); ctx.arc(cx, cy, r * 0.34, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
+    for (let i = 0; i < 10; i++) { const a = i / 10 * TAU, c = Math.cos(a), sn = Math.sin(a); ctx.beginPath(); ctx.moveTo(cx + c * r, cy + sn * r); ctx.lineTo(cx + c * (r + 3), cy + sn * (r + 3)); ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.34, 0, TAU); ctx.fill();
   } else if (hull === 'sprut') {
-    ctx.beginPath(); ctx.arc(cx, cy, r * 0.58, 0, 6.283); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.58, 0, TAU); ctx.stroke();
     for (let i = 0; i < 8; i++) {
-      const a = Math.PI / 8 + i / 8 * 6.283, c = Math.cos(a), sn = Math.sin(a);
+      const a = Math.PI / 8 + i / 8 * TAU, c = Math.cos(a), sn = Math.sin(a);
       ctx.beginPath(); ctx.moveTo(cx + c * r * 0.58, cy + sn * r * 0.58); ctx.lineTo(cx + c * (r + 2), cy + sn * (r + 2)); ctx.stroke();
-      ctx.beginPath(); ctx.arc(cx + c * (r + 2), cy + sn * (r + 2), 1.3, 0, 6.283); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + c * (r + 2), cy + sn * (r + 2), 1.3, 0, TAU); ctx.fill();
     }
-    ctx.beginPath(); ctx.arc(cx, cy, r * 0.2, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.2, 0, TAU); ctx.fill();
   } else {
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.stroke();
-    for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i / 5 * 6.283; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 1.9, 0, 6.283); ctx.fill(); }
-    ctx.beginPath(); ctx.arc(cx, cy, r * 0.3, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
+    for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i / 5 * TAU; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 1.9, 0, TAU); ctx.fill(); }
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.3, 0, TAU); ctx.fill();
   }
   ctx.restore();
 }
@@ -190,7 +190,7 @@ function _invDrawBlueprint(ctx, inv, L) {
     if (filled)          { col = PAL.cobalt; lw = 1;   dash = [];     alpha = 0.5; }
     else                 { col = PAL.amber;  lw = 1.5; dash = [4, 4]; alpha = 1; }
     ctx.globalAlpha = alpha; ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.setLineDash(dash);
-    ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, 6.283); ctx.stroke();
+    ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.stroke();
     ctx.setLineDash([]); ctx.globalAlpha = 1;
   }
   // выноски ПОВЕРХ юнита: название установленного модуля (чип клампится внутрь панели)
@@ -211,10 +211,10 @@ function _invDrawSlotPing(ctx, s, hovering, t) {
     const ph = ((t / period) + k * 0.5) % 1;
     ctx.globalAlpha = (1 - ph) * (hovering ? 0.9 : 0.6);
     ctx.strokeStyle = col; ctx.lineWidth = 2.4 * (1 - ph) + 0.5;
-    ctx.beginPath(); ctx.arc(s.x, s.y, rMin + (rMax - rMin) * ph, 0, 6.283); ctx.stroke();
+    ctx.beginPath(); ctx.arc(s.x, s.y, rMin + (rMax - rMin) * ph, 0, TAU); ctx.stroke();
   }
   ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = hovering ? 2.6 : 1.8;   // прицел-кольцо
-  ctx.beginPath(); ctx.arc(s.x, s.y, rMin, 0, 6.283); ctx.stroke();
+  ctx.beginPath(); ctx.arc(s.x, s.y, rMin, 0, TAU); ctx.stroke();
   ctx.lineWidth = 1.6;                                           // прицельные риски по 4 сторонам
   for (const d of [0, 90, 180, 270]) {
     const a = d * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a);
@@ -222,7 +222,7 @@ function _invDrawSlotPing(ctx, s, hovering, t) {
   }
   const pulse = 0.55 + 0.45 * Math.sin(t * 12.566 / period);     // центральная точка пульсирует
   ctx.globalAlpha = 0.6 + 0.4 * pulse; ctx.fillStyle = col;
-  ctx.beginPath(); ctx.arc(s.x, s.y, 3.6, 0, 6.283); ctx.fill();
+  ctx.beginPath(); ctx.arc(s.x, s.y, 3.6, 0, TAU); ctx.fill();
   ctx.restore();
 }
 

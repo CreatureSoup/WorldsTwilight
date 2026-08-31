@@ -21,7 +21,7 @@ function hudToggleSwitch(ctx, sx, sy, on) {
   else { ctx.fillStyle = PAL.ash; ctx.fillRect(sx + 2, sy + 2, 7, sh - 4); ctx.textAlign = 'right'; ctx.fillText(STR.hud.toggle.off, sx + sw - 4, sy + sh / 2 + 0.5); }   // бегунок слева, надпись справа
   return { x: sx, y: sy, w: sw, h: sh };
 }
-function pulseDot(ctx, x, y, r, color) { ctx.save(); ctx.globalAlpha = blinkA(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill(); ctx.restore(); }
+function pulseDot(ctx, x, y, r, color) { ctx.save(); ctx.globalAlpha = blinkA(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.restore(); }
 // мигающий КВАДРАТ (центр x,y, сторона s) — буллет директивы/индикатор.
 function pulseSquare(ctx, x, y, s, color) { ctx.save(); ctx.globalAlpha = blinkA(); ctx.fillStyle = color; ctx.fillRect(Math.round(x - s / 2), Math.round(y - s / 2), s, s); ctx.restore(); }
 
@@ -45,7 +45,7 @@ function drawBeaconToggle(ctx, on, W) {
   ctx.strokeStyle = acc; ctx.fillStyle = acc; ctx.lineWidth = 1; const gx = x + 8;
   ctx.beginPath(); ctx.moveTo(gx - 3, iy); ctx.lineTo(gx + 2, iy); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(gx + 1.5, iy - 2.6); ctx.lineTo(gx + 5, iy); ctx.lineTo(gx + 1.5, iy + 2.6); ctx.closePath(); on ? ctx.fill() : ctx.stroke();
-  ctx.beginPath(); ctx.arc(gx + 9, iy, 1.5, 0, 6.283); on ? ctx.fill() : ctx.stroke();
+  ctx.beginPath(); ctx.arc(gx + 9, iy, 1.5, 0, TAU); on ? ctx.fill() : ctx.stroke();
   ctx.font = `7px ${FONT_MONO}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   ctx.fillStyle = on ? PAL.chalk : PAL.pewter; ctx.fillText(STR.hud.beaconToggle, x + 27, iy + 0.5);
   ctx.textBaseline = 'alphabetic';
@@ -60,7 +60,7 @@ function drawNavToggle(ctx, on, W) {
   ctx.strokeStyle = acc; ctx.lineWidth = 1; ctx.stroke();
   // глиф-маршрут: исток · пунктир · ромб-назначение (залит=вкл / контур=выкл)
   ctx.strokeStyle = acc; ctx.fillStyle = acc; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.arc(x + 8, iy, 1.4, 0, 6.283); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + 8, iy, 1.4, 0, TAU); ctx.fill();
   ctx.setLineDash([1.5, 1.5]); ctx.beginPath(); ctx.moveTo(x + 10, iy); ctx.lineTo(x + 16, iy); ctx.stroke(); ctx.setLineDash([]);
   ctx.save(); ctx.translate(x + 19, iy); ctx.rotate(Math.PI / 4); if (on) ctx.fillRect(-1.7, -1.7, 3.4, 3.4); else ctx.strokeRect(-1.7, -1.7, 3.4, 3.4); ctx.restore();
   ctx.font = `7px ${FONT_MONO}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
@@ -86,12 +86,12 @@ function drawStructGlyph(ctx, type, cx, cy, r, color) {
     case 'turret': turret(1.1); break;
     case 'railgun': turret(1.4); break;
     case 'microwave': ctx.beginPath(); ctx.arc(cx, cy + r * 0.3, r * 0.7, Math.PI, 0); ctx.fill(); ctx.lineWidth = 1.5; for (const k of [-0.4, 0, 0.4]) { ctx.beginPath(); ctx.moveTo(cx, cy + r * 0.2); ctx.lineTo(cx + r * (1 + k), cy - r * 0.7); ctx.stroke(); } break;
-    case 'emp': ctx.beginPath(); ctx.arc(cx, cy, r * 0.85, 0, 6.283); ctx.stroke(); ctx.beginPath(); ctx.ellipse(cx, cy, r * 0.4, r * 0.85, 0, 0, 6.283); ctx.stroke(); ctx.beginPath(); ctx.arc(cx, cy, 2, 0, 6.283); ctx.fill(); break;
-    case 'repulsor': ctx.beginPath(); ctx.arc(cx, cy, r * 0.55, 0, 6.283); ctx.stroke(); for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.4; ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r * 0.55, cy + Math.sin(a) * r * 0.55); ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); ctx.stroke(); } break;
+    case 'emp': ctx.beginPath(); ctx.arc(cx, cy, r * 0.85, 0, TAU); ctx.stroke(); ctx.beginPath(); ctx.ellipse(cx, cy, r * 0.4, r * 0.85, 0, 0, TAU); ctx.stroke(); ctx.beginPath(); ctx.arc(cx, cy, 2, 0, TAU); ctx.fill(); break;
+    case 'repulsor': ctx.beginPath(); ctx.arc(cx, cy, r * 0.55, 0, TAU); ctx.stroke(); for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.4; ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r * 0.55, cy + Math.sin(a) * r * 0.55); ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); ctx.stroke(); } break;
     case 'jammer': ctx.fillRect(cx - 1.5, cy - r, 3, r * 2); for (const k of [-1, 1]) { ctx.beginPath(); ctx.moveTo(cx, cy - r * 0.6); ctx.lineTo(cx + k * r * 0.8, cy - r); ctx.stroke(); } break;
     case 'repair': ctx.strokeRect(cx - r * 0.85, cy - r * 0.85, r * 1.7, r * 1.7); ctx.fillRect(cx - 1.5, cy - r * 0.6, 3, r * 1.2); ctx.fillRect(cx - r * 0.6, cy - 1.5, r * 1.2, 3); break;
-    case 'courier': ctx.beginPath(); ctx.ellipse(cx, cy, r * 0.7, r * 0.42, 0, 0, 6.283); ctx.stroke(); for (const k of [-1, 1]) { ctx.beginPath(); ctx.moveTo(cx, cy - r * 0.2); ctx.lineTo(cx + k * r * 0.85, cy - r * 0.55); ctx.stroke(); ctx.beginPath(); ctx.arc(cx + k * r * 0.85, cy - r * 0.6, r * 0.28, 0, 6.283); ctx.stroke(); } ctx.fillRect(cx - r * 0.4, cy + r * 0.45, r * 0.8, r * 0.5); break;   // дрон с контейнером
-    case 'siege': { const baseY = cy + r, topY = cy - r; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(cx, baseY); ctx.lineTo(cx, topY); ctx.stroke();   /* мачта */ ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(cx - r * 0.7, baseY); ctx.lineTo(cx, cy + r * 0.2); ctx.lineTo(cx + r * 0.7, baseY); ctx.stroke();   /* раскосы-тренога */ ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, topY, r * 0.55, -Math.PI / 2 - 1.1, -Math.PI / 2 + 1.1); ctx.stroke();   /* дуга-излучатель к цели */ ctx.beginPath(); ctx.arc(cx, topY, r * 0.22, 0, 6.283); ctx.fill();   /* ядро-резонатор */ break; }
+    case 'courier': ctx.beginPath(); ctx.ellipse(cx, cy, r * 0.7, r * 0.42, 0, 0, TAU); ctx.stroke(); for (const k of [-1, 1]) { ctx.beginPath(); ctx.moveTo(cx, cy - r * 0.2); ctx.lineTo(cx + k * r * 0.85, cy - r * 0.55); ctx.stroke(); ctx.beginPath(); ctx.arc(cx + k * r * 0.85, cy - r * 0.6, r * 0.28, 0, TAU); ctx.stroke(); } ctx.fillRect(cx - r * 0.4, cy + r * 0.45, r * 0.8, r * 0.5); break;   // дрон с контейнером
+    case 'siege': { const baseY = cy + r, topY = cy - r; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(cx, baseY); ctx.lineTo(cx, topY); ctx.stroke();   /* мачта */ ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(cx - r * 0.7, baseY); ctx.lineTo(cx, cy + r * 0.2); ctx.lineTo(cx + r * 0.7, baseY); ctx.stroke();   /* раскосы-тренога */ ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, topY, r * 0.55, -Math.PI / 2 - 1.1, -Math.PI / 2 + 1.1); ctx.stroke();   /* дуга-излучатель к цели */ ctx.beginPath(); ctx.arc(cx, topY, r * 0.22, 0, TAU); ctx.fill();   /* ядро-резонатор */ break; }
     default: ctx.strokeRect(cx - r * 0.7, cy - r, r * 1.4, r * 2); ctx.fillRect(cx - r * 0.7, cy, r * 1.4, r); ctx.fillRect(cx - 2, cy - r - 2, 4, 2);   // battery
   }
   ctx.restore();
@@ -100,7 +100,7 @@ function drawPrintHud(ctx, game, W, H) {
   if (!game.printActive || !game.printActive()) return;
   if (game.printMode) { drawPrintHint(ctx, game, W, H); return; }
   ctx.save();   // ⚠️ ИЗОЛЯЦИЯ: внутри меняем globalAlpha (тусклые карточки/кнопка) — без restore утечка в след. кадр (мир/туман на 0.4 = «туман пропал»)
-  const RED = PAL.blood || '#ff3a22', REDB = PAL.bloodBright || '#ff6a4a';
+  const RED = PAL.blood, REDB = PAL.bloodBright;
   const types = game.printTypes(), L = printPanelLayout(W, H, types);
   if (typeof HudLayout !== 'undefined') HudLayout.reserve('bl', L.w, L.h);   // застолбить низ зоны bl → бур-статус стекается НАД панелью печати (без наложения)
   techPanel(ctx, L.x, L.y, L.w, L.h, { accent: RED, label: STR.hud.print.title });
@@ -123,7 +123,7 @@ function drawPrintHud(ctx, game, W, H) {
     ctx.globalAlpha = 1;
   }
   if (game.printSel) {
-    const cost = game.structCost(game.printSel), RC = { iron: '#9aa7b3', organic: '#5fbf6a', crystal: '#c264e0' };
+    const cost = game.structCost(game.printSel), RC = { iron: RESOURCE_DEFS.iron.color, organic: RESOURCE_DEFS.organic.color, crystal: RESOURCE_DEFS.crystal.color };   // цвета из RESOURCE_DEFS (были дублем — audit_2026-08)
     ctx.font = `8px ${FONT_MONO}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
     let cx = L.x + L.pad; const cyR = L.rowY;
     for (const k of Object.keys(cost)) {
@@ -143,7 +143,7 @@ function drawPrintHud(ctx, game, W, H) {
 }
 // Подсказка в режиме печати: при размещении — управление (steady); при печати — МИГАЮЩАЯ «Esc — отмена».
 function drawPrintHint(ctx, game, W, H) {
-  const placing = game.printMode === 'place', REDB = PAL.bloodBright || '#ff6a4a';
+  const placing = game.printMode === 'place', REDB = PAL.bloodBright;
   const msg = placing ? STR.hud.print.placeHint : STR.hud.print.printingHint;
   ctx.save(); ctx.font = `10px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const tw = ctx.measureText(msg).width, x = W / 2, y = H - 46;   // внизу по центру, над подсказкой управления
@@ -199,6 +199,7 @@ function techPanel(ctx, x, y, w, h, o) {
   o = o || {}; const accent = o.accent || PAL.gold;
   ctx.fillStyle = 'rgba(13,10,14,0.94)'; ctx.fillRect(x, y, w, h);
   ctx.strokeStyle = accent === PAL.gold ? PAL.bronze : accent; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  // уголки-скобки: НЕ _panelCorners (ui_menu) — там lw 1.4 без 0.5-офсетов, тут тонкие 1px по пиксельной сетке (осознанно разные стили — audit_2026-08)
   const s = 9; ctx.strokeStyle = accent; ctx.lineWidth = 1; ctx.beginPath();
   ctx.moveTo(x + 0.5, y + s); ctx.lineTo(x + 0.5, y + 0.5); ctx.lineTo(x + s, y + 0.5);
   ctx.moveTo(x + w - s, y + 0.5); ctx.lineTo(x + w - 0.5, y + 0.5); ctx.lineTo(x + w - 0.5, y + s);
@@ -301,8 +302,8 @@ function drawBorerStatus(ctx, game, W, H) {
     ctx.moveTo(cx0, iy); ctx.lineTo(cx1, iy); ctx.arc(cx1, cyc, r, -Math.PI / 2, Math.PI / 2);
     ctx.lineTo(cx0, iy + ih); ctx.arc(cx0, cyc, r, Math.PI / 2, Math.PI * 1.5); ctx.closePath();
     ctx.fillStyle = st === 'carry' ? 'rgba(154,208,160,0.85)' : st === 'dead' ? 'rgba(208,64,47,0.16)' : 'rgba(154,208,160,0.08)'; ctx.fill();
-    ctx.strokeStyle = st === 'carry' ? '#cfeccf' : st === 'dead' ? (dead ? '#ff6a4a' : '#d0402f') : 'rgba(154,208,160,0.45)'; ctx.lineWidth = 1.3; ctx.stroke();
-    ctx.fillStyle = st === 'carry' ? '#16241a' : st === 'dead' ? '#ff6a4a' : 'rgba(207,236,207,0.5)'; ctx.beginPath(); ctx.arc(cx1 - 1.5, cyc, 1.6, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = st === 'carry' ? '#cfeccf' : st === 'dead' ? (dead ? PAL.enemyHot : PAL.enemyEye) : 'rgba(154,208,160,0.45)'; ctx.lineWidth = 1.3; ctx.stroke();
+    ctx.fillStyle = st === 'carry' ? '#16241a' : st === 'dead' ? PAL.enemyHot : 'rgba(207,236,207,0.5)'; ctx.beginPath(); ctx.arc(cx1 - 1.5, cyc, 1.6, 0, TAU); ctx.fill();
   }
   ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.ash;
   ctx.fillText(STR.hud.borer.counts(carried, active, depleted), x, iy + ih + 11);   // В ХОДУ = активные (без разряженных) — совпадает с зелёными слотами
@@ -375,8 +376,8 @@ function drawHUD(ctx, world, unit, inv, dbg, W, H) {
   if (dbg.scan || dbg.scanDoneT > 0) {
     const ccx = W - SCAN_RING.dx, ccy = H - SCAN_RING.dy, r = SCAN_RING.r, frac = dbg.scan ? dbg.scan.data : 1;
     ctx.lineWidth = 8; ctx.lineCap = 'round';
-    ctx.strokeStyle = PAL.earth; ctx.beginPath(); ctx.arc(ccx, ccy, r, 0, 6.283); ctx.stroke();
-    ctx.strokeStyle = PAL.cobalt; ctx.beginPath(); ctx.arc(ccx, ccy, r, -Math.PI / 2, -Math.PI / 2 + 6.283 * frac); ctx.stroke();
+    ctx.strokeStyle = PAL.earth; ctx.beginPath(); ctx.arc(ccx, ccy, r, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = PAL.cobalt; ctx.beginPath(); ctx.arc(ccx, ccy, r, -Math.PI / 2, -Math.PI / 2 + TAU * frac); ctx.stroke();
     ctx.lineCap = 'butt';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = PAL.chalk; ctx.font = `700 26px ${FONT_DISPLAY}`; ctx.fillText(`${Math.round(frac * 100)}`, ccx, ccy + 2);

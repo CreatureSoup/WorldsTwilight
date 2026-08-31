@@ -14,16 +14,16 @@ function drawModuleIcon(ctx, category, cx, cy, r, color) {
     ctx.moveTo(cx - r * 0.55, cy - r * 0.4); ctx.lineTo(cx + r * 0.55, cy - r * 0.4); ctx.lineTo(cx, cy + r * 0.9); ctx.closePath();
     ctx.fill();
   } else if (category === 'engine') {          // двигатель: шестерня
-    ctx.beginPath(); ctx.arc(cx, cy, r * 0.58, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.58, 0, TAU); ctx.fill();
     for (let i = 0; i < 6; i++) { ctx.save(); ctx.translate(cx, cy); ctx.rotate(i * Math.PI / 3); ctx.fillRect(-r * 0.14, -r * 0.86, r * 0.28, r * 0.3); ctx.restore(); }
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.beginPath(); ctx.arc(cx, cy, r * 0.22, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.22, 0, TAU); ctx.fill();
   } else if (category === 'scanner') {         // сканер: концентрические дуги + точка
     ctx.lineWidth = Math.max(1.5, r * 0.13);
     for (const k of [0.95, 0.6]) {
       ctx.beginPath(); ctx.arc(cx, cy + r * 0.15, r * k, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
     }
-    ctx.beginPath(); ctx.arc(cx, cy + r * 0.15, r * 0.15, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy + r * 0.15, r * 0.15, 0, TAU); ctx.fill();
   } else if (category === 'cargo') {           // трюм: сундук-силуэт
     ctx.fillRect(cx - r * 0.7, cy - r * 0.3, r * 1.4, r * 0.95);
     ctx.fillStyle = 'rgba(0,0,0,0.55)';

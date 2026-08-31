@@ -6,6 +6,13 @@
 // Энергии/расхода нет: упрощённая модель (см. CLAUDE.md §«Сборка»).
 class Unit {
   constructor(x, y, stats) {
+    this._resetRunState(x, y);
+    this.setStats(stats);
+  }
+  // ЕДИНЫЙ сброс забег-состояния — используют И конструктор, И respawn (print_life). ⚠️ НЕ дублировать
+  // список полей в respawn вручную: ручное зеркало уже дрейфовало (drillX/dashDir/xrayR не сбрасывались) —
+  // audit_2026-08. Новое поле забега — ДОБАВЛЯТЬ СЮДА, тогда respawn подхватит автоматически.
+  _resetRunState(x, y) {
     this.tileX = x; this.tileY = y;
     this.px = x * TILE + TILE / 2;
     this.py = y * TILE + TILE / 2;
@@ -33,7 +40,9 @@ class Unit {
     this.crouchT = 0; this.crouchTarget = null; // присед перед прыжком вверх (ощущение веса)
     this._jumpDesc = false; this._jumpDescDir = 0; this._jumpDescH = 0;   // СНИЖЕНИЕ прыжка: ОТДЕЛЬНЫЙ симметричный ход вниз-вбок после апекса (dir + высота)
     this._jumpBufT = 0;                                                    // буфер нажатия «вверх»
-    this.setStats(stats);
+    this.rappel = null;      // РАПЕЛЬ «Спрута»: {hx,hy} точка схода троса (unit._rappelHold)
+    this.frozenPrint = this.frozenImpulse = this.frozenHack = this.frozenSiege = false;
+    this.stealthT = 0;   // СТЕЛС: >0 → юнит невидим для боевых врагов (stealth.js пишет, ai.js читает)
   }
   setStats(stats) {
     const prevMax = this.stats ? this.stats.maxHp : null;
@@ -42,16 +51,10 @@ class Unit {
     else if (prevMax != null && stats.maxHp > prevMax) this.hp += stats.maxHp - prevMax;  // апгрейд корпуса лечит НА ПРИБАВКУ (не полностью)
     this.hp = Math.min(this.hp, stats.maxHp);
   }
-  // print_life «Резервное тело»: тело печатается заново — полный сброс грид-стейта на старт (поля зеркалят конструктор), HP полный.
+  // print_life «Резервное тело»: тело печатается заново — полный сброс грид-стейта на старт через
+  // ОБЩИЙ _resetRunState (тот же, что в конструкторе — списки полей не могут разъехаться), HP полный.
   respawn(x, y) {
-    this.tileX = x; this.tileY = y;
-    this.px = x * TILE + TILE / 2; this.py = y * TILE + TILE / 2;
-    this.state = IDLE; this.dx = 1; this.dy = 0; this.faceX = 1; this._ringAim = 0;
-    this.fromX = x; this.fromY = y; this.toX = x; this.toY = y; this.progress = 0;
-    this.drilling = false; this.kinRamp = 0; this.kinDir = null; this.kinIdleT = 0;
-    this.dug = null; this.kinCharged = false; this.kinBurstFx = null; this.echoBreak = null; this.webT = 0; this.latchTiles = 0; this.latchT = 0; this.overshield = 0; this.overshieldDelay = 0; this.absorbCharges = 0; this.absorbCd = 0; this.drillHeat = 0; this.drillOverheatT = 0; this.dashing = false; this.dashRemain = 0; this.broke = false; this.crouchT = 0; this.crouchTarget = null; this._jumpDesc = false; this._jumpDescDir = 0; this._jumpDescH = 0; this._jumpBufT = 0; this.rappel = null;
-    this.frozenPrint = this.frozenImpulse = this.frozenHack = this.frozenSiege = false;
-    this.stealthT = 0;   // СТЕЛС: >0 → юнит невидим для боевых врагов (stealth.js пишет, ai.js читает)
+    this._resetRunState(x, y);
     this.hp = this.stats.maxHp;
   }
   // опора: только соседняя порода (клинг). Никаких «искусственных» полов —

@@ -1,6 +1,7 @@
 /* СЕТЬ ПАМЯТИ — DOM-оверлей мета-прогресса. Порт дизайна meta/project/src/tech_web.jsx.
    Токены — из meta/project/tokens.css; .vp/.pcb-flow/scanlines — из Tech Tree Web.html.
-   Узлы/рёбра/карта строятся в meta_dom.js (в основном инлайн-стили, как в исходнике). */
+   Узлы/рёбра/карта строятся в meta_dom.js (в основном инлайн-стили, как в исходнике).
+   ⚠️ Цвет-токены = КОПИЯ PAL (constants.js) — правишь PAL → синхронь здесь (audit_2026-08). */
 #metaScreen {
   --void:#07050a; --pit:#0d0a0e; --night:#14100c; --earth:#1a140e; --bronze:#2a2018;
   --carbon:#3a302a; --ash:#5a5046; --pewter:#7a705e; --bone:#b8a896; --chalk:#e8dcc4;

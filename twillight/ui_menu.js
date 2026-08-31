@@ -37,8 +37,8 @@ const MENU_GLINTS = [[0.22, 0.34, 'gold', 3], [0.78, 0.62, 'amber', 2.5], [0.86,
 function drawMenuGlints(ctx, W, H) {
   for (const [fx, fy, key, r] of MENU_GLINTS) {
     const x = W * fx, y = H * fy, c = PAL[key];
-    ctx.globalAlpha = 0.16; ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, r * 6, 0, 6.283); ctx.fill();
-    ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
+    ctx.globalAlpha = 0.16; ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, r * 6, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
   }
 }
 
@@ -114,7 +114,7 @@ function drawButtons(ctx, buttons) {
 // Виджет ГЛОБАЛЬНОГО ЦИКЛА существования ИИ (top-center): большой тикающий номер `save.epoch` + центи-доля (·NN,
 // тикает ~раз в 0.75с) → ощущение течения глобального времени. Сам счётчик тикает в game.loop (mode menu), не сбрасывается.
 function drawEpochClock(ctx, save, W) {
-  const ep = (save && save.epoch) || (typeof EPOCH_START !== 'undefined' ? EPOCH_START : 48217);
+  const ep = (save && save.epoch) || EPOCH_START;   // constants.js гарантирован загрузчиком (литерал-дубль 48217 снят — audit_2026-08)
   const whole = Math.floor(ep), centi = String(Math.floor((ep - whole) * 100)).padStart(2, '0');
   const cx = Math.round(W / 2);
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
@@ -172,21 +172,7 @@ function drawPauseMenu(ctx, buttons, W, H) {
 }
 
 // KPI-карточка итогов: болты + уголки + моно-метка + крупное Tektur-значение + дельта.
-function kpiCard(ctx, x, y, w, h, k, v, unit, color, delta) {
-  ctx.fillStyle = 'rgba(13,10,14,0.94)'; ctx.fillRect(x, y, w, h);
-  ctx.strokeStyle = color; ctx.lineWidth = 1; const s = 10;
-  ctx.beginPath();
-  ctx.moveTo(x + 0.5, y + s); ctx.lineTo(x + 0.5, y + 0.5); ctx.lineTo(x + s, y + 0.5);
-  ctx.moveTo(x + w - s, y + 0.5); ctx.lineTo(x + w - 0.5, y + 0.5); ctx.lineTo(x + w - 0.5, y + s);
-  ctx.moveTo(x + 0.5, y + h - s); ctx.lineTo(x + 0.5, y + h - 0.5); ctx.lineTo(x + s, y + h - 0.5);
-  ctx.moveTo(x + w - s, y + h - 0.5); ctx.lineTo(x + w - 0.5, y + h - 0.5); ctx.lineTo(x + w - 0.5, y + h - s);
-  ctx.stroke();
-  const b = 5; boltHead(ctx, x + b, y + b, 5, color); boltHead(ctx, x + w - b, y + b, 5, color); boltHead(ctx, x + b, y + h - b, 5, color); boltHead(ctx, x + w - b, y + h - b, 5, color);
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.pewter; ctx.fillText(k, x + 14, y + 14);
-  ctx.font = `700 30px ${FONT_DISPLAY}`; ctx.fillStyle = color; ctx.fillText(v, x + 14, y + 30);
-  if (delta) { ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = PAL.ash; ctx.fillText(delta, x + 14, y + h - 16); }
-}
+// kpiCard УДАЛЕНА (audit_2026-08: мёртвая рендер-функция без вызовов — восстановима из истории при нужде)
 
 // L-уголки рамки панели (как у кнопок) — 4 угла.
 function _panelCorners(ctx, x, y, w, h, col, s) {
@@ -211,7 +197,7 @@ function drawMetaToken(ctx, cx, cy, r) {
   ctx.fillStyle = 'rgba(212,160,66,0.18)'; ctx.fill();
   ctx.strokeStyle = PAL.gold; ctx.lineWidth = Math.max(1, 1.6 * f); ctx.stroke();
   ctx.lineWidth = Math.max(1, 1.4 * f); ctx.strokeRect(X(11), Y(11), 10 * f, 10 * f);
-  ctx.fillStyle = PAL.gold; ctx.beginPath(); ctx.arc(cx, cy, 2 * f, 0, 6.283); ctx.fill();
+  ctx.fillStyle = PAL.gold; ctx.beginPath(); ctx.arc(cx, cy, 2 * f, 0, TAU); ctx.fill();
   ctx.lineWidth = Math.max(1, 1.2 * f); ctx.beginPath();
   const seg = (a, b, c, d) => { ctx.moveTo(X(a), Y(b)); ctx.lineTo(X(c), Y(d)); };
   seg(16, 3, 16, 7); seg(16, 25, 16, 29); seg(5, 9.5, 8.5, 11.5); seg(23.5, 11.5, 27, 9.5); seg(5, 22.5, 8.5, 20.5); seg(23.5, 20.5, 27, 22.5);

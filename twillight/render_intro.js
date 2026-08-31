@@ -47,9 +47,9 @@ function drawIntro(ctx, intro, world, unit, camera, W, H) {
     const ox = pcx + (cx - pcx) * reactT, oy = pcyTop + (cy - pcyTop) * reactT;
     const rr = R * 0.5;
     ctx.fillStyle = 'rgba(58,209,122,0.25)';
-    ctx.beginPath(); ctx.arc(ox, oy, rr * 1.9, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(ox, oy, rr * 1.9, 0, TAU); ctx.fill();
     ctx.fillStyle = '#3ad17a';
-    ctx.beginPath(); ctx.arc(ox, oy, rr, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(ox, oy, rr, 0, TAU); ctx.fill();
     ctx.fillStyle = '#0d1117'; ctx.font = `bold ${Math.max(8, Math.round(rr * 1.3))}px ${FONT_MONO}`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('Р', ox, oy + 1);
     ctx.textBaseline = 'alphabetic';
@@ -57,7 +57,7 @@ function drawIntro(ctx, intro, world, unit, camera, W, H) {
   // вспышка-кольцо в момент установки
   if (reactT >= 1 && settleT < 1) {
     ctx.strokeStyle = `rgba(120,255,170,${1 - settleT})`; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(cx, cy, R + settleT * R * 2.2, 0, 6.283); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, R + settleT * R * 2.2, 0, TAU); ctx.stroke();
   }
 
   // этап + подсказка

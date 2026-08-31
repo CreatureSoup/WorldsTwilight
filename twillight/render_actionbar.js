@@ -79,9 +79,9 @@ function _actionIcon(ctx, type, cx, cy, s, col) {
   } else if (type === 'radar') {        // сектор-развёртка + луч + ядро
     ctx.beginPath(); ctx.arc(cx, cy + s * 0.35, s * 0.95, -Math.PI * 0.95, -Math.PI * 0.05); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(cx, cy + s * 0.35); ctx.lineTo(cx + Math.cos(-Math.PI * 0.32) * s * 0.95, cy + s * 0.35 + Math.sin(-Math.PI * 0.32) * s * 0.95); ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx, cy + s * 0.35, s * 0.14, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy + s * 0.35, s * 0.14, 0, TAU); ctx.fill();
   } else if (type === 'echo') {         // концентрические кольца
-    for (let i = 0; i < 3; i++) { ctx.globalAlpha = 1 - i * 0.28; ctx.beginPath(); ctx.arc(cx, cy, s * (0.32 + i * 0.32), 0, 6.283); ctx.stroke(); }
+    for (let i = 0; i < 3; i++) { ctx.globalAlpha = 1 - i * 0.28; ctx.beginPath(); ctx.arc(cx, cy, s * (0.32 + i * 0.32), 0, TAU); ctx.stroke(); }
     ctx.globalAlpha = 1;
   } else if (type === 'hack') {         // скобки + ядро-вторжение
     ctx.beginPath(); ctx.moveTo(cx - s * 0.35, cy - s * 0.6); ctx.lineTo(cx - s * 0.62, cy - s * 0.6); ctx.lineTo(cx - s * 0.62, cy + s * 0.6); ctx.lineTo(cx - s * 0.35, cy + s * 0.6); ctx.stroke();
@@ -91,8 +91,8 @@ function _actionIcon(ctx, type, cx, cy, s, col) {
     ctx.beginPath(); ctx.moveTo(cx - s * 0.75, cy - s * 0.55); ctx.lineTo(cx - s * 0.2, cy); ctx.lineTo(cx - s * 0.75, cy + s * 0.55); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(cx + s * 0.78, cy); ctx.lineTo(cx + s * 0.02, cy - s * 0.52); ctx.lineTo(cx + s * 0.02, cy + s * 0.52); ctx.closePath(); ctx.fill();
   } else if (type === 'stealth') {      // глаз с перечёркиванием — невидимость
-    ctx.beginPath(); ctx.ellipse(cx, cy, s * 0.72, s * 0.42, 0, 0, 6.283); ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx, cy, s * 0.2, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx, cy, s * 0.72, s * 0.42, 0, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, s * 0.2, 0, TAU); ctx.fill();
     ctx.beginPath(); ctx.moveTo(cx - s * 0.72, cy + s * 0.6); ctx.lineTo(cx + s * 0.72, cy - s * 0.6); ctx.stroke();
   } else if (type === 'jam') {          // глушение: расходящиеся скобки-волны (помеха) + ядро
     for (let i = 1; i <= 2; i++) {
@@ -100,19 +100,19 @@ function _actionIcon(ctx, type, cx, cy, s, col) {
       ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI - 0.85, Math.PI + 0.85); ctx.stroke();   // слева
       ctx.beginPath(); ctx.arc(cx, cy, r, -0.85, 0.85); ctx.stroke();                       // справа
     }
-    ctx.beginPath(); ctx.arc(cx, cy, s * 0.17, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, s * 0.17, 0, TAU); ctx.fill();
   } else if (type === 'jets') {         // прыжковые движки: сопло + двойной язык выхлопа вниз
     ctx.beginPath(); ctx.moveTo(cx - s * 0.5, cy - s * 0.6); ctx.lineTo(cx + s * 0.5, cy - s * 0.6); ctx.lineTo(cx + s * 0.32, cy + s * 0.1); ctx.lineTo(cx - s * 0.32, cy + s * 0.1); ctx.closePath(); ctx.stroke();   // корпус-сопло
     for (const k of [-0.22, 0.22]) { ctx.beginPath(); ctx.moveTo(cx + k * s - s * 0.12, cy + s * 0.12); ctx.lineTo(cx + k * s, cy + s * 0.7); ctx.lineTo(cx + k * s + s * 0.12, cy + s * 0.12); ctx.closePath(); ctx.fill(); }   // языки выхлопа
   } else if (type === 'stun') {         // ЭМИ-импульс: ядро + лучи-разряды наружу (статический выброс)
-    ctx.beginPath(); ctx.arc(cx, cy, s * 0.2, 0, 6.283); ctx.fill();
-    for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283, r0 = s * 0.34, r1 = s * (i % 2 ? 0.95 : 0.7); ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1); ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(cx, cy, s * 0.2, 0, TAU); ctx.fill();
+    for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, r0 = s * 0.34, r1 = s * (i % 2 ? 0.95 : 0.7); ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1); ctx.stroke(); }
   } else if (type === 'blast') {        // подрыв-заряд: звезда-вспышка (рваные лучи из центра)
     ctx.beginPath();
-    for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283, r = s * (i % 2 ? 0.95 : 0.42); const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    for (let i = 0; i < 12; i++) { const a = i / 12 * TAU, r = s * (i % 2 ? 0.95 : 0.42); const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
     ctx.closePath(); ctx.stroke();
   } else if (type === 'nano') {         // нано-ремонт: медицинский крест в кольце
-    ctx.beginPath(); ctx.arc(cx, cy, s * 0.85, 0, 6.283); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, s * 0.85, 0, TAU); ctx.stroke();
     ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.5); ctx.lineTo(cx, cy + s * 0.5); ctx.moveTo(cx - s * 0.5, cy); ctx.lineTo(cx + s * 0.5, cy); ctx.stroke();
   } else if (type === 'dash') {         // рывок: двойной шеврон вправо + след-черта (импульс движения)
     for (let i = 0; i < 2; i++) { const xx = cx - s * 0.15 + i * s * 0.5; ctx.beginPath(); ctx.moveTo(xx - s * 0.3, cy - s * 0.55); ctx.lineTo(xx + s * 0.25, cy); ctx.lineTo(xx - s * 0.3, cy + s * 0.55); ctx.stroke(); }
@@ -120,20 +120,20 @@ function _actionIcon(ctx, type, cx, cy, s, col) {
   } else if (type === 'harpoon') {      // гарпун: древко-трос слева + зубчатый наконечник-крюк справа
     ctx.beginPath(); ctx.moveTo(cx - s * 0.85, cy); ctx.lineTo(cx + s * 0.35, cy); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(cx + s * 0.85, cy); ctx.lineTo(cx + s * 0.3, cy - s * 0.5); ctx.lineTo(cx + s * 0.45, cy); ctx.lineTo(cx + s * 0.3, cy + s * 0.5); ctx.closePath(); ctx.fill();   // наконечник
-    ctx.beginPath(); ctx.arc(cx - s * 0.7, cy, s * 0.22, 0, 6.283); ctx.stroke();   // петля троса
+    ctx.beginPath(); ctx.arc(cx - s * 0.7, cy, s * 0.22, 0, TAU); ctx.stroke();   // петля троса
   } else if (type === 'xray') {         // рентген: глаз-зрачок + расходящиеся лучи-вскрытие
-    ctx.beginPath(); ctx.ellipse(cx, cy, s * 0.7, s * 0.42, 0, 0, 6.283); ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx, cy, s * 0.2, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx, cy, s * 0.7, s * 0.42, 0, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, s * 0.2, 0, TAU); ctx.fill();
     for (let i = 0; i < 4; i++) { const a = Math.PI / 4 + i * Math.PI / 2; ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * s * 0.75, cy + Math.sin(a) * s * 0.6); ctx.lineTo(cx + Math.cos(a) * s * 1.0, cy + Math.sin(a) * s * 0.85); ctx.stroke(); }
   } else if (type === 'anchor') {       // якорь кабеля: шток с кольцом сверху + лапы-крюки снизу
-    ctx.beginPath(); ctx.arc(cx, cy - s * 0.55, s * 0.28, 0, 6.283); ctx.stroke();                     // кольцо
+    ctx.beginPath(); ctx.arc(cx, cy - s * 0.55, s * 0.28, 0, TAU); ctx.stroke();                     // кольцо
     ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.3); ctx.lineTo(cx, cy + s * 0.7); ctx.stroke();          // шток
     ctx.beginPath(); ctx.moveTo(cx - s * 0.55, cy + s * 0.15); ctx.lineTo(cx + s * 0.55, cy + s * 0.15); ctx.stroke();   // перекладина
     ctx.beginPath(); ctx.moveTo(cx - s * 0.6, cy + s * 0.35); ctx.quadraticCurveTo(cx - s * 0.5, cy + s * 0.75, cx, cy + s * 0.7); ctx.quadraticCurveTo(cx + s * 0.5, cy + s * 0.75, cx + s * 0.6, cy + s * 0.35); ctx.stroke();   // лапы
   } else if (type === 'dronehack') {    // дрон-хакер: капсула-дрон + ротор + луч-взлом вниз
-    ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.2, s * 0.5, s * 0.32, 0, 0, 6.283); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.2, s * 0.5, s * 0.32, 0, 0, TAU); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(cx - s * 0.6, cy - s * 0.55); ctx.lineTo(cx + s * 0.6, cy - s * 0.55); ctx.stroke();   // ротор
     ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.moveTo(cx, cy + s * 0.12); ctx.lineTo(cx, cy + s * 0.85); ctx.stroke(); ctx.setLineDash([]);   // луч-взлом
-    ctx.beginPath(); ctx.arc(cx, cy + s * 0.85, s * 0.18, 0, 6.283); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy + s * 0.85, s * 0.18, 0, TAU); ctx.stroke();
   }
 }

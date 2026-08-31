@@ -13,6 +13,7 @@ Object.assign(Game.prototype, {
   _syncDrone() {
     if (!this.drones) this.drones = [];
     const ids = (this.artifactSlots && this.artifactSlots.drone) || [];
+    for (const d of this.drones) if (ids.indexOf(d.srcId) < 0 && d.target && d.target._claimed) d.target._claimed = false;   // уходящий компаньон отпускает заклеймленный дроп (audit_2026-08)
     this.drones = this.drones.filter((d) => ids.indexOf(d.srcId) >= 0);   // реликт снят → компаньон уходит
     for (const id of ids) {
       const kind = DRONE_KIND[id]; if (!kind || this.drones.some((d) => d.srcId === id)) continue;
@@ -55,7 +56,10 @@ Object.assign(Game.prototype, {
       else this._droneOrbit(d, u, dt);
     } else if (d.state === 'seek') {
       const dr = d.target;
-      if (!dr || dr.picked || !loot || !loot.drops.includes(dr)) { d.target = null; d.state = 'idle'; return; }
+      if (!dr || dr.picked || !loot || !loot.drops.includes(dr)) {
+        if (dr) dr._claimed = false;   // ⚠️ снять клейм при обрыве seek — иначе живой дроп навсегда потерян для сборщика (audit_2026-08)
+        d.target = null; d.state = 'idle'; return;
+      }
       if (this._droneFly(d, dr.px, dr.py, DRONE_SPEED, dt)) {
         const i = loot.drops.indexOf(dr); if (i >= 0) loot.drops.splice(i, 1);
         d.carry = dr.type; d.target = null; d.state = 'carry';

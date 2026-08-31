@@ -18,7 +18,7 @@ function drawCouriers(ctx, game, camera) {
 
 function drawCourierDrone(ctx, c, cx, cy, col, empty) {
   const r = TILE * 0.42, bob = Math.sin(c.bob * 9) * 1.5, y = cy + bob;
-  const spin = (c.bob * 26) % 6.283;
+  const spin = (c.bob * 26) % TAU;
   ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   // несущие роторы — две размытые дуги по бокам (вращение)
   ctx.strokeStyle = col; ctx.globalAlpha = 0.4; ctx.lineWidth = 1.5;
@@ -33,8 +33,8 @@ function drawCourierDrone(ctx, c, cx, cy, col, empty) {
   const hit = c.hitT > 0;
   ctx.fillStyle = hit ? '#ffd0c0' : '#1c2e30';
   ctx.strokeStyle = hit ? '#fff0e0' : col; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.ellipse(cx, y, r * 0.9, r * 0.55, 0, 0, 6.283); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(cx, y, r * 0.2, 0, 6.283); ctx.fill();   // ядро-глаз
+  ctx.beginPath(); ctx.ellipse(cx, y, r * 0.9, r * 0.55, 0, 0, TAU); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(cx, y, r * 0.2, 0, TAU); ctx.fill();   // ядро-глаз
   // подвешенный контейнер с грузом (бирюзовая коробка под корпусом)
   const bx = cx, by = y + r * 0.85, bw = r * 0.62, bh = r * 0.5;
   ctx.strokeStyle = '#2a3a3c'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - bw * 0.5, y + r * 0.3); ctx.lineTo(cx - bw * 0.5, by - bh * 0.5); ctx.moveTo(cx + bw * 0.5, y + r * 0.3); ctx.lineTo(cx + bw * 0.5, by - bh * 0.5); ctx.stroke();   // тросы
@@ -56,10 +56,10 @@ function drawCourierEnd(ctx, c, cx, cy, col) {
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   if (c.state === 'arrived' || c.state === 'docked') {   // сдача у базы / стыковка на терминале — бирюзовая вспышка-кольцо
     ctx.globalAlpha = (1 - p) * 0.8; ctx.strokeStyle = col; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(cx, cy, r * (0.4 + p * 1.6), 0, 6.283); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, r * (0.4 + p * 1.6), 0, TAU); ctx.stroke();
   } else {
     ctx.globalAlpha = (1 - p) * 0.9; ctx.strokeStyle = '#ff7a4a'; ctx.lineWidth = 1.5;
-    for (let i = 0; i < 6; i++) { const a = (i / 6) * 6.283 + c.bob, l = r * (0.5 + p * 1.8); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * l, cy + Math.sin(a) * l); ctx.stroke(); }
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * TAU + c.bob, l = r * (0.5 + p * 1.8); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * l, cy + Math.sin(a) * l); ctx.stroke(); }
   }
   ctx.restore();
 }

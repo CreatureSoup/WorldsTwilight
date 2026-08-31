@@ -2,7 +2,8 @@
    Токены — из database/project/tokens.css; анимации (codex-rot/spin/seg-pulse/newdot/
    scanlines) — из «Codex Reconstruction.html». Вёрстка/SVG-мандала — в codex_dom.js
    (в основном инлайн-стили, как в исходнике).
-   #codexPopup — внутриигровой попап «новый фрагмент данных» (см. codexPopupShow). */
+   #codexPopup — внутриигровой попап «новый фрагмент данных» (см. codexPopupShow).
+   ⚠️ Цвет-токены = КОПИЯ PAL (constants.js) — правишь PAL → синхронь здесь (audit_2026-08). */
 #codexScreen, #codexPopup {
   --void:#07050a; --pit:#0d0a0e; --night:#14100c; --earth:#1a140e; --bronze:#2a2018;
   --carbon:#3a302a; --ash:#5a5046; --pewter:#7a705e; --bone:#b8a896; --chalk:#e8dcc4;

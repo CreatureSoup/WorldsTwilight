@@ -25,7 +25,7 @@ function drawImpulseWave(ctx, game, camera) {
     const g = ctx.createRadialGradient(cx, cy, 1, cx, cy, lr);
     g.addColorStop(0, `rgba(206,224,242,${intensity * (0.04 + 0.06 * near)})`);
     g.addColorStop(1, 'rgba(206,224,242,0)');
-    ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, lr, 0, 6.283); ctx.fill();
+    ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, lr, 0, TAU); ctx.fill();
   }
   // 2) ДРОЖАЩИЕ ПОПЕРЕЧНЫЕ ГРЕБНИ — рябь искажения воздуха вдоль линии удара (без яркого фронта)
   for (let d = step * 0.4; d <= frontD; d += step) {
@@ -53,9 +53,9 @@ function drawImpulseCharge(ctx, game, camera) {
   ctx.save();
   ctx.lineWidth = 3; ctx.lineCap = 'round';
   ctx.strokeStyle = 'rgba(255,140,60,0.22)';
-  ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
   ctx.strokeStyle = ch >= 1 ? '#fff2d8' : '#ff9a3a';            // дуга-заряд растёт по кругу
-  ctx.beginPath(); ctx.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + 6.283 * ch); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + TAU * ch); ctx.stroke();
   const dx = imp.dir[0], dy = imp.dir[1], ax = cx + dx * R * 1.3, ay = cy + dy * R * 1.3;   // стрелка-прицел
   ctx.globalAlpha = 0.5 + 0.5 * ch; ctx.fillStyle = ch >= 1 ? '#fff2d8' : '#ffb060';
   ctx.beginPath();
@@ -63,7 +63,7 @@ function drawImpulseCharge(ctx, game, camera) {
   ctx.lineTo(ax - dy * 5 - dx * 3, ay + dx * 5 - dy * 3);
   ctx.lineTo(ax + dy * 5 - dx * 3, ay - dx * 5 - dy * 3);
   ctx.closePath(); ctx.fill();
-  if (ch >= 1) { ctx.globalAlpha = 0.6; ctx.strokeStyle = '#fff2d8'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, R + 4, 0, 6.283); ctx.stroke(); }
+  if (ch >= 1) { ctx.globalAlpha = 0.6; ctx.strokeStyle = '#fff2d8'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, R + 4, 0, TAU); ctx.stroke(); }
   ctx.restore();
 }
 

@@ -41,7 +41,7 @@ class Structure {
   }
   // Боевые враги бьют структуру (фаза 4); стена урон не принимает (её «HP» = dig-стойкость тайла).
   damage(n) { if (this.dying || this.def.solid) return; this.hp -= n; if (this.hp <= 0) { this.hp = 0; this.dying = true; this.deathT = STRUCT_DEATH_TIME; } }
-  built() { return this.state === 'active'; }
+  // built() УДАЛЁН (audit_2026-08: не вызывался; state === 'active' читают напрямую)
 }
 
 class Structures {
@@ -101,12 +101,7 @@ class Structures {
   // Турель — хитскан по ближайшему живому врагу в радиусе с прямой видимостью (тратит энергию, рисует трассер).
   _turretTick(s, dt, world, enemies) {
     s.fireCd -= dt;
-    let best = null, bd = s.def.range + 0.5;
-    for (const e of enemies) {
-      if (e.dying || e.dead || e.friendly) continue;
-      const d = Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE;
-      if (d < bd && this._los(world, s, e)) { bd = d; best = e; }
-    }
+    const best = this._nearestEnemy(world, s, enemies, s.def.range + 0.5);
     if (!best) return;
     const tgt = Math.atan2(best.py - s.py, wrapDeltaPx(best.px, s.px));   // дельта s→цель (wrapDeltaPx(a,b)=a−b)
     s.aimAng = aimOverTop(s.aimAng, tgt, TURRET_TURN_RATE * dt);          // медленный поворот через верх
@@ -120,8 +115,7 @@ class Structures {
   // Рейлган — медленный мощный ПРОБОЙ: луч от турели на всю дальность, бьёт ВСЕХ врагов вдоль линии.
   _railTick(s, dt, world, enemies) {
     s.fireCd -= dt;
-    let best = null, bd = s.def.range + 0.5;
-    for (const e of enemies) { if (e.dying || e.dead || e.friendly) continue; const d = Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE; if (d < bd && this._los(world, s, e)) { bd = d; best = e; } }
+    const best = this._nearestEnemy(world, s, enemies, s.def.range + 0.5);
     if (!best) return;
     const tgt = Math.atan2(best.py - s.py, wrapDeltaPx(best.px, s.px));
     s.aimAng = aimOverTop(s.aimAng, tgt, TURRET_TURN_RATE * dt);          // медленный поворот через верх
@@ -181,8 +175,7 @@ class Structures {
   _mwTick(s, dt, world, enemies) {
     s.active2 = false;
     if (s.energy <= 0) return;
-    let best = null, bd = s.def.range + 0.5;
-    for (const e of enemies) { if (e.dying || e.dead || e.friendly) continue; const d = Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE; if (d < bd && this._los(world, s, e)) { bd = d; best = e; } }
+    const best = this._nearestEnemy(world, s, enemies, s.def.range + 0.5);
     if (!best) return;
     const tgt = Math.atan2(best.py - s.py, wrapDeltaPx(best.px, s.px));
     s.aimAng = aimOverTop(s.aimAng, tgt, TURRET_TURN_RATE * dt); s.active2 = true;   // раструб доводится медленно через верх; конус бьёт по фактическому aimAng (лаг = реализм)
@@ -268,19 +261,21 @@ class Structures {
   }
 
   // Прямая видимость по тайлам: дискретизируем линию, любой ТВЁРДЫЙ тайл между турелью и целью — нет выстрела.
-  _los(world, s, e) {
-    if (!world) return true;
-    const dx = wrapDeltaPx(e.px, s.px) / TILE, dy = (e.py - s.py) / TILE;   // направление s→цель
-    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy)));
-    for (let i = 1; i < steps; i++) {
-      const tx = Math.round(s.tileX + dx * (i / steps)), ty = Math.round(s.tileY + dy * (i / steps));
-      if (isSolid(world.tileAt(tx, ty))) return false;
+  // ЕДИНАЯ модель видимости — world.hasLineOfSight (была дословная копия DDA; audit_2026-08: 3 реализации LoS → 2, hunterLOS ai.js осознанно отдельная из-за допуска).
+  _los(world, s, e) { return !world || world.hasLineOfSight(s.px, s.py, e.px, e.py); }
+  // Ближайший ЖИВОЙ не-friendly враг в радиусе (тайлы) с прямой видимостью — общий прицел турели/рейлгана/СВЧ (был скопирован ×3 — audit_2026-08).
+  _nearestEnemy(world, s, enemies, rangeTiles) {
+    let best = null, bd = rangeTiles;
+    for (const e of enemies) {
+      if (e.dying || e.dead || e.friendly) continue;
+      const d = Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE;
+      if (d < bd && this._los(world, s, e)) { bd = d; best = e; }
     }
-    return true;
+    return best;
   }
 
   _deathFx(s, game) {
     if (!game.dust) return;
-    for (let i = 0; i < 7; i++) { const a = Math.random() * 6.283, sp = TILE * (0.6 + Math.random() * 1.6); game.dust._grit(s.px, s.py, Math.cos(a) * sp, Math.sin(a) * sp - TILE * 0.6, Math.random() < 0.35); }
+    for (let i = 0; i < 7; i++) { const a = Math.random() * TAU, sp = TILE * (0.6 + Math.random() * 1.6); game.dust._grit(s.px, s.py, Math.cos(a) * sp, Math.sin(a) * sp - TILE * 0.6, Math.random() < 0.35); }
   }
 }

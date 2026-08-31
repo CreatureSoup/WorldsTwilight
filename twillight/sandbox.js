@@ -173,11 +173,11 @@ Object.assign(Game.prototype, {
       ctx.fillStyle = col; ctx.fillText(text, sx, sy);
     };
     for (const t of this.world.traps) lab(t.tx, t.ty, t.type.toUpperCase(), '#e0a040');
-    for (const r of this.world.robots) lab(r.tx, r.ty, r.kind.toUpperCase(), '#ff6a4a');
+    for (const r of this.world.robots) lab(r.tx, r.ty, r.kind.toUpperCase(), PAL.enemyHot);
     for (const s of this.world.servers) lab(s.tx, s.ty, 'СЕРВЕР', '#7fb0e0');
     for (const k of this.world.containers) lab(k.tx, k.ty, 'КОНТ:' + k.type, '#e0b048');
-    for (const a of this.world.artifacts) lab(a.tx, a.ty, a.tech.id, '#c264e0');
-    for (const b of this.world.backdrops) lab(b.cx, b.cy - b.ry, 'СЦЕНА:' + b.kind, '#9ad0a0');
+    for (const a of this.world.artifacts) lab(a.tx, a.ty, a.tech.id, RESOURCE_DEFS.crystal.color);
+    for (const b of this.world.backdrops) lab(b.cx, b.cy - b.ry, 'СЦЕНА:' + b.kind, PAL.screwGreen);
     const st = this._sandboxSpawnTile(); lab(st.x, st.y, '⚑ СПАВН ВРАГА', '#e0664a');   // точка спавна врагов (20 тайлов левее города)
     ctx.restore();
   },

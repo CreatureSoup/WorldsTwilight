@@ -75,6 +75,6 @@ function drawMazeCell(ctx, x, y, w, h, fill, t, seed, breached) {
   ctx.stroke();
   if (fill < 1) {   // мерцающий фронт заражения — точка-«голова» ползущей коррупции
     ctx.save(); ctx.globalAlpha = 0.45 + 0.5 * Math.abs(Math.sin(t * 18 + seed * 2));
-    ctx.fillStyle = '#e8ff7a'; ctx.beginPath(); ctx.arc(fx, fy, 2.3, 0, 6.283); ctx.fill(); ctx.restore();
+    ctx.fillStyle = '#e8ff7a'; ctx.beginPath(); ctx.arc(fx, fy, 2.3, 0, TAU); ctx.fill(); ctx.restore();
   } else { ctx.fillStyle = breached ? '#ff5038' : '#c8ff5a'; ctx.fillRect(cx - 2.5, cy - 2.5, 5, 5); }   // ядро заражено
 }

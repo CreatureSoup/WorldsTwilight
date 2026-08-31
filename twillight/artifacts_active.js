@@ -18,7 +18,7 @@ Object.assign(Game.prototype, {
       const sr = this._artScaled('stun_pulse');   // радиус скалируется город-апгрейдом
       if (this.enemies) for (const e of this.enemies) { if (e.dead || e.dying || e.friendly) continue; if (Math.hypot(wrapDeltaPx(e.px, u.px), e.py - u.py) / TILE <= sr) e.stunT = Math.max(e.stunT || 0, STUN_PULSE_DUR); }
       sp.cd = STUN_PULSE_CD; sp.pulse = 1;
-      if (this.fx) this.fx.hit(u.px, u.py, '#9ad0a0', 10);
+      if (this.fx) this.fx.hit(u.px, u.py, PAL.screwGreen, 10);
       if (this.logEvent) this.logEvent(STR.log.artStun);
     }
 
@@ -169,7 +169,7 @@ Object.assign(Game.prototype, {
     }
     const R = Math.ceil(BLAST_CHARGE_R), R2 = BLAST_CHARGE_R * BLAST_CHARGE_R;
     for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) if (dx * dx + dy * dy <= R2) this.world.setAir(cx + dx, cy + dy);
-    if (this.dust) for (let i = 0; i < 16; i++) { const a = Math.random() * 6.283, sp = TILE * (1 + Math.random() * 2.6); this.dust._grit(px, py, Math.cos(a) * sp, Math.sin(a) * sp - TILE * 0.6, Math.random() < 0.5); }
+    if (this.dust) for (let i = 0; i < 16; i++) { const a = Math.random() * TAU, sp = TILE * (1 + Math.random() * 2.6); this.dust._grit(px, py, Math.cos(a) * sp, Math.sin(a) * sp - TILE * 0.6, Math.random() < 0.5); }
     if (this.fx) this.fx.hit(px, py, '#ff9a4a', 14);
   },
 });

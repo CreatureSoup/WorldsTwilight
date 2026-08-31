@@ -129,19 +129,19 @@ function drawWinCutscene(ctx, game, camera, W, H) {
   ctx.globalCompositeOperation = 'lighter';             // аура ядра
   let g = ctx.createRadialGradient(ox, oy, 0, ox, oy, rr * 2.4);
   g.addColorStop(0, `rgba(${HACK_HUE},0.6)`); g.addColorStop(1, `rgba(${HACK_HUE},0)`);
-  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox, oy, rr * 2.4, 0, 6.283); ctx.fill();
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox, oy, rr * 2.4, 0, TAU); ctx.fill();
   ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = '#f0c24a'; ctx.beginPath(); ctx.arc(ox, oy, rr, 0, 6.283); ctx.fill();   // ядро города (золото)
+  ctx.fillStyle = '#f0c24a'; ctx.beginPath(); ctx.arc(ox, oy, rr, 0, TAU); ctx.fill();   // ядро города (золото)
   ctx.fillStyle = '#2a1c08'; ctx.font = `bold ${Math.round(rr * 1.3)}px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('Р', ox, oy + 1);
 
   if (flT > 0) {                                        // вспышка интеграции у юнита (зелёная, как реактор юнита)
     ctx.globalCompositeOperation = 'lighter';
     ctx.strokeStyle = `rgba(120,255,170,${(1 - flT) * 0.9})`; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(ux, uy, 10 + flT * 70, 0, 6.283); ctx.stroke();
+    ctx.beginPath(); ctx.arc(ux, uy, 10 + flT * 70, 0, TAU); ctx.stroke();
     g = ctx.createRadialGradient(ux, uy, 0, ux, uy, 40 * flT + 8);
     g.addColorStop(0, `rgba(160,255,200,${0.5 * (1 - flT) + 0.2})`); g.addColorStop(1, 'rgba(160,255,200,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ux, uy, 40 * flT + 8, 0, 6.283); ctx.fill();
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ux, uy, 40 * flT + 8, 0, TAU); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
   }
 

@@ -12,7 +12,7 @@ function drawRadarSweep(ctx, game, camera) {
   ctx.globalCompositeOperation = 'lighter';
   if (rs.sweeping) {   // развёртка видна ТОЛЬКО во время оборота (по активации); потом — только дотухающие блипы
     ctx.strokeStyle = 'rgba(127,176,224,0.055)'; ctx.lineWidth = 1;
-    for (let k = 1; k <= 3; k++) { ctx.beginPath(); ctx.arc(ux, uy, R * k / 3, 0, 6.283); ctx.stroke(); }
+    for (let k = 1; k <= 3; k++) { ctx.beginPath(); ctx.arc(ux, uy, R * k / 3, 0, TAU); ctx.stroke(); }
     const trail = 0.6, steps = 7;
     for (let i = 0; i < steps; i++) {
       ctx.beginPath(); ctx.moveTo(ux, uy);
@@ -28,9 +28,9 @@ function drawRadarSweep(ctx, game, camera) {
     if (al <= 0.01) continue;
     const bx = camera.screenX(b.wx), by = b.wy - camera.y;
     ctx.globalAlpha = al * 0.16; ctx.fillStyle = b.color;
-    ctx.beginPath(); ctx.arc(bx, by, b.enemy ? 6.5 : 5, 0, 6.283); ctx.fill();           // гало
+    ctx.beginPath(); ctx.arc(bx, by, b.enemy ? 6.5 : 5, 0, TAU); ctx.fill();           // гало
     ctx.globalAlpha = al * (b.enemy ? 0.85 : 0.72);
-    ctx.beginPath(); ctx.arc(bx, by, b.enemy ? 2.4 : 2.6, 0, 6.283); ctx.fill();          // ядро
+    ctx.beginPath(); ctx.arc(bx, by, b.enemy ? 2.4 : 2.6, 0, TAU); ctx.fill();          // ядро
     if (b.enemy) {                                                                         // крестик-метка врага
       ctx.globalAlpha = al * 0.8; ctx.strokeStyle = b.color; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(bx - 4, by); ctx.lineTo(bx + 4, by); ctx.moveTo(bx, by - 4); ctx.lineTo(bx, by + 4); ctx.stroke();
@@ -49,7 +49,7 @@ function drawEchoWave(ctx, game, camera) {
     for (let k = 0; k < 3; k++) {
       const rr = r * (1 - k * 0.07); if (rr <= 1) continue;
       ctx.strokeStyle = 'rgba(181,140,240,' + (0.2 * (1 - f) * (1 - k * 0.28)).toFixed(3) + ')'; ctx.lineWidth = 2 - k * 0.5;
-      ctx.beginPath(); ctx.arc(ox, oy, rr, 0, 6.283); ctx.stroke();
+      ctx.beginPath(); ctx.arc(ox, oy, rr, 0, TAU); ctx.stroke();
     }
     // внутренний градиент: мягкое лиловое ядро + светящаяся оболочка у фронта волны (затухает к концу)
     if (r > 2) {
@@ -58,14 +58,14 @@ function drawEchoWave(ctx, game, camera) {
       g.addColorStop(0.6, `rgba(165,120,240,${(0.05 * a).toFixed(3)})`);
       g.addColorStop(0.9, `rgba(205,165,255,${(0.17 * a).toFixed(3)})`);   // светящийся фронт
       g.addColorStop(1, 'rgba(181,140,240,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox, oy, r, 0, 6.283); ctx.fill();
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox, oy, r, 0, TAU); ctx.fill();
     }
   }
   for (const m of ec.marks) {                                                              // метки залежей (держатся и гаснут)
     const al = Math.max(0, 1 - m.age / ECHO_MARK_FADE); if (al <= 0.01) continue;
     const bx = camera.screenX(m.wx), by = m.wy - camera.y;
-    ctx.globalAlpha = al * 0.16; ctx.fillStyle = m.color; ctx.beginPath(); ctx.arc(bx, by, 5, 0, 6.283); ctx.fill();
-    ctx.globalAlpha = al * 0.72; ctx.beginPath(); ctx.arc(bx, by, 2.6, 0, 6.283); ctx.fill();
+    ctx.globalAlpha = al * 0.16; ctx.fillStyle = m.color; ctx.beginPath(); ctx.arc(bx, by, 5, 0, TAU); ctx.fill();
+    ctx.globalAlpha = al * 0.72; ctx.beginPath(); ctx.arc(bx, by, 2.6, 0, TAU); ctx.fill();
   }
   ctx.globalAlpha = 1; ctx.restore();
 }
@@ -73,15 +73,13 @@ function drawEchoWave(ctx, game, camera) {
 // HUD-виджет выбора типа ресурса РАДАРА: ВСЕ ТРИ типа как кнопки-сегменты разом, активный подсвечен (клик по кнопке
 // = выбрать напрямую; клавиша C = циклом). Ширина = HUD_VW (как ГРУЗ/БАНК/тумблеры). Скрыт при полном спектре / без
 // радара. Позиция динамическая (зона tl, стек под фикс-панелями — hud_layout.js); клик читает кэш кнопок.
-let _radarSwitchRect = null, _radarSwitchBtns = [];
-function radarSwitchRect() { return _radarSwitchRect || { x: 10, y: 150, w: 188, h: 38 }; }
+let _radarSwitchBtns = [];
 function radarSwitchButtons() { return _radarSwitchBtns; }
 function radarSwitchVisible(game) { const u = game.unit; return game.mode === 'playing' && !game.debug && u && u.stats && u.stats.radar && !u.stats.radarSpectrum; }
 function drawRadarSwitch(ctx, game) {
   if (!radarSwitchVisible(game)) return;
   const W = (typeof HUD_VW !== 'undefined') ? HUD_VW : 188, H = 38, ACC = '#7fb0e0';
   const r = (typeof HudLayout !== 'undefined') ? HudLayout.slotDock('tl', W, H, 'radarsw', ACC) : { x: 10, y: 150, w: W, h: H };
-  _radarSwitchRect = r;
   const rs = game.radarSweep;
   const cy = (typeof techPanel === 'function') ? techPanel(ctx, r.x, r.y, r.w, r.h, { accent: ACC, label: STR.hud.scan.radarLabel, bolts: false })
     : (ctx.fillStyle = 'rgba(13,12,16,0.82)', ctx.fillRect(r.x, r.y, r.w, r.h), r.y + 14);

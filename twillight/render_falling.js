@@ -77,7 +77,7 @@ function drawUnstableCracks(ctx, world, x0, y0, x1, y1, ox, oy) {
 // кадре с центром 0,0; `rnd(i)`→[0,1] детерминирует силуэт/крапины; `sh` — телеграф (тёплый контур).
 function _bigRock(ctx, rnd, R, sh) {
   const n = 9, pts = [];
-  for (let i = 0; i < n; i++) { const a = i / n * 6.283; const rr = R * (0.82 + rnd(i) * 0.2); pts.push([Math.cos(a) * rr, Math.sin(a) * rr]); }
+  for (let i = 0; i < n; i++) { const a = i / n * TAU; const rr = R * (0.82 + rnd(i) * 0.2); pts.push([Math.cos(a) * rr, Math.sin(a) * rr]); }
   ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath();
   const g = ctx.createLinearGradient(0, -R, 0, R);   // объём: свет сверху, тень снизу
   g.addColorStop(0, '#6b5f50'); g.addColorStop(0.5, '#4f463b'); g.addColorStop(1, '#322b24');
@@ -89,7 +89,7 @@ function _bigRock(ctx, rnd, R, sh) {
   ctx.strokeStyle = 'rgba(150,134,110,0.45)'; ctx.lineWidth = 2;                                // блик
   ctx.beginPath(); ctx.moveTo(-R * 0.55, -R * 0.4); ctx.lineTo(-R * 0.08, -R * 0.62); ctx.stroke();
   ctx.fillStyle = 'rgba(0,0,0,0.22)';                                                           // крапины
-  for (let i = 0; i < 4; i++) { const a = rnd(20 + i) * 6.283, rr = rnd(30 + i) * R * 0.6; ctx.fillRect(Math.cos(a) * rr, Math.sin(a) * rr, 3, 3); }
+  for (let i = 0; i < 4; i++) { const a = rnd(20 + i) * TAU, rr = rnd(30 + i) * R * 0.6; ctx.fillRect(Math.cos(a) * rr, Math.sin(a) * rr, 3, 3); }
   ctx.restore();
   ctx.strokeStyle = sh ? 'rgba(222,150,80,0.7)' : 'rgba(18,13,9,0.6)'; ctx.lineWidth = sh ? 2 : 1.4; ctx.stroke();   // контур (тёплый при дрожи)
 }

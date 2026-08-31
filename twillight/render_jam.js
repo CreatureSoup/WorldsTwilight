@@ -9,11 +9,11 @@ function drawJamFx(ctx, game, camera) {
   const u = game.unit; if (!u) return;
   const cx = camera.screenX(u.px), cy = u.py - camera.y, p = 1 - j.pulse, maxR = JAM_PULSE_R * TILE;
   ctx.save();
-  ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#9ad0a0';
+  ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = PAL.screwGreen;
   ctx.globalAlpha = j.pulse * 0.5; ctx.lineWidth = 2.5;
-  ctx.beginPath(); ctx.arc(cx, cy, maxR * p, 0, 6.283); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, maxR * p, 0, TAU); ctx.stroke();
   const p2 = Math.max(0, p - 0.25);
   ctx.globalAlpha = j.pulse * 0.3; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.arc(cx, cy, maxR * p2, 0, 6.283); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, maxR * p2, 0, TAU); ctx.stroke();
   ctx.restore();
 }

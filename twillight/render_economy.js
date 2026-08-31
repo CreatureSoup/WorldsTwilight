@@ -28,7 +28,7 @@ function _econPlate(ctx, x, y, accent, dim) {
 }
 function _resDot(ctx, cx, cy, type, r) {
   const d = (typeof RESOURCE_DEFS !== 'undefined') && RESOURCE_DEFS[type];
-  ctx.fillStyle = d ? d.color : '#888'; ctx.beginPath(); ctx.arc(cx, cy, r || 3.4, 0, 6.283); ctx.fill();
+  ctx.fillStyle = d ? d.color : '#888'; ctx.beginPath(); ctx.arc(cx, cy, r || 3.4, 0, TAU); ctx.fill();
 }
 
 function _drawConverterChip(ctx, game, x, y) {
@@ -46,14 +46,14 @@ function _drawConverterChip(ctx, game, x, y) {
     const keys = Object.keys(r.cost); let dx = x + 11, ay = y + 23;
     ctx.font = `9px ${FONT_MONO}`;
     for (const k of keys) {
-      _resDot(ctx, dx, ay, k, 3.2); ctx.fillStyle = can ? PAL.bone : (PAL.rust || '#c0402f');
+      _resDot(ctx, dx, ay, k, 3.2); ctx.fillStyle = can ? PAL.bone : (PAL.rust);
       ctx.textAlign = 'left'; ctx.fillText('−' + r.cost[k], dx + 6, ay); dx += 30;
     }
     ctx.fillStyle = PAL.pewter; ctx.fillText('→', dx - 2, ay); dx += 12;
     const out = Math.max(1, Math.round(r.amt * game._artScaled('converter')));
-    _resDot(ctx, dx, ay, r.out, 4); ctx.fillStyle = can ? '#bfe0a0' : (PAL.rust || '#c0402f');
+    _resDot(ctx, dx, ay, r.out, 4); ctx.fillStyle = can ? '#bfe0a0' : (PAL.rust);
     ctx.font = `bold 10px ${FONT_MONO}`; ctx.fillText('+' + out, dx + 7, ay);
-    if (!can) { ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.rust || '#c0402f'; ctx.textAlign = 'right'; ctx.fillText(STR.hud.econ.convNeed, x + _ECON_W - 6, y + 9); }
+    if (!can) { ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.rust; ctx.textAlign = 'right'; ctx.fillText(STR.hud.econ.convNeed, x + _ECON_W - 6, y + 9); }
   }
   ctx.restore();
 }
@@ -71,7 +71,7 @@ function _drawSplitChip(ctx, game, x, y) {
   ctx.font = `10px ${FONT_MONO}`; ctx.textAlign = 'left';
   ctx.fillStyle = active ? accent : (on ? PAL.bone : PAL.ash);
   ctx.fillText(STR.hud.econ.splitRate(Math.round(game._crystalSplitReturn())), x + 9, y + 23);
-  if (on && !have) { ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.rust || '#c0402f'; ctx.textAlign = 'right'; ctx.fillText(STR.hud.econ.splitNoFuel, x + _ECON_W - 8, y + 23); }
+  if (on && !have) { ctx.font = `7px ${FONT_MONO}`; ctx.fillStyle = PAL.rust; ctx.textAlign = 'right'; ctx.fillText(STR.hud.econ.splitNoFuel, x + _ECON_W - 8, y + 23); }
   ctx.restore();
 }
 

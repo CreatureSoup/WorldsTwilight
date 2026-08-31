@@ -64,7 +64,7 @@ Object.assign(Game.prototype, {
       if (e.dying || e.dead || e.friendly) continue;
       if (Math.hypot(wrapDeltaPx(u.px, e.px), u.py - e.py) / TILE <= COMBAT_DRILL_R) {
         e.damage(this._artScaled('combat_drill') * dt);
-        if (this.dust && Math.random() < 0.3) { const a = Math.random() * 6.283; this.dust._grit(e.px, e.py, Math.cos(a) * TILE, Math.sin(a) * TILE - TILE * 0.4, true); }   // искры контакта
+        if (this.dust && Math.random() < 0.3) { const a = Math.random() * TAU; this.dust._grit(e.px, e.py, Math.cos(a) * TILE, Math.sin(a) * TILE - TILE * 0.4, true); }   // искры контакта
       }
     }
   },

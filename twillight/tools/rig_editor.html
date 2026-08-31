@@ -155,7 +155,7 @@ const $ = (id) => document.getElementById(id);
 const PART_KINDS = { leg: 'нога', engine: 'двигатель', weapon: 'оружие', custom: 'кастом', sensor: 'сенсор', hold: 'трюм', reactor: 'реактор', drill: 'бур', shield: 'кожух', aux: 'доп-слот', anchor: 'якорь-щупальце' };
 
 // stats — все модули «есть» по умолчанию (флаги в `unitHasPart`): иначе детали с `need` (dig/engine/scanner/cargo/aux) не попадают в `rig.parts` и не рисуются даже со спрайтом.
-const unit = { hull: 'scout', dx: 1, dy: 0, faceX: 1, drilling: false, state: IDLE, crouchT: 0, noAnim: false, reactorOn: true, tileX: 0, tileY: 0, px: 0, py: 0, stats: { canDig: true, canMove: true, capacity: 1, scanR: 1, noiseResist: 1, radResist: 1.2, turret: 1, auxOn: 1, aux2On: 1 } };   // turret/auxOn/aux2On:1 — детали турели канонира и ОБОИХ доп-слотов «Спрута» видны/настраиваются в редакторе
+const unit = { hull: 'core', dx: 1, dy: 0, faceX: 1, drilling: false, state: IDLE, crouchT: 0, noAnim: false, reactorOn: true, tileX: 0, tileY: 0, px: 0, py: 0, stats: { canDig: true, canMove: true, capacity: 1, scanR: 1, noiseResist: 1, radResist: 1.2, turret: 1, auxOn: 1, aux2On: 1 } };   // turret/auxOn/aux2On:1 — детали турели канонира и ОБОИХ доп-слотов «Спрута» видны/настраиваются в редакторе
 // Снимок БАЗОВОЙ структуры деталей (из unitdefs.js, до любой загрузки). При загрузке файла дописываем
 // недостающие базовые детали (напр. aux доп-слот) — структура всегда содержит актуальные базовые слоты.
 const BASE_PARTS = {}; for (const h in UNIT_DEFS) BASE_PARTS[h] = (UNIT_DEFS[h].parts || []).map((p) => JSON.parse(JSON.stringify(p)));
@@ -255,7 +255,7 @@ function draw() {
       const a = (p.ang || 0) * Math.PI / 180, dist = (p.rad || 0) * R, px = Math.cos(a) * dist, py = Math.sin(a) * dist;
       window._ringMods.push({ id: p.id, x: px, y: py });
       const sel = p.id === selId;
-      ctx.beginPath(); ctx.arc(px, py, sel ? 2.4 : 1.6, 0, 6.283); ctx.fillStyle = sel ? '#f2c878' : 'rgba(232,220,196,0.5)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(px, py, sel ? 2.4 : 1.6, 0, TAU); ctx.fillStyle = sel ? '#f2c878' : 'rgba(232,220,196,0.5)'; ctx.fill();
     }
     ctx.restore();
     if (editMode === 'rig' && guideOn) drawGuideLabels(ctx);
@@ -280,20 +280,20 @@ function draw() {
   const segSel = !!selSeg, rigMode = editMode === 'rig';
   for (const p of rig.parts) {  // масс-детали: хваты в РИГ-режиме яркие (тянутся), в АССЕТ-режиме/при правке сегмента — приглушены
     const sel = p.id === selId; ctx.globalAlpha = (rigMode && !segSel) ? 1 : 0.18;
-    ctx.beginPath(); ctx.arc(p.x, p.y, sel ? 2.4 : 1.6, 0, 6.283); ctx.fillStyle = sel ? '#f2c878' : 'rgba(232,220,196,0.5)'; ctx.fill();
-    if (sel) { ctx.strokeStyle = '#f2c878'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, 6.283); ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(p.x, p.y, sel ? 2.4 : 1.6, 0, TAU); ctx.fillStyle = sel ? '#f2c878' : 'rgba(232,220,196,0.5)'; ctx.fill();
+    if (sel) { ctx.strokeStyle = '#f2c878'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, TAU); ctx.stroke(); }
     ctx.globalAlpha = 1;
   }
   if (!segSel) {  // хаб + маркеры стыков ног — подсказки кликабельности (статичная поза, как и ручки)
-    ctx.beginPath(); ctx.arc(rig.legHub.x, rig.legHub.y, 1.6, 0, 6.283); ctx.fillStyle = '#3a7ec8'; ctx.fill();
-    for (const leg of editRig().legs) { const fx = leg.flip ? -1 : 1; for (const sg of leg.segs) { ctx.beginPath(); ctx.arc(leg.hipX + fx * sg.jx, leg.hipY + sg.jy, 1.2, 0, 6.283); ctx.fillStyle = 'rgba(58,126,200,0.45)'; ctx.fill(); } }
+    ctx.beginPath(); ctx.arc(rig.legHub.x, rig.legHub.y, 1.6, 0, TAU); ctx.fillStyle = '#3a7ec8'; ctx.fill();
+    for (const leg of editRig().legs) { const fx = leg.flip ? -1 : 1; for (const sg of leg.segs) { ctx.beginPath(); ctx.arc(leg.hipX + fx * sg.jx, leg.hipY + sg.jy, 1.2, 0, TAU); ctx.fillStyle = 'rgba(58,126,200,0.45)'; ctx.fill(); } }
   }
   const sh = segHandles();
   if (sh) {
     ctx.strokeStyle = 'rgba(242,200,120,0.85)'; ctx.lineWidth = 1; ctx.setLineDash([2, 1.5]); ctx.lineCap = 'round';  // кость (не хват) — пунктир
     ctx.beginPath(); ctx.moveTo(sh.pivot.x, sh.pivot.y); ctx.lineTo(sh.tip.x, sh.tip.y); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = 'butt';
     if (rigMode) {  // СКЕЛЕТ: золотой круг (корень) = позиция ноги (f/s), синий круг (стык) = угол+длина
-      const nodeDot = (p, col) => { ctx.beginPath(); ctx.arc(p.x, p.y, 4.6, 0, 6.283); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 0.9; ctx.strokeStyle = '#0d0a0e'; ctx.stroke(); ctx.beginPath(); ctx.arc(p.x, p.y, 1.6, 0, 6.283); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill(); };
+      const nodeDot = (p, col) => { ctx.beginPath(); ctx.arc(p.x, p.y, 4.6, 0, TAU); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 0.9; ctx.strokeStyle = '#0d0a0e'; ctx.stroke(); ctx.beginPath(); ctx.arc(p.x, p.y, 1.6, 0, TAU); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill(); };
       nodeDot(sh.pivot, '#f2c878');  // корень — двигает всю ногу (f/s)
       nodeDot(sh.tip, '#3a7ec8');    // стык — угол/длина
     } else if (sh.center) {  // АССЕТ: зелёный квадрат = пивот спрайта. Синего нет.
@@ -334,8 +334,8 @@ function drawRingEditor(ctx, rig, t) {
   drawBorerOnUnit(ctx);                                          // составной бур-щит на сборке (превью), калибр/вынос из BORER_ON_UNIT
   for (const m of window._ringMods) {                            // ручки модулей (точка крепления) — клик/тяга
     const sel = m.id === selId;
-    ctx.beginPath(); ctx.arc(m.x, m.y, sel ? 3 : 1.8, 0, 6.283); ctx.fillStyle = sel ? '#f2c878' : 'rgba(232,220,196,0.55)'; ctx.fill();
-    if (sel) { ctx.strokeStyle = '#f2c878'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.arc(m.x, m.y, 5, 0, 6.283); ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(m.x, m.y, sel ? 3 : 1.8, 0, TAU); ctx.fillStyle = sel ? '#f2c878' : 'rgba(232,220,196,0.55)'; ctx.fill();
+    if (sel) { ctx.strokeStyle = '#f2c878'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.arc(m.x, m.y, 5, 0, TAU); ctx.stroke(); }
   }
   if (selId === 'reactor' && editMode === 'asset') {             // ЗЕЛЁНЫЙ КВАДРАТ = центр спрайта реактора (тяни → offX/offY)
     const rk = reactorAssetKey(), sp = rk && PART_SPRITES[rk];
@@ -348,7 +348,7 @@ function drawRingEditor(ctx, rig, t) {
     ctx.strokeStyle = 'rgba(242,200,120,0.85)'; ctx.lineWidth = 1; ctx.setLineDash([2, 1.5]); ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(sh.pivot.x, sh.pivot.y); ctx.lineTo(sh.tip.x, sh.tip.y); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = 'butt';
     if (editMode === 'rig') {
-      const nodeDot = (p, col) => { ctx.beginPath(); ctx.arc(p.x, p.y, 4.6, 0, 6.283); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 0.9; ctx.strokeStyle = '#0d0a0e'; ctx.stroke(); ctx.beginPath(); ctx.arc(p.x, p.y, 1.6, 0, 6.283); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill(); };
+      const nodeDot = (p, col) => { ctx.beginPath(); ctx.arc(p.x, p.y, 4.6, 0, TAU); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 0.9; ctx.strokeStyle = '#0d0a0e'; ctx.stroke(); ctx.beginPath(); ctx.arc(p.x, p.y, 1.6, 0, TAU); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill(); };
       nodeDot(sh.pivot, '#f2c878'); nodeDot(sh.tip, '#3a7ec8');
     } else if (sh.center) {
       const x = sh.center.x, y = sh.center.y, h = 4.4;
@@ -371,7 +371,7 @@ function drawGuideBg(ctx) {
   for (let x = -tile; x >= -halfW; x -= tile) vl(x);
   const line = (y, col) => {
     ctx.strokeStyle = col; ctx.lineWidth = 0.7; ctx.setLineDash([5, 3]); ctx.beginPath(); ctx.moveTo(-halfW, y); ctx.lineTo(halfW, y); ctx.stroke(); ctx.setLineDash([]);
-    ctx.beginPath(); ctx.arc(-halfW + 8 / zoom, y, 3.2, 0, 6.283); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 0.5; ctx.strokeStyle = '#0d0a0e'; ctx.stroke();  // язычок-хват
+    ctx.beginPath(); ctx.arc(-halfW + 8 / zoom, y, 3.2, 0, TAU); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 0.5; ctx.strokeStyle = '#0d0a0e'; ctx.stroke();  // язычок-хват
   };
   line(guide.floorY, '#c8e25a');  // пол — toxic
   line(guide.ceilY, '#3a7ec8');   // потолок — cobalt
@@ -861,7 +861,7 @@ function loadProject(file) {
     for (const k of Object.keys(assetCfg)) delete assetCfg[k];
     for (const k of Object.keys(assetFile)) delete assetFile[k];
     cableSrc = null;
-    unit.hull = data.hull || 'scout';
+    unit.hull = data.hull || 'core';
     UNIT_DEFS[unit.hull] = data.def;
     // дописать недостающие БАЗОВЫЕ детали (напр. aux доп-слот) в загруженный def — структура из редактора
     const _base = BASE_PARTS[unit.hull];

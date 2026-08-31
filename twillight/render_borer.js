@@ -47,7 +47,7 @@ function _borerAsset(ctx, mount, shield, alongH, perpH, spin, drilling, shieldOn
 function _borerSparks(ctx, alongH, perpH, spin) {
   const s = spin + performance.now() * 0.02, hr = perpH * 0.82, hx = alongH * 0.35;
   const a0 = ctx.globalAlpha; ctx.fillStyle = '#eafff0';
-  for (let i = 0; i < 3; i++) { const a = s * 1.7 + i * 2.1, rr = hr * (0.6 + 0.35 * Math.sin(s * 3 + i)); ctx.globalAlpha = a0 * (0.45 + 0.4 * Math.sin(s * 4 + i * 2)); ctx.beginPath(); ctx.arc(hx + alongH * 0.5 + Math.cos(a) * rr, Math.sin(a) * rr, 1.4, 0, 6.283); ctx.fill(); }
+  for (let i = 0; i < 3; i++) { const a = s * 1.7 + i * 2.1, rr = hr * (0.6 + 0.35 * Math.sin(s * 3 + i)); ctx.globalAlpha = a0 * (0.45 + 0.4 * Math.sin(s * 4 + i * 2)); ctx.beginPath(); ctx.arc(hx + alongH * 0.5 + Math.cos(a) * rr, Math.sin(a) * rr, 1.4, 0, TAU); ctx.fill(); }
   ctx.globalAlpha = a0;
 }
 
@@ -66,13 +66,13 @@ function _shieldBody(ctx, alongH, perpH, spin, drilling, shieldOnly) {
   ctx.lineTo(-alongH + r, perpH); ctx.arcTo(-alongH, perpH, -alongH, perpH - r, r);
   ctx.lineTo(-alongH, -perpH + r); ctx.arcTo(-alongH, -perpH, -alongH + r, -perpH, r); ctx.closePath();
   ctx.fillStyle = '#16241a'; ctx.fill();
-  ctx.strokeStyle = '#9ad0a0'; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.strokeStyle = PAL.screwGreen; ctx.lineWidth = 1.6; ctx.stroke();
   const s = drilling ? spin + performance.now() * 0.02 : spin;   // при бурении фреза вращается заметно быстрее
   const hr = perpH * 0.82, hx = alongH * 0.35;                    // фреза-диск спереди (охватывает калибр)
-  ctx.strokeStyle = 'rgba(154,208,160,0.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(hx, 0, hr, 0, 6.283); ctx.stroke();
+  ctx.strokeStyle = 'rgba(154,208,160,0.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(hx, 0, hr, 0, TAU); ctx.stroke();
   ctx.strokeStyle = drilling ? '#f0fff4' : '#cfeccf'; ctx.lineWidth = drilling ? 2 : 1.5;
   for (let i = 0; i < 4; i++) { const a = s + i * Math.PI / 2; ctx.beginPath(); ctx.moveTo(hx, 0); ctx.lineTo(hx + Math.cos(a) * hr, Math.sin(a) * hr); ctx.stroke(); }
-  ctx.fillStyle = '#e6f6e6'; ctx.beginPath(); ctx.arc(alongH * 0.92, 0, 2, 0, 6.283); ctx.fill();   // острие-носик
+  ctx.fillStyle = '#e6f6e6'; ctx.beginPath(); ctx.arc(alongH * 0.92, 0, 2, 0, TAU); ctx.fill();   // острие-носик
   if (drilling) _borerSparks(ctx, alongH, perpH, spin);   // искры-крошка у фрезы (общий хелпер)
 }
 
@@ -97,18 +97,18 @@ function drawBorers(ctx, game, camera) {
       if (b.recharging) {   // ПОДЗАРЯДКА: аддитивное пульс-кольцо (анимация «юнит заряжает щит»)
         const t = performance.now() / 1000;
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.4 + 0.3 * Math.sin(t * 12);
-        ctx.strokeStyle = '#9ad0a0'; ctx.lineWidth = 2 / s; ctx.beginPath(); ctx.arc(0, 0, TILE * 0.46, 0, 6.283); ctx.stroke(); ctx.restore();
+        ctx.strokeStyle = PAL.screwGreen; ctx.lineWidth = 2 / s; ctx.beginPath(); ctx.arc(0, 0, TILE * 0.46, 0, TAU); ctx.stroke(); ctx.restore();
       }
       if (b.maxCharge) {   // ИНДИКАТОР ЗАРЯДА: тонкая полоска над щитом (зелёный→янтарь→красный), мигающий «!» при разряде
         const f = Math.max(0, Math.min(1, (b.charge || 0) / b.maxCharge));
         const gy = -TILE * 0.52, gw = TILE * 0.5;
         ctx.globalAlpha = 1; ctx.lineWidth = 2.4 / s; ctx.lineCap = 'butt';
         ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.beginPath(); ctx.moveTo(-gw / 2, gy); ctx.lineTo(gw / 2, gy); ctx.stroke();
-        ctx.strokeStyle = b.depleted ? '#d0402f' : (f < 0.3 ? '#e0a040' : '#9ad0a0');
+        ctx.strokeStyle = b.depleted ? PAL.enemyEye : (f < 0.3 ? '#e0a040' : PAL.screwGreen);
         if (f > 0) { ctx.beginPath(); ctx.moveTo(-gw / 2, gy); ctx.lineTo(-gw / 2 + gw * f, gy); ctx.stroke(); }
         ctx.lineCap = 'round';
         if (b.depleted && !b.recharging && Math.sin(performance.now() / 140) > 0) {   // зов о подзарядке
-          ctx.fillStyle = '#ff6a4a'; ctx.font = `bold ${9 / s}px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+          ctx.fillStyle = PAL.enemyHot; ctx.font = `bold ${9 / s}px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
           ctx.fillText('!', 0, gy - 2 / s);
         }
       }
@@ -187,7 +187,7 @@ function drawBorerArrows(ctx, game, camera) {
     const a = Math.atan2(dy, dx), ax = ucx + Math.cos(a) * R, ay = ucy + Math.sin(a) * R;
     ctx.save(); ctx.translate(ax, ay); ctx.rotate(a);
     ctx.globalAlpha = Math.min(1, 0.45 + d / (TILE * 30));   // дальше щит → ярче стрелка
-    ctx.fillStyle = '#9ad0a0'; ctx.beginPath();        // треугольник-наконечник наружу
+    ctx.fillStyle = PAL.screwGreen; ctx.beginPath();        // треугольник-наконечник наружу
     ctx.moveTo(6, 0); ctx.lineTo(-5, -5); ctx.lineTo(-2, 0); ctx.lineTo(-5, 5); ctx.closePath(); ctx.fill();
     ctx.restore();
     // дистанция в тайлах (round → стабильно, без джиттера) неярко чуть наружу за стрелкой

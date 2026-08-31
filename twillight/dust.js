@@ -16,7 +16,7 @@ class Dust {
       life: 0, ttl: pebble ? 0.9 + Math.random() * 0.5 : 0.4 + Math.random() * 0.4 });
   }
   _fine(px, py, vx, vy, ttl) {   // size — БАЗОВЫЙ диаметр клуба (растёт в рендере по жизни)
-    this._push({ kind: 'fine', px, py, vx, vy, size: 9 + Math.random() * 5, seed: Math.random() * 6.283, life: 0, ttl });
+    this._push({ kind: 'fine', px, py, vx, vy, size: 9 + Math.random() * 5, seed: Math.random() * TAU, life: 0, ttl });
   }
 
   // БУРЕНИЕ: порция КРОШКИ с грани блока В СТОРОНУ юнита + лёгкая ПЫЛЬ вместе (медленный пуф, потом висит).
@@ -64,7 +64,7 @@ class Dust {
   burst(px, py) {
     const n = 7 + (Math.random() * 4 | 0);               // погуще — тайл реально «разваливается», а не исчезает
     for (let i = 0; i < n; i++) {
-      const a = Math.random() * 6.283, sp = TILE * (1.3 + Math.random() * 2.2);
+      const a = Math.random() * TAU, sp = TILE * (1.3 + Math.random() * 2.2);
       this._grit(px + (Math.random() - 0.5) * TILE * 0.6, py + (Math.random() - 0.5) * TILE * 0.6,
         Math.cos(a) * sp, Math.sin(a) * sp - Math.random() * TILE * 0.6, Math.random() < 0.22);
     }

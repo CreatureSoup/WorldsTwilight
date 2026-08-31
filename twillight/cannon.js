@@ -10,7 +10,7 @@ Object.assign(Game.prototype, {
     const tr = this._unitTurretTracers || (this._unitTurretTracers = []);
     for (let i = tr.length - 1; i >= 0; i--) { tr[i].life += dt; if (tr[i].life > STRUCT_TRACER_TTL) tr.splice(i, 1); }
     if (!u.stats || !u.stats.turret) return;                              // турель не установлена
-    if (u._turretAim === undefined) u._turretAim = -Math.PI / 2;
+    if (u._turretAim === undefined) u._turretAim = (u.faceX === -1 ? Math.PI : 0);   // ⚠️ та же rest-формула, что ленивый init в render_wheel.updateWheelSpin — ЕДИНАЯ поза старта (audit: два файла ставили разные)
     if (u._turretCd === undefined) u._turretCd = 0;
     if (u._turretCd > 0) u._turretCd -= dt;
     const rest = (u.faceX === -1) ? Math.PI : 0;   // ПОКОЙ = ствол по взгляду (aim=0 = канонический кадр редактора, ствол +X), не вверх

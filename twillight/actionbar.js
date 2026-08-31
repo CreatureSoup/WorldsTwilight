@@ -15,15 +15,15 @@
 const ACTION_DEFS = [
   // порядок = приоритет назначения цифр (сканер раньше aux-модулей раньше артефактов). Пробел-действия цифру не берут.
   { stat: 'impulse',  key: 'primary', icon: 'impulse', col: '#f08a2a', active: (g) => !!(g.imp && (g.imp.charge > 0 || g.imp.wave)), fill: (g) => g.imp ? g.imp.charge : 0 },
-  { stat: 'screw',    key: 'primary', icon: 'screw',   col: '#9ad0a0', active: (g) => !!(g.borers && g.borers.length),               fill: (g) => (g.borers && g.borers.length) ? 1 : 0 },
+  { stat: 'screw',    key: 'primary', icon: 'screw',   col: PAL.screwGreen, active: (g) => !!(g.borers && g.borers.length),               fill: (g) => (g.borers && g.borers.length) ? 1 : 0 },
   { stat: 'radar',    key: 'digit',   icon: 'radar',   col: '#7fb0e0', active: (g) => !!(g.radarSweep && g.radarSweep.sweeping),      fill: (g) => g.radarSweep ? Math.max(0, 1 - g.radarSweep.cd / (g.radarSweep.cdMax || RADAR_CD_BASE)) : 1 },
   { stat: 'echoScan', key: 'digit',   icon: 'echo',    col: '#b58cf0', active: (g) => !!(g.echo && g.echo.wave),                     fill: (g) => g.echo ? Math.max(0, 1 - g.echo.cd / (g.echo.cdMax || ECHO_CD_BASE)) : 1 },
   { stat: 'hack',     key: 'digit',   icon: 'hack',    col: '#c06ee6', active: (g) => !!g.activeHack,                                 fill: (g) => g.activeHack ? g.activeHack.t : 0 },
   { stat: 'siege',    key: 'digit',   icon: 'siege',   col: '#ff5a3a', active: (g) => !!(g.siege && (g.siege.charge > 0 || g.siege.beam)), fill: (g) => g.siege ? g.siege.charge : 0 },
   { stat: 'stealth',  key: 'digit',   icon: 'stealth', col: '#8a7ed4', active: (g) => !!(g.stealth && g.stealth.t > 0),              fill: (g) => g.stealth ? Math.max(0, 1 - g.stealth.cd / STEALTH_CD) : 1 },
-  { stat: 'jam',      key: 'digit',   icon: 'jam',     col: '#9ad0a0', active: (g) => !!(g.jam && g.jam.pulse > 0),                  fill: (g) => g.jam ? Math.max(0, 1 - g.jam.cd / JAM_PULSE_CD) : 1 },
+  { stat: 'jam',      key: 'digit',   icon: 'jam',     col: PAL.screwGreen, active: (g) => !!(g.jam && g.jam.pulse > 0),                  fill: (g) => g.jam ? Math.max(0, 1 - g.jam.cd / JAM_PULSE_CD) : 1 },
   { stat: 'jets',       key: 'digit', icon: 'jets',  col: '#f0c84a', active: (g) => !!(g.jets && g.jets.on),                       fill: (g) => g.jets ? g.jets.fuel / (g.jets.max || JETS_FUEL_MAX) : 1 },   // артефакт: заливка иконки = запас топлива (скалируемая ёмкость)
-  { stat: 'stunPulse',  key: 'digit', icon: 'stun',  col: '#9ad0a0', active: (g) => !!(g.stunPulse && g.stunPulse.pulse > 0),       fill: (g) => g.stunPulse ? Math.max(0, 1 - g.stunPulse.cd / STUN_PULSE_CD) : 1 },   // артефакт ЭМИ-импульс
+  { stat: 'stunPulse',  key: 'digit', icon: 'stun',  col: PAL.screwGreen, active: (g) => !!(g.stunPulse && g.stunPulse.pulse > 0),       fill: (g) => g.stunPulse ? Math.max(0, 1 - g.stunPulse.cd / STUN_PULSE_CD) : 1 },   // артефакт ЭМИ-импульс
   { stat: 'blastCharge', key: 'digit', icon: 'blast', col: '#ff9a4a', active: (g) => false,                                         fill: (g) => g.blastCharge ? Math.max(0, 1 - g.blastCharge.cd / BLAST_CHARGE_CD) : 1 },   // артефакт подрыв-заряд
   { stat: 'nanoRepair', key: 'digit', icon: 'nano',  col: '#5fd29a', active: (g) => !!(g.nanoRepair && g.nanoRepair.healT > 0),    fill: (g) => g.nanoRepair ? (g.nanoRepair.healT > 0 ? g.nanoRepair.healT / NANO_REPAIR_TIME : Math.max(0, 1 - g.nanoRepair.cd / NANO_REPAIR_CD)) : 1 },   // артефакт нано-ремонт
   { stat: 'dash',       key: 'digit', icon: 'dash',  col: '#7fd0e0', active: (g) => !!(g.unit && g.unit.dashing),                  fill: (g) => g.dash ? Math.max(0, 1 - g.dash.cd / DASH_CD) : 1 },   // артефакт рывок

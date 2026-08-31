@@ -296,7 +296,7 @@ class World {
     return list;
   }
   genRobots() { const RK = ['shooter', 'shooter', 'web', 'latch', 'jam', 'brood']; return this._genHazard(ROBOT_COUNT, [Math.round(MAP_H * 0.46), Math.round(MAP_H * 0.97)], 8,
-    (tx, ty) => ({ tx, ty, kind: RK[Math.floor(this.rand() * RK.length)], dug: false, state: 'buried', t: 0, fired: 0, fireT: 0, scan: 0, scanned: false, defused: false, seed: this.rand() * 6.283 }), null, ROBOT_UP, this._upperBand()); }
+    (tx, ty) => ({ tx, ty, kind: RK[Math.floor(this.rand() * RK.length)], dug: false, state: 'buried', t: 0, fired: 0, fireT: 0, scan: 0, scanned: false, defused: false, seed: this.rand() * TAU }), null, ROBOT_UP, this._upperBand()); }
   // ЛОВУШКИ (ЕДИНЫЙ тип): маркер `t.trap` (всегда копается); тип вперемешку. МИНА — ОДИН ИЗ типов пула (своя стейт-машина
   // dug→blink→взрыв в traps.js, поля state/t/defused; `world.mines`=фильтр type==='mine' для drawMines). Откоп `setAir` → `trap.dug` → срабатывание.
   genTraps(extraAvoid) {

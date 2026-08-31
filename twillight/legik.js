@@ -54,7 +54,7 @@ function _ikAvoidRock(world, pts) {
     if (!_ikSolid(world, pts[i].x, pts[i].y)) continue;
     let found = null, fd = 1e9;
     for (let r = TILE * 0.34; r <= TILE * 1.3 && !found; r += TILE * 0.34)
-      for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283, x = pts[i].x + Math.cos(a) * r, y = pts[i].y + Math.sin(a) * r; if (!_ikSolid(world, x, y) && r < fd) { fd = r; found = { x, y }; } }
+      for (let k = 0; k < 8; k++) { const a = k / 8 * TAU, x = pts[i].x + Math.cos(a) * r, y = pts[i].y + Math.sin(a) * r; if (!_ikSolid(world, x, y) && r < fd) { fd = r; found = { x, y }; } }
     if (found) { pts[i].x = found.x; pts[i].y = found.y; }
   }
 }
@@ -65,7 +65,7 @@ function makeLegRig(configs, drawScale) {
     const segLens = c.segLens.slice(), reach = segLens.reduce((a, b) => a + b, 0);
     return { hipOff: c.hipOff, dir: c.dir, spriteIds: c.spriteIds || null, segLens, n: segLens.length, reach,
       pts: [], tip: null, phase: 'ready', t: Math.random() * 1.0, dur: 0.4 + Math.random() * 1.0,
-      goal: null, anchor: null, wander: Math.random() * 6.283, seed: Math.random() * 6.283, plantT: 99,
+      goal: null, anchor: null, wander: Math.random() * TAU, seed: Math.random() * TAU, plantT: 99,
       stance: 0, up: false, bend: Math.sign(c.hipOff.x) || 1, bendUp: 0, releaseR: 0.9 };   // releaseR: на ходу держим стопу, пока не растянулась до этой доли reach (рандом по шагам — отрыв не синхронный)
   });
   // СТАНЦ-СЛОТЫ: равномерный разнос стоп ВДОЛЬ опоры в idle, чтобы ноги не слипались.
@@ -295,7 +295,7 @@ function drawLegRig(ctx, rig, camera, drawSeg) {
         const w = 5.4 - 3.0 * (i / (n - 1));
         ctx.strokeStyle = '#1a1620'; ctx.lineWidth = w + 2.4; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
         ctx.strokeStyle = '#6b6172'; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-        if (i > 0) { ctx.fillStyle = '#8a8194'; ctx.beginPath(); ctx.arc(a.x, a.y, 2.6 - 1.0 * (i / n), 0, 6.283); ctx.fill(); }
+        if (i > 0) { ctx.fillStyle = '#8a8194'; ctx.beginPath(); ctx.arc(a.x, a.y, 2.6 - 1.0 * (i / n), 0, TAU); ctx.fill(); }
       }
     }
     if (!drawSeg && (_legikProc || !(L.spriteIds && L.spriteIds.some((id) => { const s = typeof spriteFor === 'function' && spriteFor(id); return s && s.img; })))) {

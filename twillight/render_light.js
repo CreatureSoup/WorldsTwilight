@@ -202,7 +202,7 @@ function _flickerDip() {
   if (_flkT >= _flkNext) {                                  // запланировать новое мигание
     _flkDur = 0.12 + Math.random() * 0.5;                   // длительность провала
     _flkDepth = 0.45 + Math.random() * 0.45;               // глубина (явное)
-    _flkSeed = Math.random() * 6.283;
+    _flkSeed = Math.random() * TAU;
     _flkStart = _flkT;
     _flkNext = _flkT + _flkDur + 0.7 + Math.random() * 3.8; // следующий — случайно нескоро
   }
@@ -239,7 +239,7 @@ function _dustLayer(ctx, camera, t, ax, ay, L, W, H, par, cell, szMin, szMax, br
   const camx = camera.x * par, camy = camera.y * par;            // эффективная камера слоя (параллакс)
   const gx0 = Math.floor((camx - cell) / cell), gx1 = Math.floor((camx + W + cell) / cell);
   const gy0 = Math.floor((camy - cell) / cell), gy1 = Math.floor((camy + H + cell) / cell);
-  const ampX = cell * 0.42, ampY = cell * 0.42, TAU = 6.2832;
+  const ampX = cell * 0.42, ampY = cell * 0.42;   // TAU — глобальный (constants.js)
   for (let gy = gy0; gy <= gy1; gy++)
     for (let gx = gx0; gx <= gx1; gx++) {
       const seed = ((gx * 73856093) ^ (gy * 19349663) ^ seedOff) >>> 0;

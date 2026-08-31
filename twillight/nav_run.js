@@ -66,10 +66,10 @@ Game.prototype._drawNavPath = function (ctx) {
   // маркер НАЗНАЧЕНИЯ (база) — расходящееся кольцо-маяк + ядро
   const ex = pts[n - 2], ey = pts[n - 1], pl = (tm * 0.9) % 1;
   ctx.strokeStyle = HI; ctx.globalAlpha = 0.3 * (1 - pl); ctx.lineWidth = 1.2;
-  ctx.beginPath(); ctx.arc(ex, ey, 2.5 + pl * 5, 0, 6.283); ctx.stroke();
-  ctx.globalAlpha = 0.55; ctx.fillStyle = HI; ctx.beginPath(); ctx.arc(ex, ey, 2.1, 0, 6.283); ctx.fill();
+  ctx.beginPath(); ctx.arc(ex, ey, 2.5 + pl * 5, 0, TAU); ctx.stroke();
+  ctx.globalAlpha = 0.55; ctx.fillStyle = HI; ctx.beginPath(); ctx.arc(ex, ey, 2.1, 0, TAU); ctx.fill();
   // точка-ИСТОК у юнита
-  ctx.globalAlpha = 0.4; ctx.fillStyle = PAL.cobalt; ctx.beginPath(); ctx.arc(pts[0], pts[1], 1.6, 0, 6.283); ctx.fill();
+  ctx.globalAlpha = 0.4; ctx.fillStyle = PAL.cobalt; ctx.beginPath(); ctx.arc(pts[0], pts[1], 1.6, 0, TAU); ctx.fill();
   ctx.restore();
 };
 // Клик в забеге: тумблер «ПУТЬ» (показ навигации) в HUD (если узел amb_nav открыт).

@@ -98,10 +98,10 @@ function drawChunks(ctx, world, camera, W, H) {
         const cx = x * TILE + (hx * 1.1 - 0.05) * TILE - ox;
         const cy = y * TILE + (hy * 1.1 - 0.05) * TILE - oy;
         const r = ssize * (0.7 + tileHash(x * 7 + k, y * 9 + k) * 0.6);
-        const V = 5, baseA = tileHash(x + k, y - k) * 6.283;
+        const V = 5, baseA = tileHash(x + k, y - k) * TAU;
         ctx.beginPath();
         for (let j = 0; j < V; j++) {
-          const a = baseA + (j / V) * 6.283;
+          const a = baseA + (j / V) * TAU;
           const rr = r * (0.68 + tileHash(x * 3 + k + j, y * 5 + k - j) * 0.55);
           const px = cx + Math.cos(a) * rr, py = cy + Math.sin(a) * rr;
           if (j === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
@@ -191,7 +191,7 @@ function drawWildMarkers(ctx, world, camera, debug) {
     else if (w.hitT > 0) ctx.fillStyle = `rgba(255,240,220,${0.6 + 0.4 * (w.hitT / WILD_HIT_FLASH)})`;
     else if (w.saboted) { const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 900 + w.cx); ctx.fillStyle = `rgba(225,150,60,${0.4 + 0.35 * pulse})`; }
     else { const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 500 + w.cx); ctx.fillStyle = `rgba(210,70,55,${0.45 + 0.4 * pulse})`; }
-    ctx.beginPath(); ctx.arc(sx, fy - h * 1.6, TILE * 0.17, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(sx, fy - h * 1.6, TILE * 0.17, 0, TAU); ctx.fill();
     // полоса HP — когда гнездо ранено, но ещё живо (осада сбивает hp к 0 → ПОДАВЛЕНО)
     if (!w.disabled && w.hp < w.maxHp) {
       const bw = TILE * 1.6, bx = sx - bw / 2, byb = fy - 3 * h - 16, f = Math.max(0, w.hp / w.maxHp);
@@ -221,7 +221,7 @@ function drawBackTexture(ctx, world, camera, W, H) {
       const cx = wx - camera.x, cy = wy - camera.y;
       const size = CELL * (0.2 + r0 * 0.35);
       ctx.fillStyle = r0 < 0.26 ? 'rgba(0,0,0,0.18)' : 'rgba(255,240,220,0.025)';
-      ctx.beginPath(); ctx.ellipse(cx, cy, size, size * 0.7, tileHash(gx, gy * 3) * Math.PI, 0, 6.283); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx, cy, size, size * 0.7, tileHash(gx, gy * 3) * Math.PI, 0, TAU); ctx.fill();
     }
 }
 

@@ -51,14 +51,14 @@ function drawToothRing(ctx, radius, spin, drilling) {
   // тёмная шина + светлое ребро
   ctx.lineCap = 'butt';
   ctx.strokeStyle = PAL.carbon; ctx.lineWidth = radius * 0.42;
-  ctx.beginPath(); ctx.arc(0, 0, radius * 0.82, 0, 6.283); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, radius * 0.82, 0, TAU); ctx.stroke();
   ctx.strokeStyle = PAL.ash; ctx.lineWidth = radius * 0.14;
-  ctx.beginPath(); ctx.arc(0, 0, radius * 0.9, 0, 6.283); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, radius * 0.9, 0, TAU); ctx.stroke();
   // зубья наружу (единый path, одна заливка — дёшево)
   const N = 16, rIn = radius * 0.86, rOut = radius * 1.07, hw = 0.052;
   ctx.beginPath();
   for (let i = 0; i < N; i++) {
-    const a = i / N * 6.283, a0 = a - hw, a1 = a + hw, a0b = a - hw * 0.45, a1b = a + hw * 0.45;
+    const a = i / N * TAU, a0 = a - hw, a1 = a + hw, a0b = a - hw * 0.45, a1b = a + hw * 0.45;
     ctx.moveTo(Math.cos(a0) * rIn, Math.sin(a0) * rIn);
     ctx.lineTo(Math.cos(a0b) * rOut, Math.sin(a0b) * rOut);
     ctx.lineTo(Math.cos(a1b) * rOut, Math.sin(a1b) * rOut);
@@ -69,7 +69,7 @@ function drawToothRing(ctx, radius, spin, drilling) {
   // спицы к втулке — делают вращение ВИДИМЫМ
   ctx.strokeStyle = PAL.carbon; ctx.lineWidth = Math.max(1, radius * 0.05); ctx.lineCap = 'round';
   ctx.beginPath();
-  for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283; ctx.moveTo(Math.cos(a) * radius * 0.5, Math.sin(a) * radius * 0.5); ctx.lineTo(Math.cos(a) * radius * 0.78, Math.sin(a) * radius * 0.78); }
+  for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; ctx.moveTo(Math.cos(a) * radius * 0.5, Math.sin(a) * radius * 0.5); ctx.lineTo(Math.cos(a) * radius * 0.78, Math.sin(a) * radius * 0.78); }
   ctx.stroke();
   ctx.restore();
 }
@@ -84,13 +84,13 @@ function drawWheelBody(ctx, bodyR, spin) {
   if (spin) ctx.rotate(spin);
   ctx.lineCap = 'butt';
   ctx.strokeStyle = PAL.carbon; ctx.lineWidth = bodyR * 0.32;
-  ctx.beginPath(); ctx.arc(0, 0, bodyR, 0, 6.283); ctx.stroke();            // тёмный обод-каркас
+  ctx.beginPath(); ctx.arc(0, 0, bodyR, 0, TAU); ctx.stroke();            // тёмный обод-каркас
   ctx.strokeStyle = PAL.bronze; ctx.lineWidth = bodyR * 0.1;
-  ctx.beginPath(); ctx.arc(0, 0, bodyR * 1.06, 0, 6.283); ctx.stroke();     // ребро снаружи
+  ctx.beginPath(); ctx.arc(0, 0, bodyR * 1.06, 0, TAU); ctx.stroke();     // ребро снаружи
   ctx.strokeStyle = PAL.pewter; ctx.lineWidth = bodyR * 0.07;
-  ctx.beginPath(); ctx.arc(0, 0, bodyR * 0.92, 0, 6.283); ctx.stroke();     // ребро внутри
+  ctx.beginPath(); ctx.arc(0, 0, bodyR * 0.92, 0, TAU); ctx.stroke();     // ребро внутри
   ctx.fillStyle = PAL.ash;                                                  // болты-крепёж по кольцу
-  for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; ctx.beginPath(); ctx.arc(Math.cos(a) * bodyR, Math.sin(a) * bodyR, Math.max(1, bodyR * 0.055), 0, 6.283); ctx.fill(); }
+  for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; ctx.beginPath(); ctx.arc(Math.cos(a) * bodyR, Math.sin(a) * bodyR, Math.max(1, bodyR * 0.055), 0, TAU); ctx.fill(); }
   ctx.restore();
 }
 
@@ -109,7 +109,7 @@ function drawWheelTurret(ctx, mx, my, r, aim, unit) {
     ctx.rotate(a); if (sp.rot) ctx.rotate(sp.rot * Math.PI / 180);
     const k = r / ((TILE - 8) / 2);   // = масштаб юнита (rr/R): спрайт УЖИМАЕТСЯ с колесом (в игре drawScale<1 — иначе турель огромная; в редакторе/сборке scale=1 → k=1, без изменений)
     ctx.drawImage(sp.img, -sp.px * k, -sp.py * k, sp.w * k, sp.h * k);
-    if (flash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,175,90,' + Math.min(1, flash * 12) + ')'; ctx.beginPath(); ctx.arc((sp.w - sp.px) * k, 0, r * 0.42, 0, 6.283); ctx.fill(); }
+    if (flash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,175,90,' + Math.min(1, flash * 12) + ')'; ctx.beginPath(); ctx.arc((sp.w - sp.px) * k, 0, r * 0.42, 0, TAU); ctx.fill(); }
     ctx.restore(); return;
   }
   ctx.rotate(a);
@@ -118,13 +118,13 @@ function drawWheelTurret(ctx, mx, my, r, aim, unit) {
   if (flash > 0) {
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = 'rgba(255,175,90,' + Math.min(1, flash * 12) + ')';
-    ctx.beginPath(); ctx.arc(r * 1.75, 0, r * 0.42, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 1.75, 0, r * 0.42, 0, TAU); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
   }
   ctx.rotate(-a);
-  ctx.fillStyle = PAL.ash; ctx.beginPath(); ctx.arc(0, 0, r * 0.52, 0, 6.283); ctx.fill();   // купол
+  ctx.fillStyle = PAL.ash; ctx.beginPath(); ctx.arc(0, 0, r * 0.52, 0, TAU); ctx.fill();   // купол
   ctx.strokeStyle = PAL.carbon; ctx.lineWidth = Math.max(1, r * 0.08); ctx.stroke();
-  ctx.fillStyle = '#e0603a'; ctx.beginPath(); ctx.arc(0, 0, r * 0.22, 0, 6.283); ctx.fill();  // акцент-глаз канонира
+  ctx.fillStyle = '#e0603a'; ctx.beginPath(); ctx.arc(0, 0, r * 0.22, 0, TAU); ctx.fill();  // акцент-глаз канонира
   ctx.restore();
 }
 

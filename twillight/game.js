@@ -217,7 +217,7 @@ class Game {
   startSession(stats) {
     this.world = new World();
     this.unit = new Unit(SPAWN_X, SPAWN_Y, stats);
-    this.unit.hull = (this.inventory && this.inventory.hull) || 'scout';   // тип корпуса (scout | core-кольцо)
+    this.unit.hull = (this.inventory && this.inventory.hull) || 'core';   // тип корпуса; фолбэк = core (дефолт-риг; scout — легаси, audit_2026-08)
     this.unit.modules = Object.assign({}, this.inventory && this.inventory.modules);   // слот→модуль: спрайт конкретного варианта на корпусе
     this.city = new City();
     this.firewall.reset();   // новый забег — файрволл базы чист
@@ -264,7 +264,7 @@ class Game {
     // и доходят до района базы, отдельный большой радиус вниз больше не нужен)
     const homeR = Math.max(Math.ceil((CAVE_X1 - CAVE_X0) / 2), Math.ceil((CAVE_Y1 - CAVE_Y0) / 2)) + DETECT_CITY_PAD;
     // радиус обнаружения покрывает всю каверну (центр — её середина), чтобы копатель не прошёл насквозь незаметно
-    this.cities = [{ cx: homeCx, cy: homeCy, dr: homeR, found: false, name: 'База' }]
+    this.cities = [{ cx: homeCx, cy: homeCy, dr: homeR, found: false, name: STR.upgrades.cityNameDefault }]
       .concat(this.world.caverns.map((c) => ({ cx: c.cx, cy: c.cy, dr: Math.max(c.rx, c.ry) + DETECT_CITY_PAD, found: false, name: c.name })));
     this.inventory.resetCargo();
     this.inventory.unit = this.unit;   // груз читает эффективную ёмкость из unit.stats (единый источник)
@@ -289,7 +289,7 @@ class Game {
     this.scanEnemy = null;    // вражеский юнит, который сейчас сканируется (данные кодекса)
     this._scanDoneT = 0; this._scanMsg = null;   // таймер+текст HUD-надписи после скана («ДАННЫЕ ИЗВЛЕЧЕНЫ» / «ОБЪЕКТ ОПОЗНАН»)
     this.dataCount = 0;       // извлечено серверов данных за забег (вход в мета-пересчёт)
-    this.directivesDone = 0;  // выполнено директив за забег (задел: система директив ещё впереди)
+    this.directivesDone = 0;  // выполнено директив за забег (инкремент — победные ветки hackwin/wake; идёт в пересчёт меты)
     this.metaResult = null;   // результат мета-пересчёта (считается один раз на gameover)
     this.overT = 0;           // таймер финального экрана — для анимации счётчиков
     this.radLevel = 0;        // сглаженный фон помех (0..1) у полюсов — глитчи интерфейса
@@ -530,7 +530,7 @@ class Game {
     if (this.unit && this.unit.hitT > 0) {   // удар-флэш ЮНИТА: красная аддитивная вспышка поверх корпуса
       const f = this.unit.hitT / HIT_FLASH_TIME, ux = this.camera.screenX(this.unit.px), uy = this.unit.py - this.camera.y;
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.4 * f; ctx.fillStyle = '#ff5040';
-      ctx.beginPath(); ctx.arc(ux, uy, TILE * 0.72, 0, 6.283); ctx.fill(); ctx.restore();
+      ctx.beginPath(); ctx.arc(ux, uy, TILE * 0.72, 0, TAU); ctx.fill(); ctx.restore();
     }
     if (typeof drawUnitDebuffFx === 'function' && !this.debug) drawUnitDebuffFx(ctx, this, this.camera);   // дебаффы останков на юните: паутина-нити / прыгун на буре
     if (typeof drawDrillHeat === 'function' && !this.debug) drawDrillHeat(ctx, this, this.camera);   // ФОРСАЖ БУРА (реликт): термометр нагрева над юнитом
@@ -623,8 +623,8 @@ class Game {
       for (const s of this.world.radSources) {
         const sx = this.camera.screenX(s.x * TILE + TILE / 2), sy = s.y * TILE + TILE / 2 - this.camera.y;
         ctx.strokeStyle = 'rgba(140,226,90,0.5)'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.arc(sx, sy, s.r * TILE, 0, 6.283); ctx.stroke();
-        ctx.fillStyle = '#c8e25a'; ctx.beginPath(); ctx.arc(sx, sy, 5, 0, 6.283); ctx.fill();
+        ctx.beginPath(); ctx.arc(sx, sy, s.r * TILE, 0, TAU); ctx.stroke();
+        ctx.fillStyle = '#c8e25a'; ctx.beginPath(); ctx.arc(sx, sy, 5, 0, TAU); ctx.fill();
         ctx.fillStyle = '#c8e25a'; ctx.fillText('☢', sx, sy - 10);
       }
       ctx.textAlign = 'left';
@@ -675,7 +675,7 @@ class Game {
       if (this.input.pressed('Escape')) this.mode = 'paused';
       this.drawScene();
       // ДЕБАГ-ОВЕРЛЕЙ: fps + координаты юнита по тайлам мира
-      ctx.save(); ctx.font = `10px ${FONT_MONO}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = PAL.toxic || '#c8e25a';
+      ctx.save(); ctx.font = `10px ${FONT_MONO}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = PAL.toxic;
       ctx.fillText(`FPS ${Math.round(this.fps || 0)}  ·  XY ${this.unit ? this.unit.tileX : '-'},${this.unit ? this.unit.tileY : '-'}`, 12, this.designH - 24);
       ctx.restore();
     } else if (this.mode === 'playing') {
@@ -701,11 +701,13 @@ class Game {
       const _hullAnchor = UNIT_DEFS[this.unit.hull] && UNIT_DEFS[this.unit.hull].anchorLegs;
       if (_hullAnchor) updateSprutLegs(dt, this.unit, this.world);   // «Спрут»: якорные щупальца (sprut.js)
       else if (this.debugTentacles && _hullKind !== 'wheel') updateTentacles(dt, this.unit, this.world);   // у колеса ног нет
-      if (typeof updateRingAim === 'function' && _hullKind === 'ring') updateRingAim(dt, this.unit);   // доворот кластера кольца к направлению бурения
+      if (_hullKind === 'ring') updateRingAim(dt, this.unit);   // доворот кластера кольца к направлению бурения
       if (_hullKind === 'wheel') {
-        if (typeof updateWheelSpin === 'function') updateWheelSpin(dt, this.unit);   // качение колеса + раскрутка бура
-        if (typeof this.updateUnitTurret === 'function') this.updateUnitTurret(dt);  // авто-турель канонира (cannon.js)
+        updateWheelSpin(dt, this.unit);   // качение колеса + раскрутка бура
+        this.updateUnitTurret(dt);        // авто-турель канонира (cannon.js)
       }
+      // ⚠️ typeof-гварды здесь СНЯТЫ (audit_2026-08): загрузчик index.html теперь СТОПИТ бут при упавшем модуле —
+      // отсутствие функции = реальный баг, падаем громко, а не тихо теряем поведение.
       if (this.unit.dug) {
         const d = this.unit.dug, n = d.amount || 1;
         for (let i = 0; i < n; i++) this.loot.spawn(wrapX(d.x + (n > 1 ? Math.round((Math.random() - 0.5) * 2.2) : 0)), d.y, d.type);   // богатый тайл (1..3) → несколько дропов
@@ -765,7 +767,7 @@ class Game {
         if (this.deliverCd <= 0) { this.deliverCargo(); this.deliverCd = DELIVER_INTERVAL; }
       } else this.deliverCd = 0;
       // гаджет «Ремонт-дрон»: реген HP вне базы
-      if (!atBase && this.upgrades.gadgets.repair) this.unit.hp = Math.min(this.unit.stats.maxHp, this.unit.hp + REPAIR_RATE * dt);
+      // реген гаджета «ремонт» УБРАН — система гаджетов отключена (upgrades.js UPG_GADGETS, audit_2026-08)
       // РЕМОНТНЫЙ ТРЮМ: непрерывный реген (healRate — HP за 10с)
       if (this.unit.stats.healRate) this.unit.hp = Math.min(this.unit.stats.maxHp, this.unit.hp + this.unit.stats.healRate / 10 * dt);
       // РЕМОНТНЫЙ ДОК (узел ГОРОД): на базе юнит лечит HP корпуса

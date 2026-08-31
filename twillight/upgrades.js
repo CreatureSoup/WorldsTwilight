@@ -80,7 +80,7 @@ const UPG_TRACKS = [
   { id: 'cable', cat: 'city', label: STR.upgrades.tracks.cable.label, sub: STR.upgrades.tracks.cable.sub, accent: PAL.amber, icon: null, metaNeed: 'print_cable', cap: 3, metaCap: { node: 'print_cable2', cap: 5 },
     need: () => true, step: CABLE_LEN_STEP, base: () => CABLE_LEN_BASE, fmt: STR.upgrades.tracks.cable.fmt },
   // УРОН ТУРЕЛЕЙ ГОРОДА — `amb_turret` (жёлтая ветка): +урон авто-турелям базы (эффект — cityturret._cityTurretDmg читает levels.turretdmg).
-  { id: 'turretdmg', cat: 'city', label: STR.upgrades.tracks.turretdmg.label, sub: STR.upgrades.tracks.turretdmg.sub, accent: PAL.rust || '#c0402f', icon: null, metaNeed: 'amb_turret', cap: 3,
+  { id: 'turretdmg', cat: 'city', label: STR.upgrades.tracks.turretdmg.label, sub: STR.upgrades.tracks.turretdmg.sub, accent: PAL.rust, icon: null, metaNeed: 'amb_turret', cap: 3,
     need: () => true, step: CITY_TURRET_DMG_STEP, base: () => CITY_TURRET_DMG, fmt: (v) => Math.round(v) + '' },
   // ЭФФЕКТИВНОСТЬ РАСЩЕПЛЕНИЯ — `amb_split` (жёлтая ветка): +сек таймера за кристалл (эффект — economy._crystalSplitReturn читает levels.splitreturn).
   { id: 'splitreturn', cat: 'city', label: STR.upgrades.tracks.splitreturn.label, sub: STR.upgrades.tracks.splitreturn.sub, accent: PAL.gold, icon: null, metaNeed: 'amb_split', cap: 3,
@@ -119,9 +119,9 @@ const ART_UPG_META = {
   drone_scout:     { fmt: 'tiles', accent: PAL.cobalt },
   drone_hacker:    { fmt: 'sec', accent: PAL.cobalt },
   // БАТЧ 8 — экономика города. costMul ИНДЕКСИРУЕТ РЕДКОСТЬ выходного ресурса (дороже трек → железо<органика<кристалл).
-  synth_iron:      { fmt: 'num', accent: '#9aa7b3', costMul: 1.0 },
-  synth_organic:   { fmt: 'num', accent: '#5fbf6a', costMul: 1.8 },
-  synth_crystal:   { fmt: 'num', accent: '#c264e0', costMul: 3.0 },
+  synth_iron:      { fmt: 'num', accent: RESOURCE_DEFS.iron.color, costMul: 1.0 },
+  synth_organic:   { fmt: 'num', accent: RESOURCE_DEFS.organic.color, costMul: 1.8 },
+  synth_crystal:   { fmt: 'num', accent: RESOURCE_DEFS.crystal.color, costMul: 3.0 },
   converter:       { fmt: 'num', accent: PAL.gold,  costMul: 1.6 },
   power_plant:     { fmt: 'sec', accent: PAL.amber, costMul: 1.4 },
 };
@@ -136,11 +136,14 @@ const trCap = (tr) => {
 // Соответствие трека → поле stats юнита (для applyToStats).
 const UPG_STAT_MAP = { drill: 'digMult', impforce: 'impForce', kinpower: 'kinPower', kinburst: 'kinBurstBonus', screwspeed: 'screwSpeed', radarcd: 'radarCdD', echocd: 'echoCdD', engine: 'moveSpeed', scanner: 'scanR', cargo: 'capacity', repair: 'healRate', hull: 'maxHp', proj: 'projLvl', noise: 'noiseResist', printreach: 'printReach' };
 
-const UPG_GADGETS = [
-  { id: 'magnet', label: STR.upgrades.gadgets.magnet.label, sub: STR.upgrades.gadgets.magnet.sub, accent: PAL.gold, cost: { iron: 18, organic: 8 } },
-  { id: 'repair', label: STR.upgrades.gadgets.repair.label,  sub: STR.upgrades.gadgets.repair.sub, accent: PAL.toxic, cost: { iron: 20, organic: 12 } },
-  { id: 'ping',   label: STR.upgrades.gadgets.ping.label,   sub: STR.upgrades.gadgets.ping.sub, accent: PAL.cobalt, cost: { crystal: 8 } },
-];
+// ГАДЖЕТЫ — ОТКЛЮЧЕНО (audit_2026-08): UI покупки так и не появился, buyGadget никто не звал, а живой код
+// каждый кадр читал вечно-false флаги. Вернуть: раскомментировать блок + buyGadget ниже + карточки в
+// render_upgrades + чтения эффектов (game.js реген repair; pickupBonus magnet). Строки — lang_ru_upgdata (живы).
+// const UPG_GADGETS = [
+//   { id: 'magnet', label: STR.upgrades.gadgets.magnet.label, sub: STR.upgrades.gadgets.magnet.sub, accent: PAL.gold, cost: { iron: 18, organic: 8 } },
+//   { id: 'repair', label: STR.upgrades.gadgets.repair.label,  sub: STR.upgrades.gadgets.repair.sub, accent: PAL.toxic, cost: { iron: 20, organic: 12 } },
+//   { id: 'ping',   label: STR.upgrades.gadgets.ping.label,   sub: STR.upgrades.gadgets.ping.sub, accent: PAL.cobalt, cost: { crystal: 8 } },
+// ];
 
 class Upgrades {
   constructor() {
@@ -211,12 +214,13 @@ class Upgrades {
     this.buyFlash = { id, level: lvl + 1, t0: performance.now() };   // подтверждение: свечение купленной карточки
     if (this.onChange) this.onChange('track', id);
   }
-  buyGadget(id) {
-    if (this.gadgets[id]) return;
-    const g = UPG_GADGETS.find((x) => x.id === id); if (!g || !this.canAfford(g.cost)) return;
-    this.spend(g.cost); this.gadgets[id] = true;
-    if (this.onChange) this.onChange('gadget', id);
-  }
+  // buyGadget — ОТКЛЮЧЕНО вместе с UPG_GADGETS (см. коммент у блока выше).
+  // buyGadget(id) {
+  //   if (this.gadgets[id]) return;
+  //   const g = UPG_GADGETS.find((x) => x.id === id); if (!g || !this.canAfford(g.cost)) return;
+  //   this.spend(g.cost); this.gadgets[id] = true;
+  //   if (this.onChange) this.onChange('gadget', id);
+  // }
 
   // Эффективные статы юнита = база + прибавки уровней.
   applyToStats() {
@@ -245,7 +249,7 @@ class Upgrades {
   cityRecharge() { const tr = UPG_TRACKS.find((t) => t.id === 'charge'); return this.trackVal(tr, this.levels.charge || 0); }
   cityRepairLevel() { return this.levels.cityrepair || 0; }
   cityDockRate() { return (this.levels.dock || 0) * CITY_DOCK_HP; }
-  pickupBonus() { return this.gadgets.magnet ? 1 : 0; }
+  pickupBonus() { return 0; }   // гаджет «магнит» ОТКЛЮЧЁН (см. UPG_GADGETS) — бонуса нет
 
   // ---- навигация WASD: выбор «крайнего» (следующего к покупке) слота трека ----
   moveSel(d) { if (!this.tracks.length) return; this.sel = Math.max(0, Math.min(this.tracks.length - 1, (this.sel || 0) + d)); this._followSel = true; this.endHold(); }

@@ -45,7 +45,7 @@ function drawBackdrops(ctx, world, unit, camera, W, H) {
     if (b._rejT > 0) {   // красная «ОТКАЗ»-вспышка: скан прошёл, но без узла kart_ruins данные не извлечь (ассет всё равно проявлен)
       const k = b._rejT / BACKDROP_REJ_T;
       ctx.save();
-      ctx.beginPath(); ctx.ellipse(sx, sy, hw * 1.1, hh * 1.35, 0, 0, 6.283); ctx.clip();
+      ctx.beginPath(); ctx.ellipse(sx, sy, hw * 1.1, hh * 1.35, 0, 0, TAU); ctx.clip();
       ctx.globalCompositeOperation = 'lighter';
       const rg = ctx.createRadialGradient(sx, sy, 6, sx, sy, Math.max(hw, hh) * 1.2);
       rg.addColorStop(0, `rgba(210,46,32,${(0.26 * k).toFixed(3)})`); rg.addColorStop(1, 'rgba(210,46,32,0)');
@@ -59,7 +59,7 @@ function drawBackdrops(ctx, world, unit, camera, W, H) {
 function _bdScene(ctx, b, sx, sy, hw, hh, offX, offY, rev) {
   const PAR = 0.45;
   ctx.save();
-  ctx.beginPath(); ctx.ellipse(sx, sy, hw * 1.1, hh * 1.35, 0, 0, 6.283); ctx.clip();   // в пределах полости, низ растянут до дна (`clipVisibleAir` всё равно режет по воздуху)
+  ctx.beginPath(); ctx.ellipse(sx, sy, hw * 1.1, hh * 1.35, 0, 0, TAU); ctx.clip();   // в пределах полости, низ растянут до дна (`clipVisibleAir` всё равно режет по воздуху)
   // фон-зарево (cobalt — «данные»)
   const gg = ctx.createRadialGradient(sx, sy, 6, sx, sy, Math.max(hw, hh) * 1.2);
   gg.addColorStop(0, `rgba(58,126,200,${0.14 * rev})`); gg.addColorStop(1, 'rgba(58,126,200,0)');
@@ -83,8 +83,8 @@ function _bdKind(ctx, kind, r, cx, by, hw, hh) {
   if (kind === 'city') { for (let i = 0; i < 7; i++) { const tw = _bdrr(r, W * 0.05, W * 0.12), tx = cx - hw * 0.7 + _bdrr(r, 0, hw * 1.4), th = _bdrr(r, hh * 0.3, hh * 1.0); ctx.fillRect(tx, by - th, tw, th); } return; }
   if (kind === 'machine') {
     const wr = hh * 0.55, wx = cx, wy = by - hh * 0.55; ctx.lineWidth = hh * 0.05; ctx.strokeStyle = ctx.fillStyle;
-    ctx.beginPath(); ctx.arc(wx, wy, wr, 0, 6.283); ctx.stroke();
-    for (let a = 0; a < 10; a++) { const an = a / 10 * 6.283; ctx.beginPath(); ctx.moveTo(wx, wy); ctx.lineTo(wx + Math.cos(an) * wr, wy + Math.sin(an) * wr); ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(wx, wy, wr, 0, TAU); ctx.stroke();
+    for (let a = 0; a < 10; a++) { const an = a / 10 * TAU; ctx.beginPath(); ctx.moveTo(wx, wy); ctx.lineTo(wx + Math.cos(an) * wr, wy + Math.sin(an) * wr); ctx.stroke(); }
     ctx.fillRect(cx - hw * 0.06, wy, hw * 0.12, by - wy);   // мачта/опора
     return;
   }
@@ -110,7 +110,7 @@ function _bdSweep(ctx, b, sx, sy, hw, hh) {
     ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.6; ctx.imageSmoothingEnabled = true;
     ctx.drawImage(_bdRobot, r.dx, r.dy, r.dw, r.dh);
   } else {
-    ctx.beginPath(); ctx.ellipse(sx, sy, hw * 1.1, hh * 1.35, 0, 0, 6.283); ctx.clip();
+    ctx.beginPath(); ctx.ellipse(sx, sy, hw * 1.1, hh * 1.35, 0, 0, TAU); ctx.clip();
     const g = ctx.createLinearGradient(lx - 16, 0, lx + 16, 0);
     g.addColorStop(0, 'rgba(58,126,200,0)'); g.addColorStop(0.5, 'rgba(130,205,245,0.5)'); g.addColorStop(1, 'rgba(58,126,200,0)');
     ctx.fillStyle = g; ctx.fillRect(lx - 16, sy - hh, 32, hh * 2);

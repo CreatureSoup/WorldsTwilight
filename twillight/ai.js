@@ -1,7 +1,8 @@
 'use strict';
 
-// AI диких гнёзд (вынесено из game.js): спавн волн по циклам + поведение врагов
-// (копатель/собиратель/разведчик) + BFS-путь по воздуху. Это оркестрация над состоянием
+// AI диких гнёзд (вынесено из game.js): спавн волн по циклам + мозги ВСЕХ 13 типов врагов
+// (копатель/собиратель/рейдер/охотник/взломщик/снайпер/мошкара/залежень/закладка/латальщик/
+// таран/мортира/скверносей) + BFS-путь по воздуху. Это оркестрация над состоянием
 // Game (world/enemies/cities/cycle/city), поэтому методы домешиваются в Game.prototype —
 // тела не менялись, `this` = инстанс Game. Грузится ПОСЛЕ game.js (Game уже определён),
 // до создания инстанса (`new Game()` на событии load).
@@ -83,7 +84,7 @@ Object.assign(Game.prototype, {
   diggerBrain(e) {
     if (e.friendly) {   // дружественный копатель: блуждание-копка ВОКРУГ своего города (случайные локальные цели), НЕ ищет города игрока
       if (!e.target || this.near(e, e.target.x, e.target.y, 1)) {
-        const ang = Math.random() * 6.283, rad = 3 + Math.random() * 5;
+        const ang = Math.random() * TAU, rad = 3 + Math.random() * 5;
         const ty = Math.max(DIGGER_MIN_Y + 2, Math.min(MAP_H - 2, Math.round(e.homeY + Math.sin(ang) * rad)));
         e.target = { x: wrapX(Math.round(e.homeX + Math.cos(ang) * rad)), y: ty }; e.commit = null;
       }
@@ -229,7 +230,7 @@ Object.assign(Game.prototype, {
       }
       if (e.cBlocked || e.cT >= HUNTER_CHARGE_MAX) this._hunterRecoverVel(e);
     } else if (e.cstate === 'recover') {
-      e.cT += dt; e.cvx *= 0.88; e.cvy *= 0.88;
+      e.cT += dt; e.cvx *= ENEMY_RECOVER_FRICTION; e.cvy *= ENEMY_RECOVER_FRICTION;
       if (e.cT >= HUNTER_RECOVER) { e.cstate = 'approach'; e.cT = 0; e.cvx = 0; e.cvy = 0; e.commit = null; e.target = null; e._tStruct = null; }
     }
   },
@@ -247,7 +248,7 @@ Object.assign(Game.prototype, {
     }
     return best;
   },
-  _hunterLOS(e, u) {                                              // линия к юниту в основном по воздуху (рывок не упрётся сразу в породу)
+  _hunterLOS(e, u) {   // ⚠️ ОСОЗНАННО отдельная от world.hasLineOfSight: ДОПУСК ≤1 solid-тайла (рывок «сквозь угол»); строгая версия — world.js
     const dpx = wrapDeltaPx(u.px, e.px), dpy = u.py - e.py, steps = Math.max(2, Math.ceil(Math.hypot(dpx, dpy) / TILE));
     let solid = 0;
     for (let i = 1; i < steps; i++) { const t = i / steps;
@@ -274,10 +275,10 @@ Object.assign(Game.prototype, {
     let distU = Infinity, dpx = 0, dpy = 0;
     if (u) { dpx = wrapDeltaPx(u.px, e.px); dpy = u.py - e.py; distU = Math.hypot(dpx, dpy) / TILE; e.aimAng = Math.atan2(dpy, dpx); }
     if (seeU && this.shots && distU <= SNIPER_RANGE && distU >= SNIPER_MINDIST && this.world.hasLineOfSight(e.px, e.py, u.px, u.py) && e.aimT <= 0) {  // огонь по юниту (СТРОГАЯ прямая видимость — не сквозь породу)
-      this.shots.fire(e.px, e.py, u.px, u.py); e.aimT = SNIPER_COOLDOWN; e.firing = 0.13;
+      this.shots.fire(e.px, e.py, u.px, u.py); e.aimT = SNIPER_COOLDOWN; e.firing = ENEMY_FIRE_FLASH_T;
     } else if (this.shots && e.aimT <= 0) {   // ФАЗА 4: по юниту не вышло — бьём по структуре игрока в радиусе
       const s = this._sniperStructTarget(e);
-      if (s) { this.shots.fire(e.px, e.py, s.px, s.py); e.aimT = SNIPER_COOLDOWN; e.firing = 0.13; e.aimAng = Math.atan2(s.py - e.py, wrapDeltaPx(s.px, e.px)); }
+      if (s) { this.shots.fire(e.px, e.py, s.px, s.py); e.aimT = SNIPER_COOLDOWN; e.firing = ENEMY_FIRE_FLASH_T; e.aimAng = Math.atan2(s.py - e.py, wrapDeltaPx(s.px, e.px)); }
     }
     if (e.state2 !== IDLE) return;
     if (seeU && distU < SNIPER_MINDIST) {                            // близко юнит → отступаем ОТ него
@@ -362,7 +363,7 @@ Object.assign(Game.prototype, {
     if (s) {
       e.aimAng = Math.atan2(s.py - e.py, wrapDeltaPx(s.px, e.px));
       const ds = Math.hypot(wrapDeltaPx(s.px, e.px), s.py - e.py) / TILE;
-      if (this.shots && ds <= MORTAR_RANGE && ds >= MORTAR_MINDIST && e.aimT <= 0) { this.shots.fire(e.px, e.py, s.px, s.py, MORTAR_DMG); e.aimT = MORTAR_COOLDOWN; e.firing = 0.13; }
+      if (this.shots && ds <= MORTAR_RANGE && ds >= MORTAR_MINDIST && e.aimT <= 0) { this.shots.fire(e.px, e.py, s.px, s.py, MORTAR_DMG); e.aimT = MORTAR_COOLDOWN; e.firing = ENEMY_FIRE_FLASH_T; }
     }
     if (e.state2 !== IDLE) return;
     if (seeU && distU < MORTAR_MINDIST) {   // юнит близко → отступаем ОТ него
@@ -409,7 +410,7 @@ Object.assign(Game.prototype, {
       }
       if (e.cBlocked || e.cT >= RAM_CHARGE_MAX) this._hunterRecoverVel(e);
     } else if (e.cstate === 'recover') {
-      e.cT += dt; e.cvx *= 0.88; e.cvy *= 0.88;
+      e.cT += dt; e.cvx *= ENEMY_RECOVER_FRICTION; e.cvy *= ENEMY_RECOVER_FRICTION;
       if (e.cT >= RAM_RECOVER) { e.cstate = 'approach'; e.cT = 0; e.cvx = 0; e.cvy = 0; e.commit = null; e.target = null; e._tStruct = null; }
     }
   },
@@ -496,7 +497,7 @@ Object.assign(Game.prototype, {
     for (const e of this.enemies) {
       if (story && !e.friendly) continue;   // в истории живут ТОЛЬКО дружественные (диких не спавним, существующих не тикаем)
       if (e.dying) {   // уничтожен: разовый выброс обломков, доигрываем анимацию, затем чистка (мозг/движение выкл)
-        if (!e._fx) { e._fx = true; if (this.dust) for (let i = 0; i < 6; i++) { const a = Math.random() * 6.283, sp = TILE * (0.6 + Math.random() * 1.5); this.dust._grit(e.px, e.py, Math.cos(a) * sp, Math.sin(a) * sp - TILE * 0.5, Math.random() < 0.3); } }
+        if (!e._fx) { e._fx = true; if (this.dust) for (let i = 0; i < 6; i++) { const a = Math.random() * TAU, sp = TILE * (0.6 + Math.random() * 1.5); this.dust._grit(e.px, e.py, Math.cos(a) * sp, Math.sin(a) * sp - TILE * 0.5, Math.random() < 0.3); } }
         e.deathT -= dt; if (e.deathT <= 0) e.dead = true;
         continue;
       }

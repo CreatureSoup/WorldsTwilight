@@ -19,7 +19,7 @@ function _ironPath(ctx, cx, cy, r, seed) {
 }
 function _organicPath(ctx, cx, cy, r, seed) {
   const N = 9, pts = [];
-  for (let i = 0; i < N; i++) { const a = (i / N) * 6.283; const rr = r * (0.72 + _rh(seed * 5 + i) * 0.42); pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]); }
+  for (let i = 0; i < N; i++) { const a = (i / N) * TAU; const rr = r * (0.72 + _rh(seed * 5 + i) * 0.42); pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]); }
   ctx.beginPath();
   ctx.moveTo((pts[0][0] + pts[N - 1][0]) / 2, (pts[0][1] + pts[N - 1][1]) / 2);
   for (let i = 0; i < N; i++) { const c = pts[i], nx = pts[(i + 1) % N]; ctx.quadraticCurveTo(c[0], c[1], (c[0] + nx[0]) / 2, (c[1] + nx[1]) / 2); }
@@ -49,9 +49,9 @@ function paintResource(ctx, type, cx, cy, r, seed) {
     ctx.strokeStyle = 'rgba(20,26,32,0.7)'; ctx.lineWidth = Math.max(1, r * 0.13);
     ctx.beginPath(); ctx.moveTo(cx - r * 0.7, cy); ctx.lineTo(cx + r * 0.7, cy); ctx.stroke();
     ctx.fillStyle = def.edge;
-    for (const [sx, sy] of [[-0.55, -0.55], [0.55, 0.55]]) { ctx.beginPath(); ctx.arc(cx + sx * r, cy + sy * r, r * 0.16, 0, 6.283); ctx.fill(); }
+    for (const [sx, sy] of [[-0.55, -0.55], [0.55, 0.55]]) { ctx.beginPath(); ctx.arc(cx + sx * r, cy + sy * r, r * 0.16, 0, TAU); ctx.fill(); }
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.beginPath(); ctx.arc(cx - r * 0.4, cy - r * 0.4, r * 0.16, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - r * 0.4, cy - r * 0.4, r * 0.16, 0, TAU); ctx.fill();
   } else if (type === 'organic') {
     ctx.fillStyle = 'rgba(220,255,210,0.32)';
     _organicPath(ctx, cx - r * 0.16, cy - r * 0.16, r * 0.4, seed + 991); ctx.fill();
@@ -66,7 +66,7 @@ function drawResourceCluster(ctx, type, cx, cy, R, seed) {
   const n = type === 'organic' ? 4 : 3;
   const items = [];
   for (let i = 0; i < n; i++) {
-    const ang = _rh(seed + i * 3) * 6.283, dist = _rh(seed + i * 7) * R * 0.62;
+    const ang = _rh(seed + i * 3) * TAU, dist = _rh(seed + i * 7) * R * 0.62;
     const r = R * (0.26 + _rh(seed + i * 5) * 0.2);
     items.push({ ox: Math.cos(ang) * dist, oy: Math.sin(ang) * dist, r, s: seed + i * 131 });
   }

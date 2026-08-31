@@ -13,7 +13,7 @@ function drawStealthFx(ctx, game, camera) {
   ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
   // мягкий ореол-маскировка
   ctx.globalAlpha = 0.10 * ending; ctx.fillStyle = '#8a7ed4';
-  ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();
   // дрожащие горизонтальные сканлайны (расфокус силуэта)
   ctx.strokeStyle = '#b8aef0'; ctx.lineWidth = 1;
   for (let i = -3; i <= 3; i++) {

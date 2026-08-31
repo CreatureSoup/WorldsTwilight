@@ -73,7 +73,7 @@ Object.assign(Game.prototype, {
       }
     }
     this.seismicWaves.push({ cx: tr.tx, cy: tr.ty, t: 0 });
-    if (this.dust) for (let i = 0; i < 12; i++) { const a = Math.random() * 6.283, sp = TILE * (1 + Math.random() * 2.4); this.dust._grit((tr.tx + 0.5) * TILE, (tr.ty + 0.5) * TILE, Math.cos(a) * sp, Math.sin(a) * sp, Math.random() < 0.5); }
+    if (this.dust) for (let i = 0; i < 12; i++) { const a = Math.random() * TAU, sp = TILE * (1 + Math.random() * 2.4); this.dust._grit((tr.tx + 0.5) * TILE, (tr.ty + 0.5) * TILE, Math.cos(a) * sp, Math.sin(a) * sp, Math.random() < 0.5); }
     if (!this.debug && this.logEvent) this.logEvent(STR.log.trapSeismic);
   },
 
@@ -81,7 +81,7 @@ Object.assign(Game.prototype, {
   _trigBrood(tr) {
     for (let i = 0; i < BROOD_COUNT; i++) {
       const e = new Enemy(tr.tx, tr.ty, 'swarm_midge', tr.tx, tr.ty, 2);
-      e.scatterT = BROOD_SCATTER_T; e.scatterAng = (i / BROOD_COUNT) * 6.283 + Math.random() * 0.6; e.fromTrap = true;
+      e.scatterT = BROOD_SCATTER_T; e.scatterAng = (i / BROOD_COUNT) * TAU + Math.random() * 0.6; e.fromTrap = true;
       this.enemies.push(e);
     }
     if (!this.debug && this.logEvent) this.logEvent(STR.log.trapBrood);

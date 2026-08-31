@@ -15,7 +15,7 @@ function drawFx(ctx, fx, camera) {
       ctx.globalAlpha = a; ctx.strokeStyle = p.hot ? '#fff' : p.color; ctx.lineWidth = 1.1;   // яркое ядро (короче, к голове)
       ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx - ux * len * 0.5, cy - uy * len * 0.5); ctx.stroke();
       ctx.globalAlpha = Math.min(1, a * 1.25); ctx.fillStyle = p.hot ? '#fff' : p.color;        // раскалённая голова-точка
-      ctx.beginPath(); ctx.arc(cx, cy, 1.25 * (0.5 + a), 0, 6.283); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy, 1.25 * (0.5 + a), 0, TAU); ctx.fill();
       ctx.restore();
       continue;
     }

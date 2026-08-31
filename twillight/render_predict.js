@@ -63,7 +63,7 @@ function _waveGlyph(ctx, type, cx, cy, s, col) {
     ctx.beginPath(); ctx.moveTo(cx + s * 0.4, cy - s); ctx.lineTo(cx + s, cy - s); ctx.lineTo(cx + s, cy + s); ctx.lineTo(cx + s * 0.4, cy + s); ctx.stroke();
     ctx.fillRect(cx - s * 0.28, cy - s * 0.28, s * 0.56, s * 0.56);
   } else if (type === 'sniper') {        // прицел
-    ctx.beginPath(); ctx.arc(cx, cy, s * 0.68, 0, 6.283); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, s * 0.68, 0, TAU); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(cx - s, cy); ctx.lineTo(cx + s, cy); ctx.moveTo(cx, cy - s); ctx.lineTo(cx, cy + s); ctx.stroke();
   }
 }

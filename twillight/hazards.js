@@ -78,7 +78,7 @@ Object.assign(Game.prototype, {
     // воронка + обрушение нестабильной породы (setAir без noTrigger → falling.js осыпает нестабильную сверху)
     const R = Math.ceil(MINE_CRATER_R), R2 = MINE_CRATER_R * MINE_CRATER_R;
     for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) if (dx * dx + dy * dy <= R2) this.world.setAir(cx + dx, cy + dy);
-    if (this.dust) for (let i = 0; i < 16; i++) { const a = Math.random() * 6.283, sp = TILE * (1 + Math.random() * 2.6); this.dust._grit(px, py, Math.cos(a) * sp, Math.sin(a) * sp - TILE * 0.6, Math.random() < 0.5); }
+    if (this.dust) for (let i = 0; i < 16; i++) { const a = Math.random() * TAU, sp = TILE * (1 + Math.random() * 2.6); this.dust._grit(px, py, Math.cos(a) * sp, Math.sin(a) * sp - TILE * 0.6, Math.random() < 0.5); }
     if (!this.debug) this.logEvent(STR.log.mineBlast);
   },
 
@@ -94,7 +94,7 @@ Object.assign(Game.prototype, {
   _robotWeb(r) {
     if (this._robotDist(r) > WEB_R || !this.unit) return;
     this.unit.webT = WEB_DUR;
-    if (this.dust) { const px = this.unit.px, py = this.unit.py; for (let i = 0; i < 8; i++) { const a = Math.random() * 6.283; this.dust._grit(px, py, Math.cos(a) * TILE, Math.sin(a) * TILE, false); } }
+    if (this.dust) { const px = this.unit.px, py = this.unit.py; for (let i = 0; i < 8; i++) { const a = Math.random() * TAU; this.dust._grit(px, py, Math.cos(a) * TILE, Math.sin(a) * TILE, false); } }
     if (!this.debug) this.logEvent(STR.log.robotWeb);
   },
   // ПРЫГУН: достал юнита (в радиусе прыжка) → виснет на буре = дебафф бурения на N тайлов проходки; не достал → подыхает.

@@ -25,7 +25,7 @@ function drawArtifacts(ctx, world, camera) {
     if (exc > 0.001) {                                                 // сияние ТОЛЬКО по мере откопки (погребённый не светит)
       const gi = exc * (0.10 + 0.12 * pulse), g = ctx.createRadialGradient(sx, sy, 2, sx, sy, w * 0.75);
       g.addColorStop(0, 'rgba(79,214,208,' + gi.toFixed(3) + ')'); g.addColorStop(1, 'rgba(79,214,208,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, w * 0.75, 0, 6.283); ctx.fill();
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, w * 0.75, 0, TAU); ctx.fill();
     }
     ctx.globalAlpha = 0.4 + 0.6 * exc;                                 // погребённый — тусклее, выкопанный — в полную силу
     const x0 = sx - w / 2 + pad, y0 = sy - h / 2 + pad, ww = w - pad * 2, hh = h - pad * 2, r = 6;
@@ -73,7 +73,7 @@ function drawDrillHeat(ctx, game, camera) {
     ctx.strokeStyle = '#ff4030'; ctx.lineWidth = 1; ctx.strokeRect(x - 0.5, y - 0.5, w + 1, h + 1);
   } else {
     const heat = Math.max(0, Math.min(1, u.drillHeat));
-    ctx.fillStyle = heat > 0.85 ? '#ff7a3a' : heat > 0.6 ? '#f0c84a' : '#9ad0a0';
+    ctx.fillStyle = heat > 0.85 ? '#ff7a3a' : heat > 0.6 ? '#f0c84a' : PAL.screwGreen;
     ctx.fillRect(x, y, Math.round(w * heat), h);
     ctx.strokeStyle = 'rgba(180,200,210,0.4)'; ctx.lineWidth = 1; ctx.strokeRect(x - 0.5, y - 0.5, w + 1, h + 1);
     if (heat > 0.8) { ctx.fillStyle = '#ff4030'; ctx.fillRect(x + w - 2, y - 1, 2, h + 2); }   // красная риска «у предела»
@@ -103,7 +103,7 @@ function drawHarpoonFx(ctx, game, camera) {
   ctx.strokeStyle = h.dry ? 'rgba(224,176,112,0.5)' : '#e0b070';
   ctx.lineWidth = h.dry ? 1 : 2; ctx.globalAlpha = h.dry ? f * 0.7 : 0.85;
   ctx.beginPath(); ctx.moveTo(ux, uy); ctx.lineTo(ax, ay); ctx.stroke();
-  if (!h.dry) { ctx.globalAlpha = 0.9; ctx.fillStyle = '#f0c890'; ctx.beginPath(); ctx.arc(ax, ay, 3, 0, 6.283); ctx.fill(); }
+  if (!h.dry) { ctx.globalAlpha = 0.9; ctx.fillStyle = '#f0c890'; ctx.beginPath(); ctx.arc(ax, ay, 3, 0, TAU); ctx.fill(); }
   ctx.globalAlpha = 1; ctx.restore();
 }
 
@@ -135,8 +135,8 @@ function drawArtifactModal(ctx, game, W, H) {
     const used = game._artifactSlotUsed(def.slot), cap = game._artifactSlotCap(def.slot);
     return { label: STR.world.artifact.tech.label, sub: def.name, desc: def.desc, accent: ART_ACCENT, icon: 'tech', slot: def.slot, used, cap, locked: used >= cap };
   });
-  choices.push({ label: STR.world.artifact.data.label, sub: STR.world.artifact.data.sub, desc: STR.world.artifact.data.desc, accent: PAL.cobalt || '#5a8fd6', icon: 'data' });
-  choices.push({ label: STR.world.artifact.scrap.label, sub: STR.world.artifact.scrap.sub, desc: STR.world.artifact.scrap.desc, accent: PAL.toxic || '#c8e25a', icon: 'scrap' });
+  choices.push({ label: STR.world.artifact.data.label, sub: STR.world.artifact.data.sub, desc: STR.world.artifact.data.desc, accent: PAL.cobalt, icon: 'data' });
+  choices.push({ label: STR.world.artifact.scrap.label, sub: STR.world.artifact.scrap.sub, desc: STR.world.artifact.scrap.desc, accent: PAL.toxic, icon: 'scrap' });
   game._artifactChoiceCount = choices.length;   // game.js читает для навигации ← →
 
   const N = choices.length, gap = 20, canReroll = typeof metaHas === 'function' && metaHas('kart_reroll');
@@ -150,7 +150,7 @@ function drawArtifactModal(ctx, game, W, H) {
   ctx.fillText(STR.world.artifact.hint + (canReroll ? '  ·  ' + STR.world.artifact.reroll.hint : ''), W / 2, cy + 42);
 
   const cardW = (pw - 44 - gap * (N - 1)) / N, cardH = 210, cardY = cy + 62, x0 = px + 22;
-  const rects = [], GRN = PAL.toxic || '#9ad06a', RED = PAL.rust || '#c0402f';
+  const rects = [], GRN = PAL.toxic, RED = PAL.rust;
   for (let i = 0; i < N; i++) {
     const c = choices[i], cx = x0 + i * (cardW + gap), sel = game.artifactSel === i;
     rects.push({ x: cx, y: cardY, w: cardW, h: cardH });
@@ -224,8 +224,8 @@ function _artIcon(ctx, kind, cx, cy, accent) {
     ctx.fillRect(cx - 5, cy - 5, 10, 10);
     for (const s of [-7, 0, 7]) { ctx.beginPath(); ctx.moveTo(cx + s, cy - 11); ctx.lineTo(cx + s, cy - 16); ctx.moveTo(cx + s, cy + 11); ctx.lineTo(cx + s, cy + 16); ctx.moveTo(cx - 11, cy + s); ctx.lineTo(cx - 16, cy + s); ctx.moveTo(cx + 11, cy + s); ctx.lineTo(cx + 16, cy + s); ctx.stroke(); }
   } else if (kind === 'data') {                 // диск данных: круг + дуга-сектор
-    ctx.beginPath(); ctx.arc(cx, cy, 13, 0, 6.283); ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, 13, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, 4, 0, TAU); ctx.fill();
     ctx.beginPath(); ctx.arc(cx, cy, 9, -1.0, 0.6); ctx.stroke();
   } else {                                      // переработка: три стрелки по кругу
     for (let i = 0; i < 3; i++) { const a = i * 2.094 - 1.57; ctx.beginPath(); ctx.arc(cx, cy, 11, a + 0.25, a + 1.7); ctx.stroke(); const ex = cx + Math.cos(a + 1.7) * 11, ey = cy + Math.sin(a + 1.7) * 11; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex - 5, ey - 1); ctx.moveTo(ex, ey); ctx.lineTo(ex - 1, ey - 5); ctx.stroke(); }

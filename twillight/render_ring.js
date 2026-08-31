@@ -49,19 +49,19 @@ function drawReactorRing(ctx, cx, cy, r, t, on) {
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineWidth = band; ctx.strokeStyle = PAL.carbon;                 // тёмный корпус тора
-  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
   ctx.lineWidth = band * 0.66; ctx.strokeStyle = PAL.bronze;          // ребро
-  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
   // болты по кольцу
   ctx.fillStyle = PAL.ash;
-  for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, Math.max(1, r * 0.07), 0, 6.283); ctx.fill(); }
+  for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, Math.max(1, r * 0.07), 0, TAU); ctx.fill(); }
   // ядро в дыре тора (свечение); выкл — почти потухшее
   const ir = r - band * 0.5, lit = on === false ? 0.12 : 1;
   const gr = ctx.createRadialGradient(cx, cy, 1, cx, cy, ir);
   gr.addColorStop(0, `rgba(150,255,190,${(0.6 + 0.35 * pulse) * lit})`);
   gr.addColorStop(0.55, `rgba(58,209,122,${(0.3 + 0.25 * pulse) * lit})`);
   gr.addColorStop(1, 'rgba(20,60,40,0)');
-  ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(cx, cy, ir, 0, 6.283); ctx.fill();
+  ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(cx, cy, ir, 0, TAU); ctx.fill();
   ctx.restore();
 }
 

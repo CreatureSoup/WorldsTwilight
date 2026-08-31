@@ -5,7 +5,7 @@
 const SAVE_KEY = 'twilight-of-the-world.save';
 
 function loadSave() {
-  const ep = (typeof EPOCH_START !== 'undefined') ? EPOCH_START : 48217;   // глобальный цикл существования ИИ (тикает, не сбрасывается)
+  const ep = EPOCH_START;   // constants.js грузится ДО save.js (loader) — литерал-фолбэк 48217 был скрытым дублем (audit_2026-08)   // глобальный цикл существования ИИ (тикает, не сбрасывается)
   try {
     return Object.assign({ bestDug: 0, runs: 0, meta: 0, metaUnlocks: {}, codex: null, storyMode: false, epoch: ep },
       JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'));

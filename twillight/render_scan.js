@@ -22,7 +22,7 @@ function drawServers(ctx, world, camera, debug) {
 function _drawServerDebug(ctx, x, y, s) {
   ctx.save();
   ctx.strokeStyle = PAL.cobalt; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.arc(x, y, 13, 0, 6.283); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, 13, 0, TAU); ctx.stroke();
   ctx.fillStyle = PAL.cobaltBright || PAL.cobalt;
   ctx.font = '700 8px ' + (typeof FONT_MONO !== 'undefined' ? FONT_MONO : 'monospace');
   ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
@@ -89,7 +89,7 @@ function drawScanBeam(ctx, src, tx, ty, t, r) {
   const ex = src.x + Math.cos(ang) * dist, ey = src.y + Math.sin(ang) * dist;
   const sp = ctx.createRadialGradient(ex, ey, 0.5, ex, ey, 7);
   sp.addColorStop(0, 'rgba(212,236,255,0.95)'); sp.addColorStop(1, 'rgba(120,180,255,0)');
-  ctx.fillStyle = sp; ctx.beginPath(); ctx.arc(ex, ey, 7, 0, 6.283); ctx.fill();
+  ctx.fillStyle = sp; ctx.beginPath(); ctx.arc(ex, ey, 7, 0, TAU); ctx.fill();
   ctx.restore();
 }
 
@@ -104,7 +104,7 @@ function drawScanFx(ctx, game, camera) {
   const pul = 0.5 + 0.5 * Math.sin(t * 4.5);
   const og = ctx.createRadialGradient(tx, ty, 1, tx, ty, 15);
   og.addColorStop(0, `rgba(95,170,240,${0.30 + 0.18 * pul})`); og.addColorStop(1, 'rgba(95,170,240,0)');
-  ctx.fillStyle = og; ctx.beginPath(); ctx.arc(tx, ty, 15, 0, 6.283); ctx.fill();
+  ctx.fillStyle = og; ctx.beginPath(); ctx.arc(tx, ty, 15, 0, TAU); ctx.fill();
   ctx.fillStyle = `rgba(120,190,250,${0.22 + 0.12 * pul})`;
   ctx.beginPath(); ctx.moveTo(tx - 10, ty + 6); ctx.lineTo(tx - 4, ty - 4); ctx.lineTo(tx + 3, ty - 2); ctx.lineTo(tx + 10, ty + 6); ctx.closePath(); ctx.fill();
   ctx.restore();
@@ -121,7 +121,7 @@ function drawEnemyScanFx(ctx, game, camera) {
   const pul = 0.5 + 0.5 * Math.sin(t * 4.5);
   const og = ctx.createRadialGradient(tx, ty, 1, tx, ty, 14);
   og.addColorStop(0, `rgba(95,170,240,${0.26 + 0.16 * pul})`); og.addColorStop(1, 'rgba(95,170,240,0)');
-  ctx.fillStyle = og; ctx.beginPath(); ctx.arc(tx, ty, 14, 0, 6.283); ctx.fill();
+  ctx.fillStyle = og; ctx.beginPath(); ctx.arc(tx, ty, 14, 0, TAU); ctx.fill();
   ctx.restore();
   drawScanBeam(ctx, src, tx, ty, t, 12);
 }

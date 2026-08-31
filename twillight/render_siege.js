@@ -29,7 +29,7 @@ function drawSiegeCharge(ctx, game, camera) {
   ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + ux * TILE * (0.6 + 0.8 * ch), cy + uy * TILE * (0.6 + 0.8 * ch)); ctx.stroke();
   // ядро-фокус
   ctx.globalAlpha = 0.5 + 0.5 * ch; ctx.fillStyle = ch >= 1 ? '#fff0e0' : '#ff7a4a';
-  ctx.beginPath(); ctx.arc(cx, cy, TILE * 0.12 * (0.7 + 0.6 * ch), 0, 6.283); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, TILE * 0.12 * (0.7 + 0.6 * ch), 0, TAU); ctx.fill();
   ctx.restore();
 }
 
@@ -48,6 +48,6 @@ function drawSiegeBeam(ctx, game, camera) {
   ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.stroke();
   // ударная вспышка на конце (попадание)
   ctx.globalAlpha = 0.7 * fade; ctx.fillStyle = '#fff0e0';
-  ctx.beginPath(); ctx.arc(ex, ey, TILE * 0.35 * (0.6 + 0.5 * b.power), 0, 6.283); ctx.fill();
+  ctx.beginPath(); ctx.arc(ex, ey, TILE * 0.35 * (0.6 + 0.5 * b.power), 0, TAU); ctx.fill();
   ctx.restore();
 }

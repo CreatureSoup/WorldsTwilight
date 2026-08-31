@@ -2,11 +2,8 @@
 
 // Projectiles — лёгкие выстрелы врагов (снайпер). Летят по прямой, бьют юнита при попадании, гаснут о
 // породу/по таймауту. Логика без Canvas (рендер — render_enemy.drawShots). Тор по X.
-const SHOT_SPEED = 22;   // тайла/сек
-const SHOT_DMG_MIN = 40, SHOT_DMG_MAX = 60;   // урон юниту за попадание (рандом в диапазоне)
-const SHOT_TTL = 2.0;    // сек макс. полёта
-const SHOT_HIT_R = 0.55; // тайлов: радиус попадания по юниту
-const SHOT_STRUCT_DMG = 22;   // урон структуре игрока за попадание (фаза 4: снайпер чешет оборону по пути к юниту)
+// ⚠️ ТЮНИНГ (SHOT_*, вкл. УРОН СНАЙПЕРА SHOT_DMG_MIN/MAX) — в constants.js, секция «ВРАГИ: БАЗОВЫЕ ТИПЫ» (audit_2026-08).
+
 class Projectiles {
   constructor() { this.list = []; }
   clear() { this.list.length = 0; }

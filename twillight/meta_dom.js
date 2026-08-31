@@ -238,12 +238,26 @@ function mtRenderCard() {
   const stTag = { owned: [STR.meta.ui.stOwned, acc], avail: [STR.meta.ui.stAvail, 'var(--gold)'], visible: [STR.meta.ui.stVisible, 'var(--pewter)'], hidden: [STR.meta.ui.stHidden, 'var(--ash)'] }[s];
   const hasMod = typeof metaUnlocksModule === 'function' && metaUnlocksModule(n.id);   // узел открывает новый модуль сборки
   const hasStruct = typeof metaUnlocksStruct === 'function' && metaUnlocksStruct(n.id);   // узел открывает новую структуру для печати
-  const prereq = metaDepNames(n);
+  const deps = metaDepIds(n);
   const lbl = (c) => `font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:${c};text-transform:uppercase`;
   // КРУПНЫЙ красный баннер для узлов БЕЗ функционала (n.wip) — виден когда описание расшифровано (не 'visible'). Убираем флаг по мере реализации.
   const wipBanner = (n.wip && s !== 'visible') ? `<div style="margin-bottom:14px;padding:10px 13px;border:1px solid var(--blood);border-left:3px solid var(--blood-bright);background:rgba(168,40,28,0.12)"><div style="font-family:var(--font-display);font-size:16px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--blood-bright);line-height:1">${STR.meta.ui.wipTitle}</div><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;color:var(--bone);margin-top:5px;text-transform:uppercase">${STR.meta.ui.wipSub}</div></div>` : '';
   let body = wipBanner + `<div><div style="${lbl('var(--ash)')}">${STR.meta.ui.hDesc}</div><p style="margin:8px 0 0;font-family:var(--font-body);font-size:13.5px;color:var(--bone);line-height:1.6">${s === 'visible' ? STR.meta.ui.descLocked : n.desc}</p></div>`;
-  if (s !== 'visible' && prereq.length) body += `<div style="margin-top:16px"><div style="${lbl('var(--ash)')}">${STR.meta.ui.hRequires}</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${prereq.map((p) => `<span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--bone);background:var(--earth);border:1px solid var(--bronze);padding:4px 8px">${p}</span>`).join('')}</div></div>`;
+  // ТРЕБУЕТ — блок виден ВСЕГДА, в т.ч. у НЕРАСШИФРОВАННЫХ узлов ('visible'): там плашки «?» — имя не спойлерим,
+  // но КОЛИЧЕСТВО требований игрок видит. Имя раскрываем, если зависимость УЖЕ ЗАПИТАНА (её игрок и так знает —
+  // плашка акцентом с «●») либо сам узел расшифрован. ⚠️ КОНВЕРГЕНЦИЯ (allDeps/cap) — бейдж «НУЖНЫ ВСЕ», иначе
+  // перечисление читается как «любой из» (у обычных узлов родитель один, и любой запитанный сосед открывает узел).
+  if (deps.length) {
+    const chipBase = 'font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:4px 8px';
+    const chips = deps.map((id) => {
+      const d = META_BY_ID[id]; if (!d) return '';
+      if (metaUnlocked(save, id)) return `<span style="${chipBase};color:${d.accent};background:var(--earth);border:1px solid ${d.accent}">● ${d.name}</span>`;
+      if (s === 'owned' || s === 'avail') return `<span style="${chipBase};color:var(--bone);background:var(--earth);border:1px solid var(--bronze)">${d.name}</span>`;   // ⚠️ именно РАСШИФРОВАННЫЕ состояния (не `s!=='visible'`: у 'hidden' имена тоже нельзя раскрывать)
+      return `<span style="${chipBase};color:var(--ash);border:1px dashed var(--bronze);min-width:30px;text-align:center">${STR.meta.ui.reqUnknown}</span>`;
+    }).join('');
+    const needAll = deps.length > 1 && !!(n.allDeps || n.kind === 'cap');
+    body += `<div style="margin-top:16px"><div style="display:flex;align-items:center;gap:8px"><div style="${lbl('var(--ash)')}">${STR.meta.ui.hRequires}</div>${needAll ? `<span style="font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;padding:1px 5px;color:var(--gold);border:1px solid var(--gold-dim)">${STR.meta.ui.reqAll}</span>` : ''}</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${chips}</div></div>`;
+  }
   if (n.kind === 'cap') body += `<div style="margin-top:16px;padding:12px 14px;border:1px solid var(--gold-dim);background:rgba(212,160,66,0.05)"><div style="${lbl('var(--gold)')}">${STR.meta.ui.capTitle}</div><p style="margin:6px 0 0;font-family:var(--font-body);font-size:12.5px;color:var(--pewter);line-height:1.55">${STR.meta.ui.capDesc}</p></div>`;
   // ТЕГ «ограниченно в режиме истории» (боевые узлы) — КРУПНЫЙ, внизу тела (над статусом/футером), с ОТДЕЛЯЮЩЕЙ ЛИНИЕЙ; виден когда описание расшифровано (не 'visible'). Каутион-янтарь, НЕ красный (узел рабочий, просто не применим без врагов).
   if (n.storyLimited && s !== 'visible') body += `<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--gold-dim)"><div style="display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border:1px solid var(--gold-dim);border-left:3px solid var(--gold);background:rgba(212,160,66,0.09)"><span style="font-size:17px;line-height:1;color:var(--gold)">⚠</span><div style="min-width:0"><div style="font-family:var(--font-display);font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);line-height:1.05">${STR.meta.ui.storyTitle}</div><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;color:var(--bone);margin-top:6px;text-transform:uppercase;line-height:1.55">${STR.meta.ui.storySub}</div></div></div></div>`;

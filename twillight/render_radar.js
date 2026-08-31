@@ -12,12 +12,12 @@ function drawRadarCompass(ctx, w, x, y) {
   const cx = x + 36, cy = y + 34, R = 13, active = w.signal > 0.03, sig = w.signal;
   const pulse = 0.5 + 0.5 * Math.sin(w.t * 5);
 
-  ctx.fillStyle = 'rgba(10,14,6,0.55)'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283); ctx.fill();   // тёмная линза
+  ctx.fillStyle = 'rgba(10,14,6,0.55)'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();   // тёмная линза
 
   // КОРОНА-СОНЦЕ (кибер-ацтек): лучи alt длинный/короткий «разгораются» с интенсивностью загрязнения
   ctx.lineCap = 'round';
   for (let i = 0; i < RADAR_RAYS; i++) {
-    const a = -Math.PI / 2 + (i + 0.5) * (6.283 / RADAR_RAYS), long = (i % 2) === 0;   // +0.5: ни один луч не бьёт прямо в шапку
+    const a = -Math.PI / 2 + (i + 0.5) * (TAU / RADAR_RAYS), long = (i % 2) === 0;   // +0.5: ни один луч не бьёт прямо в шапку
     const len = (long ? 4 : 2.4) * (0.45 + 0.55 * sig) * (0.92 + 0.08 * pulse);
     const r0 = R + 1.5, r1 = r0 + len;
     ctx.globalAlpha = active ? (0.22 + 0.72 * sig) * (long ? 1 : 0.7) : 0.3;
@@ -27,7 +27,7 @@ function drawRadarCompass(ctx, w, x, y) {
   }
   ctx.globalAlpha = 1; ctx.lineCap = 'butt';
 
-  ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R - 1, 0, 6.283); ctx.clip();   // содержимое — внутри линзы
+  ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R - 1, 0, TAU); ctx.clip();   // содержимое — внутри линзы
   if (active) {
     for (const p of w.parts) {                          // морось летит со стороны источника в ядро
       const px = cx + p.x * R, py = cy + p.y * R, lx = px - p.vx * R * 0.07, ly = py - p.vy * R * 0.07;
@@ -42,7 +42,7 @@ function drawRadarCompass(ctx, w, x, y) {
       const tw = Math.sin(w.t * (5 + i) + i * 2.3); if (tw < 0.3) continue;
       const ang = i * 1.7 + w.t * 0.2, rr = (0.3 + 0.6 * ((i * 0.37) % 1)) * R;
       ctx.globalAlpha = (tw - 0.3) * 0.9;
-      ctx.beginPath(); ctx.arc(cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr, 1.1, 0, 6.283); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr, 1.1, 0, TAU); ctx.fill();
     }
     ctx.globalAlpha = 1;
   }
@@ -55,7 +55,7 @@ function drawRadarCompass(ctx, w, x, y) {
   ctx.restore();
 
   ctx.strokeStyle = active ? PAL.toxic : PAL.bronze; ctx.lineWidth = 1.4;   // обод
-  ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
 
   // ЯДРО-ГЛИФ (мини-сонце): ромб, разгорается с сигналом + вспышка при попадании частицы
   const cs = 2.4 + (active ? 1.5 * sig : 0) + (w.flash || 0) * 2;
@@ -79,7 +79,7 @@ function drawDataCompass(ctx, dc, x, y) {
   techPanel(ctx, x, y, DATADET_W, DATADET_H, { accent: PAL.cobalt, label: STR.hud.dataDet.title, bolts: false });
   const cx = x + 36, cy = y + 34, R = 13, has = dc.has, sig = Math.max(0, Math.min(1, dc.sig));
   const pulse = 0.5 + 0.5 * Math.sin(dc.t * 4);
-  ctx.fillStyle = 'rgba(6,12,20,0.55)'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283); ctx.fill();   // тёмная линза
+  ctx.fillStyle = 'rgba(6,12,20,0.55)'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();   // тёмная линза
   ctx.strokeStyle = has ? PAL.cobalt : PAL.bronze; ctx.globalAlpha = 0.5; ctx.lineWidth = 1;          // тики компас-розы
   for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, r0 = R - 2.5, r1 = R; ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1); ctx.stroke(); }
   ctx.globalAlpha = 1;
@@ -95,8 +95,8 @@ function drawDataCompass(ctx, dc, x, y) {
     const a = dc.t * 0.8; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * (R - 3), cy + Math.sin(a) * (R - 3)); ctx.stroke(); ctx.globalAlpha = 1;
   }
   ctx.fillStyle = has ? PAL.cobalt : PAL.ash; ctx.globalAlpha = has ? 0.6 + 0.4 * pulse : 0.5;          // ядро-глиф (диск данных)
-  ctx.beginPath(); ctx.arc(cx, cy, 2.4, 0, 6.283); ctx.fill(); ctx.globalAlpha = 1;
-  ctx.strokeStyle = has ? PAL.cobalt : PAL.bronze; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283); ctx.stroke();   // обод
+  ctx.beginPath(); ctx.arc(cx, cy, 2.4, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = has ? PAL.cobalt : PAL.bronze; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();   // обод
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = `9px ${FONT_MONO}`;
   if (has) { ctx.fillStyle = PAL.cobalt; ctx.fillText(STR.hud.dataDet.dist(Math.round(dc.dist)), x + 60, cy); }
   else { ctx.fillStyle = PAL.ash; ctx.fillText(STR.hud.dataDet.none, x + 60, cy); }

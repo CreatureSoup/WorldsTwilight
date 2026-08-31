@@ -34,6 +34,7 @@ i18nRegister('ru', {
   hull: {
     name: { scout: 'Каркас «Скиталец»', core: 'Ядро «Тор»', gun: 'Каркас «Канонир»', sprut: 'Ядро «Спрут»' },
   },
+  metaCurrency: { name: 'МЕГА-ТОКЕНЫ', abbr: 'МТ' },   // мета-валюта (constants.js: META_NAME/META_ABBR читают отсюда)
   tech: {
     grav_dampen: { name: 'ГРАВИ-ДЕМПФЕР', desc: 'Мягкое падение: меньше урона от срывов и валунов.' },
     echo_drill:  { name: 'ЭХО-БУР',        desc: 'Бур изредка пробивает соседний тайл «эхом».' },

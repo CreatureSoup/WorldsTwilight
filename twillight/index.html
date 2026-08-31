@@ -45,6 +45,11 @@
       var mcss = document.createElement('link'); mcss.rel = 'stylesheet'; mcss.href = 'meta_dom.css?v=' + v; document.head.appendChild(mcss);
       var ccss = document.createElement('link'); ccss.rel = 'stylesheet'; ccss.href = 'codex_dom.css?v=' + v; document.head.appendChild(ccss);
       var fill = document.getElementById('ld-fill'), pct = document.getElementById('ld-pct');
+      var failed = [];                            // упавшие модули — бут НЕ стартует (audit_2026-08: старт с дырой в глобалах падал посреди сессии)
+      function fatal(msg) {
+        var ld = document.getElementById('loader');
+        if (ld) ld.innerHTML = '<div style="color:#ff6a4a;font:600 15px/1.6 monospace;text-align:center;padding:40px;white-space:pre-wrap">ОШИБКА ЗАГРУЗКИ\n' + msg + '\n\nИгра не запущена — проверь консоль/файлы и перезагрузи.</div>';
+      }
       function tick() {
         loaded++;
         var p = Math.round(loaded / total * 100);
@@ -53,6 +58,12 @@
         if (loaded >= total) finish();
       }
       function finish() {
+        if (failed.length) { fatal('Не загрузились модули: ' + failed.join(', ')); return; }   // СТОП: лучше явный отказ, чем «дыра в глобалах»
+        // смоук обязательных глобалов: битый файл (синтаксис/TypeError при top-level STR.*) молча оставил бы дыру
+        var need = ['STR', 'PAL', 'TILE', 'UNIT_DEFS', 'HULL_DEFS', 'MODULE_DEFS', 'Game', 'Unit', 'World', 'Enemy', 'drawInventory', 'metaHas'];
+        // ⚠️ const/class — глобальные ЛЕКСИЧЕСКИЕ биндинги (не window.*) → проверка только через indirect eval
+        var miss = need.filter(function (g) { try { return (0, eval)('typeof ' + g) === 'undefined'; } catch (e) { return true; } });
+        if (miss.length) { fatal('Модули загрузились, но глобалы не определены: ' + miss.join(', ') + '\n(вероятно, ошибка выполнения в одном из файлов — см. консоль)'); return; }
         var ld = document.getElementById('loader');
         if (ld) { ld.classList.add('hide'); setTimeout(function () { ld.style.display = 'none'; }, 450); }
         if (window.bootGame) window.bootGame();   // все модули выполнены → стартуем игру
@@ -62,7 +73,7 @@
         s.async = false;                          // параллельная загрузка, но выполнение В ПОРЯДКЕ вставки
         s.src = f + '.js?v=' + v;
         s.onload = tick;
-        s.onerror = function () { console.error('Не загрузился модуль: ' + f); tick(); };
+        s.onerror = function () { console.error('Не загрузился модуль: ' + f); failed.push(f); tick(); };
         document.head.appendChild(s);
       });
     })();

@@ -389,10 +389,16 @@ function metaReset(save) {       // сброс сети: возврат потр
   if (typeof writeSave === 'function') writeSave(save);
 }
 function metaPoweredCount(save) { let n = 0; for (const x of META_NODES) if (metaUnlocked(save, x.id)) n++; return n; }
-function metaDepNames(n) {       // предки (wire-родители ближе к ядру) — для блока «ТРЕБУЕТ»
-  if (n.kind === 'cap') return n.capDeps.map((id) => META_BY_ID[id].name);
+// Предки (wire-родители ближе к ядру) — для блока «ТРЕБУЕТ». Возвращает ID (не имена): карточка сама решает,
+// раскрывать имя или ставить «?» (нерасшифрованный узел не спойлерит свои требования — см. mtRenderCard).
+// ⚠️ КОНВЕРГЕНЦИЯ (`allDeps`): берём СПИСОК ЗАВИСИМОСТЕЙ НАПРЯМУЮ — он и есть условие `metaAvail`; wire-рёбра
+// для таких узлов лишь дублируют его (совпадение проверено), но полагаться на них нельзя — при правке графа
+// ребро могло бы разойтись с allDeps и блок показал бы не то.
+function metaDepIds(n) {
+  if (n.kind === 'cap') return n.capDeps.slice();
+  if (n.allDeps) return n.allDeps.slice();
   if (n.kind === 'core') return [];
-  return META_EDGES.filter(([a, b, k]) => k === 'wire' && b === n.id).map(([a]) => META_BY_ID[a].name);
+  return META_EDGES.filter(([a, b, k]) => k === 'wire' && b === n.id).map(([a]) => a);
 }
 
 // ── для эффектов узлов в забеге ──

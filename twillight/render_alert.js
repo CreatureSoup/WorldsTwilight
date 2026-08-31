@@ -27,7 +27,7 @@ function drawAlertToggle(ctx, on, threats, t) {
   const midY = r.y + r.h / 2;
   ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   if (on) pulseDot(ctx, r.x + 13, midY, 3.2, PAL.toxic);
-  else { ctx.fillStyle = PAL.ash; ctx.beginPath(); ctx.arc(r.x + 13, midY, 3, 0, 6.283); ctx.fill(); }
+  else { ctx.fillStyle = PAL.ash; ctx.beginPath(); ctx.arc(r.x + 13, midY, 3, 0, TAU); ctx.fill(); }
   ctx.font = `8px ${FONT_MONO}`; ctx.fillStyle = on ? PAL.chalk : PAL.pewter;
   ctx.fillText(STR.hud.alert.title, r.x + 22, midY + 0.5);
   const sw = 30, sh = 14, sx = r.x + r.w - 12 - sw, sy = midY - sh / 2;
@@ -57,7 +57,7 @@ function _alertReticle(ctx, x, y, R, acc, t, seed) {
   ctx.save();
   ctx.globalAlpha = a0 * (1 - ph) * 0.55;
   ctx.strokeStyle = acc; ctx.lineWidth = 1.2;
-  ctx.beginPath(); ctx.arc(x, y, R * (0.5 + ph * 0.7), 0, 6.283); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, R * (0.5 + ph * 0.7), 0, TAU); ctx.stroke();
   ctx.restore();
   ctx.strokeStyle = acc; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(x - 4, y); ctx.lineTo(x + 4, y); ctx.moveTo(x, y - 4); ctx.lineTo(x, y + 4); ctx.stroke();
